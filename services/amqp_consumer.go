@@ -50,20 +50,15 @@ func (c *AMQPConsumer) Start() error {
 	
 	// 构建AMQP URL
 	// 格式: amqps://username:password@host:port/vhost
-	// virtual host中的斜杠需要编码为%2F
-	// 但是第一个斜杠（路径分隔符）不需要编码
-	// 例如: /unifiedfeed/45426 -> /unifiedfeed%2F45426
-	vhostPath := virtualHost
-	if len(virtualHost) > 0 && virtualHost[0] == '/' {
-		// 移除第一个斜杠，编码剩余部分，再加回第一个斜杠
-		vhostPath = "/" + url.PathEscape(virtualHost[1:])
-	}
-	
+	// 注意：不要手动编码virtual host，amqp.DialTLS会自动处理
+	// 直接使用原始的virtual host路径，与Python代码一致
 	amqpURL := fmt.Sprintf("amqps://%s:@%s%s",
 		url.QueryEscape(c.config.AccessToken),
 		c.config.MessagingHost,
-		vhostPath,
+		virtualHost,  // 直接使用，不编码
 	)
+	
+	log.Printf("AMQP URL format: amqps://[token]:@%s%s", c.config.MessagingHost, virtualHost)
 	
 	log.Printf("Connecting to AMQP (vhost: %s)...", virtualHost)
 
