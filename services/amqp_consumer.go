@@ -300,6 +300,9 @@ func (c *AMQPConsumer) getBookmakerInfo() (bookmakerId, virtualHost string, err 
 	// 调用Betradar API获取bookmaker_id
 	// API端点: GET /users/whoami.xml
 	url := c.config.APIBaseURL + "/users/whoami.xml"
+	log.Printf("Calling API: %s", url)
+	log.Printf("Token length: %d characters", len(c.config.AccessToken))
+	
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create request: %w", err)
@@ -307,6 +310,7 @@ func (c *AMQPConsumer) getBookmakerInfo() (bookmakerId, virtualHost string, err 
 
 	// 添加认证头
 	req.Header.Set("x-access-token", c.config.AccessToken)
+	log.Printf("Request headers: %v", req.Header)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -317,6 +321,7 @@ func (c *AMQPConsumer) getBookmakerInfo() (bookmakerId, virtualHost string, err 
 
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
+		log.Printf("API Error Response: Status=%d, Body=%s", resp.StatusCode, string(body))
 		return "", "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
