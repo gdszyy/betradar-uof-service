@@ -68,12 +68,24 @@ func (c *AMQPConsumer) Start() error {
 	log.Printf("Connecting to AMQP (vhost: %s)...", virtualHost)
 
 	// 连接到AMQP
+	log.Printf("Resolving host: %s", c.config.MessagingHost)
+	
 	tlsConfig := &tls.Config{
 		ServerName: "stgmq.betradar.com",
+		InsecureSkipVerify: false,
 	}
 
+	log.Printf("Attempting AMQP connection...")
+	log.Printf("This may take up to 30 seconds...")
+	
 	conn, err := amqp.DialTLS(amqpURL, tlsConfig)
+	
 	if err != nil {
+		log.Printf("Connection failed: %v", err)
+		log.Printf("Possible causes:")
+		log.Printf("  1. Network firewall blocking port 5671")
+		log.Printf("  2. Railway IP not whitelisted by Betradar")
+		log.Printf("  3. AMQP server unreachable from this location")
 		return fmt.Errorf("failed to connect to AMQP: %w", err)
 	}
 	c.conn = conn
