@@ -8,7 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/url"
+	"time"
 
 	"github.com/streadway/amqp"
 
