@@ -5,7 +5,9 @@ import (
 	"crypto/tls"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"net/url"
 
 	"github.com/streadway/amqp"
@@ -283,8 +285,48 @@ func (c *AMQPConsumer) handleBetSettlement(eventID string, productID *int, xmlCo
 }
 
 func (c *AMQPConsumer) getBookmakerId() (string, error) {
-	// TODO: 调用API获取bookmaker_id
-	// 这里先返回一个示例值
-	return "12345", nil
+	// 调用Betradar API获取bookmaker_id
+	// API端点: GET /users/whoami.xml
+	url := c.config.APIBaseURL + "/users/whoami.xml"
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// 添加认证头
+	req.Header.Set("x-access-token", c.config.AccessToken)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to call API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// 解析XML响应
+	type WhoAmIResponse struct {
+		BookmakerID string `xml:"bookmaker_id,attr"`
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var response WhoAmIResponse
+	if err := xml.Unmarshal(body, &response); err != nil {
+		return "", fmt.Errorf("failed to parse XML: %w", err)
+	}
+
+	if response.BookmakerID == "" {
+		return "", fmt.Errorf("bookmaker_id not found in response")
+	}
+
+	return response.BookmakerID, nil
 }
 
