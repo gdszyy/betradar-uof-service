@@ -40,11 +40,11 @@ func Migrate(db *sql.DB) error {
 			xml_content TEXT NOT NULL,
 			timestamp BIGINT,
 			received_at TIMESTAMP NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			INDEX idx_event_id (event_id),
-			INDEX idx_message_type (message_type),
-			INDEX idx_received_at (received_at)
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE INDEX IF NOT EXISTS idx_uof_messages_event_id ON uof_messages(event_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_uof_messages_message_type ON uof_messages(message_type)`,
+		`CREATE INDEX IF NOT EXISTS idx_uof_messages_received_at ON uof_messages(received_at)`,
 
 		// 跟踪的赛事表
 		`CREATE TABLE IF NOT EXISTS tracked_events (
@@ -55,10 +55,10 @@ func Migrate(db *sql.DB) error {
 			message_count INTEGER DEFAULT 0,
 			last_message_at TIMESTAMP,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			INDEX idx_event_id (event_id),
-			INDEX idx_status (status)
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE INDEX IF NOT EXISTS idx_tracked_events_event_id ON tracked_events(event_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_tracked_events_status ON tracked_events(status)`,
 
 		// 赔率变化表
 		`CREATE TABLE IF NOT EXISTS odds_changes (
@@ -69,10 +69,10 @@ func Migrate(db *sql.DB) error {
 			odds_change_reason VARCHAR(50),
 			markets_count INTEGER DEFAULT 0,
 			xml_content TEXT NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			INDEX idx_event_id (event_id),
-			INDEX idx_timestamp (timestamp)
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE INDEX IF NOT EXISTS idx_odds_changes_event_id ON odds_changes(event_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_odds_changes_timestamp ON odds_changes(timestamp)`,
 
 		// 投注停止表
 		`CREATE TABLE IF NOT EXISTS bet_stops (
@@ -82,9 +82,9 @@ func Migrate(db *sql.DB) error {
 			timestamp BIGINT NOT NULL,
 			market_status VARCHAR(50),
 			xml_content TEXT NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			INDEX idx_event_id (event_id)
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE INDEX IF NOT EXISTS idx_bet_stops_event_id ON bet_stops(event_id)`,
 
 		// 投注结算表
 		`CREATE TABLE IF NOT EXISTS bet_settlements (
@@ -94,9 +94,9 @@ func Migrate(db *sql.DB) error {
 			timestamp BIGINT NOT NULL,
 			certainty INTEGER,
 			xml_content TEXT NOT NULL,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			INDEX idx_event_id (event_id)
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)`,
+		`CREATE INDEX IF NOT EXISTS idx_bet_settlements_event_id ON bet_settlements(event_id)`,
 
 		// 生产者状态表
 		`CREATE TABLE IF NOT EXISTS producer_status (
