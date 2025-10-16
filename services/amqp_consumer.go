@@ -70,9 +70,9 @@ func (c *AMQPConsumer) Start() error {
 	// 连接到AMQP
 	log.Printf("Resolving host: %s", c.config.MessagingHost)
 	
+	// TLS配置 - 与Python代码一致，禁用证书验证
 	tlsConfig := &tls.Config{
-		ServerName: "stgmq.betradar.com",
-		InsecureSkipVerify: false,
+		InsecureSkipVerify: true,  // 等同Python的verify_mode=CERT_NONE
 	}
 
 	log.Printf("Attempting AMQP connection...")
