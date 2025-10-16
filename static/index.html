@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Betradar UOF 监控面板</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .header {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    h1 {
+      color: #333;
+      font-size: 24px;
+    }
+
+    .status {
+      display: inline-block;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .status.connected {
+      background: #4caf50;
+      color: white;
+    }
+
+    .status.disconnected {
+      background: #f44336;
+      color: white;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: bold;
+      color: #333;
+    }
+
+    .panel {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .panel h2 {
+      color: #333;
+      margin-bottom: 15px;
+      font-size: 18px;
+      border-bottom: 2px solid #2196f3;
+      padding-bottom: 10px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      padding: 10px 20px;
+      background: #2196f3;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.3s;
+    }
+
+    button:hover {
+      background: #1976d2;
+    }
+
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    button.danger {
+      background: #f44336;
+    }
+
+    button.danger:hover {
+      background: #d32f2f;
+    }
+
+    .log-container {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 15px;
+      border-radius: 4px;
+      height: 500px;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .log-entry {
+      margin-bottom: 5px;
+      word-wrap: break-word;
+    }
+
+    .log-entry.info {
+      color: #4fc3f7;
+    }
+
+    .log-entry.success {
+      color: #81c784;
+    }
+
+    .log-entry.warning {
+      color: #ffb74d;
+    }
+
+    .log-entry.error {
+      color: #e57373;
+    }
+
+    .log-entry .timestamp {
+      color: #888;
+      margin-right: 10px;
+    }
+
+    .log-entry .type {
+      color: #ce93d8;
+      font-weight: bold;
+      margin-right: 10px;
+    }
+
+    .events-list {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .event-item {
+      background: #f9f9f9;
+      padding: 15px;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      border-left: 4px solid #2196f3;
+    }
+
+    .event-id {
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 5px;
+    }
+
+    .event-meta {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .filters {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
+
+    .filter-input {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .xml-preview {
+      background: #f5f5f5;
+      padding: 10px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      max-height: 200px;
+      overflow: auto;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- 头部 -->
+    <div class="header">
+      <h1>🎯 Betradar UOF 监控面板</h1>
+      <span class="status disconnected" id="status">未连接</span>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">总消息数</div>
+        <div class="stat-value" id="totalMessages">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">跟踪赛事</div>
+        <div class="stat-value" id="totalEvents">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">赔率变化</div>
+        <div class="stat-value" id="oddsChanges">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">投注停止</div>
+        <div class="stat-value" id="betStops">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">投注结算</div>
+        <div class="stat-value" id="betSettlements">0</div>
+      </div>
+    </div>
+
+    <!-- 控制面板 -->
+    <div class="panel">
+      <h2>控制面板</h2>
+      <div class="controls">
+        <button id="connectBtn">连接</button>
+        <button id="disconnectBtn" disabled>断开</button>
+        <button id="refreshStatsBtn">刷新统计</button>
+        <button id="loadEventsBtn">加载赛事</button>
+        <button id="clearLogBtn" class="danger">清空日志</button>
+      </div>
+
+      <div class="filters">
+        <input type="text" class="filter-input" id="eventIdFilter" placeholder="过滤赛事ID (例如: sr:match:12345)">
+        <button id="subscribeBtn">订阅赛事</button>
+        <button id="unsubscribeBtn">取消订阅</button>
+      </div>
+    </div>
+
+    <!-- 跟踪的赛事 -->
+    <div class="panel">
+      <h2>跟踪的赛事</h2>
+      <div class="events-list" id="eventsList">
+        <p style="color: #999;">暂无跟踪的赛事</p>
+      </div>
+    </div>
+
+    <!-- 实时消息日志 -->
+    <div class="panel">
+      <h2>实时消息日志</h2>
+      <div class="log-container" id="logContainer"></div>
+    </div>
+  </div>
+
+  <script src="/uof-client.js"></script>
+  <script>
+    // 创建客户端
+    const client = window.createUOFClient({
+      autoReconnect: true
+    });
+
+    // DOM元素
+    const statusEl = document.getElementById('status');
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    const refreshStatsBtn = document.getElementById('refreshStatsBtn');
+    const loadEventsBtn = document.getElementById('loadEventsBtn');
+    const clearLogBtn = document.getElementById('clearLogBtn');
+    const subscribeBtn = document.getElementById('subscribeBtn');
+    const unsubscribeBtn = document.getElementById('unsubscribeBtn');
+    const eventIdFilter = document.getElementById('eventIdFilter');
+    const logContainer = document.getElementById('logContainer');
+    const eventsList = document.getElementById('eventsList');
+
+    // 统计数据
+    let stats = {
+      totalMessages: 0,
+      oddsChanges: 0,
+      betStops: 0,
+      betSettlements: 0
+    };
+
+    // 日志函数
+    function log(message, type = 'info') {
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      const timestamp = new Date().toLocaleTimeString();
+      entry.innerHTML = `<span class="timestamp">[${timestamp}]</span>${message}`;
+      logContainer.appendChild(entry);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    // 更新统计
+    function updateStats() {
+      document.getElementById('totalMessages').textContent = stats.totalMessages;
+      document.getElementById('oddsChanges').textContent = stats.oddsChanges;
+      document.getElementById('betStops').textContent = stats.betStops;
+      document.getElementById('betSettlements').textContent = stats.betSettlements;
+    }
+
+    // 刷新统计
+    async function refreshStats() {
+      try {
+        const data = await client.getStats();
+        document.getElementById('totalMessages').textContent = data.total_messages || 0;
+        document.getElementById('totalEvents').textContent = data.total_events || 0;
+        document.getElementById('oddsChanges').textContent = data.odds_changes || 0;
+        document.getElementById('betStops').textContent = data.bet_stops || 0;
+        document.getElementById('betSettlements').textContent = data.bet_settlements || 0;
+      } catch (error) {
+        log(`刷新统计失败: ${error.message}`, 'error');
+      }
+    }
+
+    // 加载赛事列表
+    async function loadEvents() {
+      try {
+        const data = await client.getTrackedEvents();
+        const events = data.events || [];
+
+        if (events.length === 0) {
+          eventsList.innerHTML = '<p style="color: #999;">暂无跟踪的赛事</p>';
+          return;
+        }
+
+        eventsList.innerHTML = '';
+        events.forEach(event => {
+          const item = document.createElement('div');
+          item.className = 'event-item';
+          item.innerHTML = `
+            <div class="event-id">${event.event_id}</div>
+            <div class="event-meta">
+              消息数: ${event.message_count} | 
+              最后更新: ${new Date(event.last_message_at).toLocaleString()}
+            </div>
+          `;
+          eventsList.appendChild(item);
+        });
+
+        log(`加载了 ${events.length} 个跟踪的赛事`, 'success');
+      } catch (error) {
+        log(`加载赛事失败: ${error.message}`, 'error');
+      }
+    }
+
+    // 事件监听
+    client.on('connected', () => {
+      statusEl.textContent = '已连接';
+      statusEl.className = 'status connected';
+      connectBtn.disabled = true;
+      disconnectBtn.disabled = false;
+      log('✓ 已连接到UOF服务', 'success');
+      refreshStats();
+    });
+
+    client.on('disconnected', () => {
+      statusEl.textContent = '未连接';
+      statusEl.className = 'status disconnected';
+      connectBtn.disabled = false;
+      disconnectBtn.disabled = true;
+      log('✗ 已断开连接', 'warning');
+    });
+
+    client.on('message', (msg) => {
+      stats.totalMessages++;
+      updateStats();
+
+      const typeSpan = `<span class="type">[${msg.message_type || msg.type}]</span>`;
+      const eventInfo = msg.event_id ? ` Event: ${msg.event_id}` : '';
+      log(`${typeSpan}${eventInfo}`, 'info');
+
+      // 显示XML预览(前200字符)
+      if (msg.xml) {
+        const xmlPreview = msg.xml.substring(0, 200) + (msg.xml.length > 200 ? '...' : '');
+        log(`<div class="xml-preview">${escapeHtml(xmlPreview)}</div>`, 'info');
+      }
+    });
+
+    client.on('odds_change', (msg) => {
+      stats.oddsChanges++;
+      updateStats();
+      log(`<span class="type">[赔率变化]</span> ${msg.event_id}`, 'success');
+    });
+
+    client.on('bet_stop', (msg) => {
+      stats.betStops++;
+      updateStats();
+      log(`<span class="type">[投注停止]</span> ${msg.event_id}`, 'warning');
+    });
+
+    client.on('bet_settlement', (msg) => {
+      stats.betSettlements++;
+      updateStats();
+      log(`<span class="type">[投注结算]</span> ${msg.event_id}`, 'success');
+    });
+
+    client.on('error', (error) => {
+      log(`错误: ${error.message || error}`, 'error');
+    });
+
+    // 按钮事件
+    connectBtn.addEventListener('click', () => {
+      client.connect();
+    });
+
+    disconnectBtn.addEventListener('click', () => {
+      client.disconnect();
+    });
+
+    refreshStatsBtn.addEventListener('click', refreshStats);
+    loadEventsBtn.addEventListener('click', loadEvents);
+    clearLogBtn.addEventListener('click', () => {
+      logContainer.innerHTML = '';
+    });
+
+    subscribeBtn.addEventListener('click', () => {
+      const eventId = eventIdFilter.value.trim();
+      if (eventId) {
+        client.subscribe([], [eventId]);
+        log(`订阅赛事: ${eventId}`, 'success');
+      }
+    });
+
+    unsubscribeBtn.addEventListener('click', () => {
+      client.unsubscribe();
+      log('已取消所有订阅', 'info');
+    });
+
+    // 工具函数
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // 自动连接
+    log('页面加载完成,点击"连接"按钮开始', 'info');
+    
+    // 自动连接(可选)
+    // client.connect();
+  </script>
+</body>
+</html>
+
