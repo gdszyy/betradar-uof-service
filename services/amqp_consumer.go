@@ -47,11 +47,17 @@ func (c *AMQPConsumer) Start() error {
 
 	log.Printf("Bookmaker ID: %s", bookmakerId)
 	log.Printf("Virtual Host: %s", virtualHost)
+	
+	// 构建AMQP URL - virtual host需要URL编码
+	// 例如: /unifiedfeed/45426 -> %2Funifiedfeed%2F45426
+	encodedVHost := url.QueryEscape(virtualHost)
 	amqpURL := fmt.Sprintf("amqps://%s:@%s%s",
 		url.QueryEscape(c.config.AccessToken),
 		c.config.MessagingHost,
-		virtualHost,
+		encodedVHost,
 	)
+	
+	log.Printf("Connecting to AMQP (vhost: %s)...", virtualHost)
 
 	// 连接到AMQP
 	tlsConfig := &tls.Config{
