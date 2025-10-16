@@ -47,33 +47,35 @@ func (c *AMQPConsumer) Start() error {
 
 	log.Printf("Bookmaker ID: %s", bookmakerId)
 	log.Printf("Virtual Host: %s", virtualHost)
-	
-	// 构建AMQP URL
-	// 格式: amqps://username:password@host:port/vhost
-	// 注意：不要手动编码virtual host，amqp.DialTLS会自动处理
-	// 直接使用原始的virtual host路径，与Python代码一致
-	amqpURL := fmt.Sprintf("amqps://%s:@%s%s",
-		url.QueryEscape(c.config.AccessToken),
-		c.config.MessagingHost,
-		virtualHost,  // 直接使用，不编码
-	)
-	
-	log.Printf("AMQP URL format: amqps://[token]:@%s%s", c.config.MessagingHost, virtualHost)
-	
 	log.Printf("Connecting to AMQP (vhost: %s)...", virtualHost)
 
-	// 连接到AMQP
+	// 使用amqp.DialConfig更精确地控制连接参数，与Python的pika.ConnectionParameters类似
 	log.Printf("Resolving host: %s", c.config.MessagingHost)
 	
 	// TLS配置 - 与Python代码一致，禁用证书验证
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true,  // 等同Python的verify_mode=CERT_NONE
 	}
-
-	log.Printf("Attempting AMQP connection...")
+	
+	// AMQP配置
+	config := amqp.Config{
+		Vhost:      virtualHost,  // 直接设置，不编码
+		Heartbeat:  60 * time.Second,  // 与Python一致
+		Locale:     "en_US",
+		TLSClientConfig: tlsConfig,  // TLS配置
+	}
+	
+	// 构建AMQP URL - 不包含vhost（通过Config设置）
+	amqpURL := fmt.Sprintf("amqps://%s:@%s",
+		c.config.AccessToken,  // 不编码token，让库处理
+		c.config.MessagingHost,
+	)
+	
+	log.Printf("AMQP URL: amqps://[token]:@%s", c.config.MessagingHost)
+	log.Printf("Attempting AMQP connection with DialConfig...")
 	log.Printf("This may take up to 30 seconds...")
 	
-	conn, err := amqp.DialTLS(amqpURL, tlsConfig)
+	conn, err := amqp.DialConfig(amqpURL, config)
 	
 	if err != nil {
 		log.Printf("Connection failed: %v", err)
