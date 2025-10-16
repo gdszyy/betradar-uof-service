@@ -39,16 +39,14 @@ func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster Messag
 }
 
 func (c *AMQPConsumer) Start() error {
-	// 获取bookmaker_id
-	bookmakerId, err := c.getBookmakerId()
+	// 获取bookmaker信息
+	bookmakerId, virtualHost, err := c.getBookmakerInfo()
 	if err != nil {
-		return fmt.Errorf("failed to get bookmaker_id: %w", err)
+		return fmt.Errorf("failed to get bookmaker info: %w", err)
 	}
 
 	log.Printf("Bookmaker ID: %s", bookmakerId)
-
-	// 构建AMQP URL
-	virtualHost := fmt.Sprintf("/unifiedfeed/%s", bookmakerId)
+	log.Printf("Virtual Host: %s", virtualHost)
 	amqpURL := fmt.Sprintf("amqps://%s:@%s%s",
 		url.QueryEscape(c.config.AccessToken),
 		c.config.MessagingHost,
@@ -284,13 +282,13 @@ func (c *AMQPConsumer) handleBetSettlement(eventID string, productID *int, xmlCo
 	c.messageStore.UpdateTrackedEvent(eventID)
 }
 
-func (c *AMQPConsumer) getBookmakerId() (string, error) {
+func (c *AMQPConsumer) getBookmakerInfo() (bookmakerId, virtualHost string, err error) {
 	// 调用Betradar API获取bookmaker_id
 	// API端点: GET /users/whoami.xml
 	url := c.config.APIBaseURL + "/users/whoami.xml"
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return "", "", fmt.Errorf("failed to create request: %w", err)
 	}
 
 	// 添加认证头
@@ -299,34 +297,39 @@ func (c *AMQPConsumer) getBookmakerId() (string, error) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to call API: %w", err)
+		return "", "", fmt.Errorf("failed to call API: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+		return "", "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	// 解析XML响应
 	type WhoAmIResponse struct {
 		BookmakerID string `xml:"bookmaker_id,attr"`
+		VirtualHost string `xml:"virtual_host,attr"`
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
+		return "", "", fmt.Errorf("failed to read response: %w", err)
 	}
 
 	var response WhoAmIResponse
 	if err := xml.Unmarshal(body, &response); err != nil {
-		return "", fmt.Errorf("failed to parse XML: %w", err)
+		return "", "", fmt.Errorf("failed to parse XML: %w", err)
 	}
 
 	if response.BookmakerID == "" {
-		return "", fmt.Errorf("bookmaker_id not found in response")
+		return "", "", fmt.Errorf("bookmaker_id not found in response")
 	}
 
-	return response.BookmakerID, nil
+	if response.VirtualHost == "" {
+		return "", "", fmt.Errorf("virtual_host not found in response")
+	}
+
+	return response.BookmakerID, response.VirtualHost, nil
 }
 
