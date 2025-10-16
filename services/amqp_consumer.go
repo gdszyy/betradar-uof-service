@@ -1,12 +1,12 @@
 package services
 
 import (
+	"bytes"
 	"crypto/tls"
 	"encoding/xml"
 	"fmt"
 	"log"
 	"net/url"
-	"time"
 
 	"github.com/streadway/amqp"
 
@@ -198,7 +198,7 @@ func (c *AMQPConsumer) parseMessage(xmlContent string) (messageType, eventID str
 	}
 
 	// 获取根元素名称作为消息类型
-	decoder := xml.NewDecoder([]byte(xmlContent))
+	decoder := xml.NewDecoder(bytes.NewReader([]byte(xmlContent)))
 	token, _ := decoder.Token()
 	if startElement, ok := token.(xml.StartElement); ok {
 		messageType = startElement.Name.Local
