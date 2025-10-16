@@ -11,23 +11,27 @@ import (
 	"github.com/streadway/amqp"
 
 	"uof-service/config"
-	"uof-service/web"
 )
+
+// MessageBroadcaster 接口用于广播消息，避免循环依赖
+type MessageBroadcaster interface {
+	Broadcast(msg interface{})
+}
 
 type AMQPConsumer struct {
 	config       *config.Config
 	messageStore *MessageStore
-	wsHub        *web.Hub
+	broadcaster  MessageBroadcaster
 	conn         *amqp.Connection
 	channel      *amqp.Channel
 	done         chan bool
 }
 
-func NewAMQPConsumer(cfg *config.Config, store *MessageStore, hub *web.Hub) *AMQPConsumer {
+func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster MessageBroadcaster) *AMQPConsumer {
 	return &AMQPConsumer{
 		config:       cfg,
 		messageStore: store,
-		wsHub:        hub,
+		broadcaster:  broadcaster,
 		done:         make(chan bool),
 	}
 }
@@ -159,15 +163,17 @@ func (c *AMQPConsumer) processMessage(msg amqp.Delivery) {
 	}
 
 	// 广播到WebSocket客户端
-	c.wsHub.Broadcast(&web.WSMessage{
-		Type:        "message",
-		MessageType: messageType,
-		EventID:     eventID,
-		ProductID:   productID,
-		RoutingKey:  routingKey,
-		XML:         xmlContent,
-		Timestamp:   timestamp,
-	})
+	if c.broadcaster != nil {
+		c.broadcaster.Broadcast(map[string]interface{}{
+			"type":         "message",
+			"message_type": messageType,
+			"event_id":     eventID,
+			"product_id":   productID,
+			"routing_key":  routingKey,
+			"xml":          xmlContent,
+			"timestamp":    timestamp,
+		})
+	}
 
 	// 处理特定消息类型
 	switch messageType {

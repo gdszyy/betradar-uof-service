@@ -91,9 +91,45 @@ func (h *Hub) Run() {
 	}
 }
 
-// Broadcast 广播消息
-func (h *Hub) Broadcast(message *WSMessage) {
-	h.broadcast <- message
+// Broadcast 广播消息（实现MessageBroadcaster接口）
+func (h *Hub) Broadcast(message interface{}) {
+	// 如果是WSMessage类型，直接使用
+	if wsMsg, ok := message.(*WSMessage); ok {
+		h.broadcast <- wsMsg
+		return
+	}
+	
+	// 如果是map类型，转换为WSMessage
+	if msgMap, ok := message.(map[string]interface{}); ok {
+		wsMsg := &WSMessage{}
+		
+		if v, ok := msgMap["type"].(string); ok {
+			wsMsg.Type = v
+		}
+		if v, ok := msgMap["message_type"].(string); ok {
+			wsMsg.MessageType = v
+		}
+		if v, ok := msgMap["event_id"].(string); ok {
+			wsMsg.EventID = v
+		}
+		if v, ok := msgMap["product_id"].(*int); ok {
+			wsMsg.ProductID = v
+		}
+		if v, ok := msgMap["routing_key"].(string); ok {
+			wsMsg.RoutingKey = v
+		}
+		if v, ok := msgMap["xml"].(string); ok {
+			wsMsg.XML = v
+		}
+		if v, ok := msgMap["timestamp"].(int64); ok {
+			wsMsg.Timestamp = v
+		}
+		if v, ok := msgMap["data"]; ok {
+			wsMsg.Data = v
+		}
+		
+		h.broadcast <- wsMsg
+	}
 }
 
 // marshalMessage 序列化消息
