@@ -224,6 +224,16 @@ func (c *AMQPConsumer) processMessage(msg amqp.Delivery) {
 		c.handleBetStop(eventID, productID, xmlContent, timestamp)
 	case "bet_settlement":
 		c.handleBetSettlement(eventID, productID, xmlContent, timestamp)
+	case "bet_cancel":
+		c.handleBetCancel(eventID, productID, xmlContent, timestamp)
+	case "fixture_change":
+		c.handleFixtureChange(eventID, productID, xmlContent, timestamp)
+	case "rollback_bet_settlement":
+		c.handleRollbackBetSettlement(eventID, productID, xmlContent, timestamp)
+	case "rollback_bet_cancel":
+		c.handleRollbackBetCancel(eventID, productID, xmlContent, timestamp)
+	case "snapshot_complete":
+		c.handleSnapshotComplete(xmlContent)
 	}
 }
 
@@ -285,9 +295,36 @@ func (c *AMQPConsumer) handleOddsChange(eventID string, productID *int, xmlConte
 		return
 	}
 
-	// 计算市场数量
-	marketsCount := 0
-	// TODO: 解析XML获取准确的市场数量
+	// 解析odds_change消息获取市场数量
+	type OddsChange struct {
+		Odds struct {
+			Markets []struct {
+				ID     string `xml:"id,attr"`
+				Status int    `xml:"status,attr"`
+				Outcomes []struct {
+					ID     string  `xml:"id,attr"`
+					Odds   float64 `xml:"odds,attr"`
+					Active int     `xml:"active,attr"`
+				} `xml:"outcome"`
+			} `xml:"market"`
+		} `xml:"odds"`
+		SportEventStatus struct {
+			Status        string `xml:"status,attr"`
+			MatchStatus   int    `xml:"match_status,attr"`
+			HomeScore     int    `xml:"home_score,attr"`
+			AwayScore     int    `xml:"away_score,attr"`
+		} `xml:"sport_event_status"`
+	}
+
+	var oddsChange OddsChange
+	if err := xml.Unmarshal([]byte(xmlContent), &oddsChange); err != nil {
+		log.Printf("Failed to parse odds_change: %v", err)
+		return
+	}
+
+	marketsCount := len(oddsChange.Odds.Markets)
+	log.Printf("Odds change for event %s: %d markets, status=%s", 
+		eventID, marketsCount, oddsChange.SportEventStatus.Status)
 
 	if err := c.messageStore.SaveOddsChange(eventID, *productID, timestamp, xmlContent, marketsCount); err != nil {
 		log.Printf("Failed to save odds change: %v", err)
@@ -302,6 +339,20 @@ func (c *AMQPConsumer) handleBetStop(eventID string, productID *int, xmlContent 
 		return
 	}
 
+	// 解析bet_stop消息
+	type BetStop struct {
+		MarketStatus int    `xml:"market_status,attr"`
+		Groups       string `xml:"groups,attr"`
+	}
+
+	var betStop BetStop
+	if err := xml.Unmarshal([]byte(xmlContent), &betStop); err != nil {
+		log.Printf("Failed to parse bet_stop: %v", err)
+	} else {
+		log.Printf("Bet stop for event %s: market_status=%d, groups=%s", 
+			eventID, betStop.MarketStatus, betStop.Groups)
+	}
+
 	if err := c.messageStore.SaveBetStop(eventID, *productID, timestamp, xmlContent); err != nil {
 		log.Printf("Failed to save bet stop: %v", err)
 	}
@@ -312,6 +363,29 @@ func (c *AMQPConsumer) handleBetStop(eventID string, productID *int, xmlContent 
 func (c *AMQPConsumer) handleBetSettlement(eventID string, productID *int, xmlContent string, timestamp int64) {
 	if eventID == "" || productID == nil {
 		return
+	}
+
+	// 解析bet_settlement消息
+	type BetSettlement struct {
+		Certainty int `xml:"certainty,attr"`
+		Outcomes struct {
+			Markets []struct {
+				ID string `xml:"id,attr"`
+				Outcomes []struct {
+					ID     string `xml:"id,attr"`
+					Result int    `xml:"result,attr"`
+				} `xml:"outcome"`
+			} `xml:"market"`
+		} `xml:"outcomes"`
+	}
+
+	var settlement BetSettlement
+	if err := xml.Unmarshal([]byte(xmlContent), &settlement); err != nil {
+		log.Printf("Failed to parse bet_settlement: %v", err)
+	} else {
+		marketsCount := len(settlement.Outcomes.Markets)
+		log.Printf("Bet settlement for event %s: %d markets, certainty=%d", 
+			eventID, marketsCount, settlement.Certainty)
 	}
 
 	if err := c.messageStore.SaveBetSettlement(eventID, *productID, timestamp, xmlContent); err != nil {
@@ -375,5 +449,100 @@ func (c *AMQPConsumer) getBookmakerInfo() (bookmakerId, virtualHost string, err 
 	}
 
 	return response.BookmakerID, response.VirtualHost, nil
+}
+
+
+
+// handleBetCancel 处理投注取消消息
+func (c *AMQPConsumer) handleBetCancel(eventID string, productID *int, xmlContent string, timestamp int64) {
+	if eventID == "" || productID == nil {
+		return
+	}
+
+	// 解析bet_cancel消息
+	type BetCancel struct {
+		StartTime int64  `xml:"start_time,attr"`
+		EndTime   int64  `xml:"end_time,attr"`
+		Markets   []struct {
+			ID string `xml:"id,attr"`
+		} `xml:"market"`
+	}
+
+	var betCancel BetCancel
+	if err := xml.Unmarshal([]byte(xmlContent), &betCancel); err != nil {
+		log.Printf("Failed to parse bet_cancel: %v", err)
+		return
+	}
+
+	marketsCount := len(betCancel.Markets)
+	log.Printf("Bet cancel for event %s: %d markets cancelled", eventID, marketsCount)
+
+	// 存储到数据库（使用通用的SaveMessage已经存储了，这里可以添加额外处理）
+	c.messageStore.UpdateTrackedEvent(eventID)
+}
+
+// handleFixtureChange 处理赛程变化消息
+func (c *AMQPConsumer) handleFixtureChange(eventID string, productID *int, xmlContent string, timestamp int64) {
+	if eventID == "" {
+		return
+	}
+
+	// 解析fixture_change消息
+	type FixtureChange struct {
+		StartTime     int64  `xml:"start_time,attr"`
+		NextLiveTime  int64  `xml:"next_live_time,attr"`
+		ChangeType    int    `xml:"change_type,attr"`
+	}
+
+	var fixtureChange FixtureChange
+	if err := xml.Unmarshal([]byte(xmlContent), &fixtureChange); err != nil {
+		log.Printf("Failed to parse fixture_change: %v", err)
+		return
+	}
+
+	if fixtureChange.StartTime > 0 {
+		startTimeStr := time.UnixMilli(fixtureChange.StartTime).Format(time.RFC3339)
+		log.Printf("Fixture change for event %s: new start time %s", eventID, startTimeStr)
+	}
+
+	c.messageStore.UpdateTrackedEvent(eventID)
+}
+
+// handleRollbackBetSettlement 处理撤销投注结算消息
+func (c *AMQPConsumer) handleRollbackBetSettlement(eventID string, productID *int, xmlContent string, timestamp int64) {
+	if eventID == "" || productID == nil {
+		return
+	}
+
+	log.Printf("Rollback bet settlement for event %s", eventID)
+	c.messageStore.UpdateTrackedEvent(eventID)
+}
+
+// handleRollbackBetCancel 处理撤销投注取消消息
+func (c *AMQPConsumer) handleRollbackBetCancel(eventID string, productID *int, xmlContent string, timestamp int64) {
+	if eventID == "" || productID == nil {
+		return
+	}
+
+	log.Printf("Rollback bet cancel for event %s", eventID)
+	c.messageStore.UpdateTrackedEvent(eventID)
+}
+
+// handleSnapshotComplete 处理快照完成消息
+func (c *AMQPConsumer) handleSnapshotComplete(xmlContent string) {
+	// 解析snapshot_complete消息
+	type SnapshotComplete struct {
+		RequestID int    `xml:"request_id,attr"`
+		Product   int    `xml:"product,attr"`
+		Timestamp int64  `xml:"timestamp,attr"`
+	}
+
+	var snapshot SnapshotComplete
+	if err := xml.Unmarshal([]byte(xmlContent), &snapshot); err != nil {
+		log.Printf("Failed to parse snapshot_complete: %v", err)
+		return
+	}
+
+	log.Printf("Snapshot complete: product=%d, request_id=%d", snapshot.Product, snapshot.RequestID)
 }
 
