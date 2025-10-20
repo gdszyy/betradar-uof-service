@@ -47,7 +47,7 @@ func Load() *Config {
 		
 		// 恢复配置
 		AutoRecovery:       getEnv("AUTO_RECOVERY", "true") == "true",
-		RecoveryAfterHours: getEnvInt("RECOVERY_AFTER_HOURS", 72),
+		RecoveryAfterHours: getEnvInt("RECOVERY_AFTER_HOURS", 10),  // Betradar最多允许10小时
 		RecoveryProducts:   getRecoveryProducts(),
 	}
 }

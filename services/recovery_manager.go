@@ -53,14 +53,20 @@ func (r *RecoveryManager) triggerProductRecovery(product string) error {
 	
 	// 如果配置了恢复时间范围，添加after参数
 	if r.config.RecoveryAfterHours > 0 {
-		afterTimestamp := time.Now().Add(-time.Duration(r.config.RecoveryAfterHours) * time.Hour).UnixMilli()
+		// Betradar限制：最多恢复10小时内的数据
+		hours := r.config.RecoveryAfterHours
+		if hours > 10 {
+			log.Printf("WARNING: RECOVERY_AFTER_HOURS=%d exceeds Betradar limit (10 hours), using 10 hours instead", hours)
+			hours = 10
+		}
+		afterTimestamp := time.Now().Add(-time.Duration(hours) * time.Hour).UnixMilli()
 		url = fmt.Sprintf("%s?after=%d", url, afterTimestamp)
 		log.Printf("Recovery for %s: requesting data after %s (%d hours ago)", 
 			product, 
 			time.UnixMilli(afterTimestamp).Format(time.RFC3339),
-			r.config.RecoveryAfterHours)
+			hours)
 	} else {
-		log.Printf("Recovery for %s: requesting default range (72 hours)", product)
+		log.Printf("Recovery for %s: requesting default range (Betradar default)", product)
 	}
 	
 	// 创建POST请求
