@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strings"
 )
@@ -20,6 +21,11 @@ type Config struct {
 
 	// 其他配置
 	Environment string
+	
+	// 恢复配置
+	AutoRecovery        bool   // 启动时自动触发恢复
+	RecoveryAfterHours  int    // 恢复多少小时内的数据（0=默认72小时）
+	RecoveryProducts    []string // 需要恢复的产品列表
 }
 
 func Load() *Config {
@@ -38,6 +44,11 @@ func Load() *Config {
 
 		// 其他配置
 		Environment: getEnv("ENVIRONMENT", "development"),
+		
+		// 恢复配置
+		AutoRecovery:       getEnv("AUTO_RECOVERY", "true") == "true",
+		RecoveryAfterHours: getEnvInt("RECOVERY_AFTER_HOURS", 72),
+		RecoveryProducts:   getRecoveryProducts(),
 	}
 }
 
@@ -52,5 +63,23 @@ func getEnv(key, defaultValue string) string {
 func getRoutingKeys() []string {
 	keys := getEnv("ROUTING_KEYS", "#")
 	return strings.Split(keys, ",")
+}
+
+func getEnvInt(key string, defaultValue int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	var result int
+	fmt.Sscanf(value, "%d", &result)
+	if result == 0 {
+		return defaultValue
+	}
+	return result
+}
+
+func getRecoveryProducts() []string {
+	products := getEnv("RECOVERY_PRODUCTS", "liveodds,pre")
+	return strings.Split(products, ",")
 }
 

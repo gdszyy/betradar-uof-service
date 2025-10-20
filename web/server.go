@@ -18,20 +18,22 @@ import (
 )
 
 type Server struct {
-	config       *config.Config
-	db           *sql.DB
-	wsHub        *Hub
-	messageStore *services.MessageStore
-	httpServer   *http.Server
-	upgrader     websocket.Upgrader
+	config          *config.Config
+	db              *sql.DB
+	wsHub           *Hub
+	messageStore    *services.MessageStore
+	recoveryManager *services.RecoveryManager
+	httpServer      *http.Server
+	upgrader        websocket.Upgrader
 }
 
 func NewServer(cfg *config.Config, db *sql.DB, hub *Hub) *Server {
 	return &Server{
-		config:       cfg,
-		db:           db,
-		wsHub:        hub,
-		messageStore: services.NewMessageStore(db),
+		config:          cfg,
+		db:              db,
+		wsHub:           hub,
+		messageStore:    services.NewMessageStore(db),
+		recoveryManager: services.NewRecoveryManager(cfg),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -52,6 +54,10 @@ func (s *Server) Start() error {
 	api.HandleFunc("/events", s.handleGetTrackedEvents).Methods("GET")
 	api.HandleFunc("/events/{event_id}/messages", s.handleGetEventMessages).Methods("GET")
 	api.HandleFunc("/stats", s.handleGetStats).Methods("GET")
+	
+	// 恢复API
+	api.HandleFunc("/recovery/trigger", s.handleTriggerRecovery).Methods("POST")
+	api.HandleFunc("/recovery/event/{event_id}", s.handleTriggerEventRecovery).Methods("POST")
 
 	// WebSocket路由
 	router.HandleFunc("/ws", s.handleWebSocket)
@@ -211,5 +217,62 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	go client.writePump()
 	go client.readPump()
+}
+
+
+
+// handleTriggerRecovery 手动触发全量恢复
+func (s *Server) handleTriggerRecovery(w http.ResponseWriter, r *http.Request) {
+	log.Println("Manual recovery triggered via API")
+	
+	go func() {
+		if err := s.recoveryManager.TriggerFullRecovery(); err != nil {
+			log.Printf("Manual recovery failed: %v", err)
+		} else {
+			log.Println("Manual recovery completed successfully")
+		}
+	}()
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "accepted",
+		"message": "Recovery request accepted and processing",
+		"time":    time.Now().Unix(),
+	})
+}
+
+// handleTriggerEventRecovery 触发单个赛事的恢复
+func (s *Server) handleTriggerEventRecovery(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	eventID := vars["event_id"]
+	
+	// 获取product参数（默认为liveodds）
+	product := r.URL.Query().Get("product")
+	if product == "" {
+		product = "liveodds"
+	}
+	
+	log.Printf("Manual event recovery triggered for %s (product: %s)", eventID, product)
+	
+	go func() {
+		// 触发赔率恢复
+		if err := s.recoveryManager.TriggerEventRecovery(product, eventID); err != nil {
+			log.Printf("Event recovery failed: %v", err)
+		}
+		
+		// 触发状态消息恢复
+		if err := s.recoveryManager.TriggerStatefulMessagesRecovery(product, eventID); err != nil {
+			log.Printf("Stateful messages recovery failed: %v", err)
+		}
+	}()
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":   "accepted",
+		"message":  "Event recovery request accepted and processing",
+		"event_id": eventID,
+		"product":  product,
+		"time":     time.Now().Unix(),
+	})
 }
 

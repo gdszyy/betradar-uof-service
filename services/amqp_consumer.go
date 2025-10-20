@@ -21,20 +21,22 @@ type MessageBroadcaster interface {
 }
 
 type AMQPConsumer struct {
-	config       *config.Config
-	messageStore *MessageStore
-	broadcaster  MessageBroadcaster
-	conn         *amqp.Connection
-	channel      *amqp.Channel
-	done         chan bool
+	config          *config.Config
+	messageStore    *MessageStore
+	broadcaster     MessageBroadcaster
+	recoveryManager *RecoveryManager
+	conn            *amqp.Connection
+	channel         *amqp.Channel
+	done            chan bool
 }
 
 func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster MessageBroadcaster) *AMQPConsumer {
 	return &AMQPConsumer{
-		config:       cfg,
-		messageStore: store,
-		broadcaster:  broadcaster,
-		done:         make(chan bool),
+		config:          cfg,
+		messageStore:    store,
+		broadcaster:     broadcaster,
+		recoveryManager: NewRecoveryManager(cfg),
+		done:            make(chan bool),
 	}
 }
 
@@ -145,6 +147,20 @@ func (c *AMQPConsumer) Start() error {
 	}
 
 	log.Println("Started consuming messages")
+	
+	// 自动触发恢复（如果启用）
+	if c.config.AutoRecovery {
+		log.Println("Auto recovery is enabled, triggering full recovery...")
+		go func() {
+			// 等待几秒确保AMQP连接稳定
+			time.Sleep(3 * time.Second)
+			if err := c.recoveryManager.TriggerFullRecovery(); err != nil {
+				log.Printf("Auto recovery failed: %v", err)
+			} else {
+				log.Println("Auto recovery completed successfully")
+			}
+		}()
+	}
 
 	// 处理消息
 	go c.handleMessages(msgs)
