@@ -51,8 +51,9 @@ func (r *RecoveryManager) triggerProductRecovery(product string) error {
 	// 构建恢复URL
 	url := fmt.Sprintf("%s/%s/recovery/initiate_request", r.config.APIBaseURL, product)
 	
-	// 如果配置了恢复时间范围，添加after参数
-	if r.config.RecoveryAfterHours > 0 {
+	// 注意：liveodds对after参数很敏感，建议不使用after参数，让Betradar使用默认范围
+	// 如果配置了RECOVERY_AFTER_HOURS且大于0，且产品不是liveodds，才使用after参数
+	if r.config.RecoveryAfterHours > 0 && product != "liveodds" {
 		// Betradar限制：最多恢复10小时内的数据
 		hours := r.config.RecoveryAfterHours
 		if hours > 10 {
@@ -66,7 +67,11 @@ func (r *RecoveryManager) triggerProductRecovery(product string) error {
 			time.UnixMilli(afterTimestamp).Format(time.RFC3339),
 			hours)
 	} else {
-		log.Printf("Recovery for %s: requesting default range (Betradar default)", product)
+		if product == "liveodds" {
+			log.Printf("Recovery for %s: using default range (no 'after' parameter for liveodds)", product)
+		} else {
+			log.Printf("Recovery for %s: using default range (Betradar default)", product)
+		}
 	}
 	
 	// 创建POST请求
