@@ -29,10 +29,13 @@ type Server struct {
 }
 
 func NewServer(cfg *config.Config, db *sql.DB, hub *Hub) *Server {
-	// 创建Replay客户端(如果凭证可用)
+	// 创建Replay客户端(如果access token可用)
 	var replayClient *services.ReplayClient
-	if cfg.Username != "" && cfg.Password != "" {
-		replayClient = services.NewReplayClient(cfg.Username, cfg.Password)
+	if cfg.AccessToken != "" {
+		replayClient = services.NewReplayClient(cfg.AccessToken)
+		log.Println("[Server] Replay client initialized with access token")
+	} else {
+		log.Println("[Server] ⚠️  Replay client not initialized - BETRADAR_ACCESS_TOKEN not set")
 	}
 	
 	return &Server{

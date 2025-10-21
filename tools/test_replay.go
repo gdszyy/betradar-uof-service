@@ -25,13 +25,12 @@ func main() {
 		log.Fatal("❌ Event ID is required. Use -event=sr:match:12345")
 	}
 
-	// 从环境变量获取凭证
-	username := os.Getenv("UOF_USERNAME")
-	password := os.Getenv("UOF_PASSWORD")
+	// 从环境变量获取access token
+	accessToken := os.Getenv("BETRADAR_ACCESS_TOKEN")
 	dbURL := os.Getenv("DATABASE_URL")
 
-	if username == "" || password == "" {
-		log.Fatal("❌ UOF_USERNAME and UOF_PASSWORD environment variables are required")
+	if accessToken == "" {
+		log.Fatal("❌ BETRADAR_ACCESS_TOKEN environment variable is required")
 	}
 
 	log.Println("🎬 Betradar UOF Replay Test")
@@ -43,7 +42,7 @@ func main() {
 	log.Println()
 
 	// 创建重放客户端
-	client := services.NewReplayClient(username, password)
+	client := services.NewReplayClient(accessToken)
 
 	// 连接数据库(如果提供)
 	var db *sql.DB

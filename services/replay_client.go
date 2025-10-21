@@ -12,10 +12,9 @@ import (
 
 // ReplayClient 重放服务器API客户端
 type ReplayClient struct {
-	baseURL  string
-	username string
-	password string
-	client   *http.Client
+	baseURL     string
+	accessToken string
+	client      *http.Client
 }
 
 // ReplayStatus 重放状态
@@ -25,25 +24,19 @@ type ReplayStatus struct {
 }
 
 // NewReplayClient 创建重放客户端
-func NewReplayClient(username, password string) *ReplayClient {
+// accessToken: Betradar access token (from BETRADAR_ACCESS_TOKEN)
+func NewReplayClient(accessToken string) *ReplayClient {
 	log.Println("[ReplayClient] Initializing Replay API client...")
 	
-	if username != "" {
-		log.Printf("[ReplayClient] ✅ Using username: %s", username)
+	if accessToken != "" {
+		log.Printf("[ReplayClient] ✅ Access token configured (length: %d)", len(accessToken))
 	} else {
-		log.Println("[ReplayClient] ⚠️  Username is empty")
-	}
-	
-	if password != "" {
-		log.Printf("[ReplayClient] ✅ Password configured (length: %d)", len(password))
-	} else {
-		log.Println("[ReplayClient] ⚠️  Password is empty")
+		log.Println("[ReplayClient] ⚠️  Access token is empty")
 	}
 	
 	return &ReplayClient{
-		baseURL:  "https://api.betradar.com/v1",
-		username: username,
-		password: password,
+		baseURL:     "https://api.betradar.com/v1",
+		accessToken: accessToken,
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -67,13 +60,14 @@ func (r *ReplayClient) doRequest(method, path string, body interface{}) ([]byte,
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	// 设置认证并记录
-	if r.username != "" && r.password != "" {
-		log.Printf("[ReplayClient] Making %s request to %s with auth (user: %s)", method, path, r.username)
-		req.SetBasicAuth(r.username, r.password)
+	// 添加access token到URL参数
+	if r.accessToken != "" {
+		q := req.URL.Query()
+		q.Add("token", r.accessToken)
+		req.URL.RawQuery = q.Encode()
+		log.Printf("[ReplayClient] Making %s request to %s with token", method, path)
 	} else {
-		log.Printf("[ReplayClient] ⚠️  Making %s request to %s WITHOUT auth (credentials missing)", method, path)
-		req.SetBasicAuth(r.username, r.password) // 仍然设置，但会失败
+		log.Printf("[ReplayClient] ⚠️  Making %s request to %s WITHOUT token", method, path)
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
