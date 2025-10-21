@@ -367,36 +367,13 @@ func (s *Server) handleReplayStart(w http.ResponseWriter, r *http.Request) {
 	
 	// 异步启动重放
 	go func() {
-		// 1. 重置
-		if err := s.replayClient.Reset(); err != nil {
-			log.Printf("⚠️  Replay reset failed: %v", err)
-		}
-		
-		// 2. 添加赛事
-		if err := s.replayClient.AddEvent(req.EventID, 0); err != nil {
-			log.Printf("❌ Failed to add event: %v", err)
-			return
-		}
-		
-		// 3. 开始重放
-		options := services.PlayOptions{
-			Speed:              req.Speed,
-			MaxDelay:           req.MaxDelay,
-			NodeID:             req.NodeID,
-			UseReplayTimestamp: req.UseReplayTimestamp,
-		}
-		
-		if err := s.replayClient.Play(options); err != nil {
+		// 使用QuickReplay方法,它包含正确的等待和验证逻辑
+		if err := s.replayClient.QuickReplay(req.EventID, req.Speed, req.NodeID); err != nil {
 			log.Printf("❌ Failed to start replay: %v", err)
 			return
 		}
 		
-		// 4. 等待准备就绪
-		if err := s.replayClient.WaitUntilReady(30 * time.Second); err != nil {
-			log.Printf("⚠️  Replay may not be ready: %v", err)
-		} else {
-			log.Printf("✅ Replay started successfully: %s", req.EventID)
-		}
+		log.Printf("✅ Replay started successfully: %s", req.EventID)
 		
 		// 5. 如果指定了duration,自动停止
 		if req.Duration > 0 {
