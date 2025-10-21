@@ -248,9 +248,16 @@ func (c *AMQPConsumer) parseMessage(xmlContent string) (messageType, eventID str
 
 	// 获取根元素名称作为消息类型
 	decoder := xml.NewDecoder(bytes.NewReader([]byte(xmlContent)))
-	token, _ := decoder.Token()
-	if startElement, ok := token.(xml.StartElement); ok {
-		messageType = startElement.Name.Local
+	// 循环读取token直到找到第一个StartElement(跳过XML声明等)
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			break
+		}
+		if startElement, ok := token.(xml.StartElement); ok {
+			messageType = startElement.Name.Local
+			break
+		}
 	}
 
 	// 解析基本属性
