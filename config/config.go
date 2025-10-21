@@ -55,6 +55,14 @@ func Load() *Config {
 		log.Println("[Config] ⚠️  UOF_PASSWORD not set")
 	}
 	
+	// 检查 LARK_WEBHOOK_URL
+	larkWebhook := getEnv("LARK_WEBHOOK_URL", "")
+	if larkWebhook != "" {
+		log.Printf("[Config] ✅ LARK_WEBHOOK_URL loaded: %s (length: %d)", larkWebhook, len(larkWebhook))
+	} else {
+		log.Println("[Config] ⚠️  LARK_WEBHOOK_URL not set")
+	}
+	
 		return &Config{
 		// Betradar配置
 		AccessToken:   getEnv("BETRADAR_ACCESS_TOKEN", ""),
@@ -81,7 +89,7 @@ func Load() *Config {
 		RecoveryProducts:   getRecoveryProducts(),
 		
 		// 通知配置
-		LarkWebhook: getEnv("LARK_WEBHOOK_URL", ""),
+		LarkWebhook: larkWebhook,
 	}
 }
 
