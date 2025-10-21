@@ -54,7 +54,8 @@ func (r *RecoveryManager) triggerProductRecovery(product string) error {
 	// 注意：liveodds对after参数很敏感，建议不使用after参数，让Betradar使用默认范围
 	// 如果配置了RECOVERY_AFTER_HOURS且大于0，且产品不是liveodds，才使用after参数
 	if r.config.RecoveryAfterHours > 0 && product != "liveodds" {
-		// Betradar限制：最多恢复10小时内的数据
+		// Betradar限制：最多恢复10小时内的数据（Live Odds producers） 
+		// 调用频率限制 https://docs.sportradar.com/uof/api-and-structure/api/odds-recovery/restrictions-for-odds-recovery
 		hours := r.config.RecoveryAfterHours
 		if hours > 10 {
 			log.Printf("WARNING: RECOVERY_AFTER_HOURS=%d exceeds Betradar limit (10 hours), using 10 hours instead", hours)
