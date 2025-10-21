@@ -1,4 +1,4 @@
-# Sportradar UOF Technical Issues
+# Sportradar UOF Technical Issue
 
 **Date**: 2025-10-21  
 **Account**: afunmts982  
@@ -6,7 +6,7 @@
 
 ---
 
-## Issue #1: Replay API - Playlist Empty on Play
+## Issue: Replay API - Playlist Empty on Play
 
 ### What We Did
 
@@ -24,9 +24,9 @@
    - Verify → Play: <1 second
    - Retried with 5-10 seconds wait: same result
 
-3. **Key Details from Docs**:
+3. **Key Details from Documentation**:
    - ✓ Used `x-access-token` header (not Basic Auth)
-   - ✓ Added `node_id` parameter
+   - ✓ Added `node_id` parameter for routing
    - ✓ Verified event in playlist before Play
    - ✓ Aware of 48-hour rule (only events >48h old are replayable)
 
@@ -38,93 +38,107 @@
 08:19:33  POST /replay/play                       → 400 "Playlist is empty" ✗
 ```
 
-**Gap**: 3 seconds between verify and play, event confirmed but play fails.
+**Timeline**: 3 seconds between verify and play. Event confirmed in playlist, but play fails immediately after.
 
-### Questions for SR
+### Actual Logs
 
-1. Is `test:match:21797788` valid for Replay API? (may be AMQP-only)
-2. Is there a minimum wait time between AddEvent and Play?
-3. Can you provide a list of currently available test events?
-4. Is there server-side logging we can check?
-
----
-
-## Issue #2: Recovery API - Rate Limiting
-
-### What We Did
-
-**Auto-recovery on startup**:
 ```
-POST /liveodds/recovery/initiate_request?request_id=X&node_id=1
-POST /pre/recovery/initiate_request?request_id=Y&node_id=1
-```
+2025/10/21 08:19:29 🔄 Resetting replay...
+2025/10/21 08:19:29 [ReplayClient] Making POST request to /replay/reset
+2025/10/21 08:19:29 ✅ Replay reset successfully
 
-**Result**: 403 Forbidden after multiple restarts
-```xml
-<response response_code="FORBIDDEN">
-  <action>Too many requests. Limits are:
-    - 4 requests per 120 minutes [Recovery length: 1440 minutes]
-    - 2 requests per 30 minutes [Recovery length: 1440 minutes]
-    - 4 requests per 10 minutes [Recovery length: 30 minutes]
-    ...
-  </action>
+2025/10/21 08:19:29 ➕ Adding event test:match:21797788...
+2025/10/21 08:19:29 [ReplayClient] Making PUT request to /replay/events/test:match:21797788
+2025/10/21 08:19:30 ✅ Event test:match:21797788 added successfully
+
+2025/10/21 08:19:30 ⏳ Waiting for event to be added to playlist...
+
+2025/10/21 08:19:33 📋 Listing replay events...
+2025/10/21 08:19:33 [ReplayClient] Making GET request to /replay/
+2025/10/21 08:19:33 ✅ Event test:match:21797788 confirmed in playlist
+
+2025/10/21 08:19:33 ▶️  Starting replay...
+2025/10/21 08:19:33 [ReplayClient] Making POST request to /replay/play?speed=30&node_id=1
+2025/10/21 08:19:33 ❌ Failed: API error (status 400): 
+<response>
+  <action>One or more parameter values are invalid</action>
+  <message>Playlist is empty or not found.</message>
 </response>
 ```
 
-### Our Solution
+### Questions for Sportradar
 
-- Detect 403 rate limit errors
-- Schedule async retry (15min, then 30min)
-- Don't block service startup
+1. **Event Validity**: Is `test:match:21797788` valid for Replay API?
+   - Does it meet the 48-hour age requirement?
+   - Is it AMQP-only or Replay-compatible?
 
-### Questions for SR
+2. **API Timing**: Is there a minimum wait time between AddEvent and Play?
+   - Our 3-second wait seems insufficient
+   - Should we poll GET /replay/ until certain condition?
 
-1. Are the 6 limits evaluated independently or in combination?
-2. What's the recommended recovery frequency for production?
-3. Should we trigger recovery on every service restart?
-4. Is there an API to query remaining quota?
+3. **Test Events**: Can you provide a list of currently available test events?
+   - Which `test:match:*` IDs are guaranteed to work?
+   - Any recommended events for testing?
 
----
-
-## Issue #3: Replay Messages Not Received
-
-### Current Setup
-
-```
-Our Service → stgmq.betradar.com:5671 (Production AMQP)
-Replay API  → global.replaymq.betradar.com:5671 (Replay AMQP)
-```
-
-**Result**: Replay API calls succeed, but we don't receive replay messages.
-
-### Questions for SR
-
-1. Confirm: Replay messages go to `global.replaymq.betradar.com` only?
-2. Can we receive replay messages on production AMQP connection?
-3. Does `node_id` affect message routing between connections?
+4. **Debugging**: Is there server-side logging we can check?
+   - Why does the event disappear between verify and play?
+   - Any internal state we should be aware of?
 
 ---
 
-## Current Implementation Status
+## Implementation Details
 
-### Working ✓
-- AMQP message receiving (45,000+ messages processed)
-- XML parsing (alive, fixture_change, odds_change, etc.)
-- Recovery API with `request_id` and `node_id` tracking
-- Replay API client (all endpoints implemented)
-- Rate limit handling with smart retry
+### HTTP Client
+```go
+func (r *ReplayClient) doRequest(method, path string, body io.Reader) ([]byte, error) {
+    url := r.baseURL + path  // https://api.betradar.com/v1
+    req, _ := http.NewRequest(method, url, body)
+    req.Header.Set("x-access-token", r.accessToken)
+    
+    resp, err := r.client.Do(req)
+    // ... error handling
+}
+```
 
-### Not Working ✗
-- Replay playlist persistence (event disappears between verify and play)
-- Receiving replay messages (architecture issue)
+### Replay Flow
+```go
+func QuickReplay(eventID string, speed int, nodeID int) error {
+    // 1. Reset
+    POST /replay/reset
+    
+    // 2. Add event
+    PUT /replay/events/{eventID}
+    
+    // 3. Wait and verify (retry up to 5 times)
+    for i := 0; i < 5; i++ {
+        time.Sleep(2 * time.Second)
+        eventsXML := GET /replay/
+        if contains(eventsXML, eventID) {
+            break
+        }
+    }
+    
+    // 4. Play
+    POST /replay/play?speed={speed}&node_id={nodeID}
+    
+    // 5. Wait for ready
+    for {
+        status := GET /replay/status
+        if status != "SETTING_UP" {
+            break
+        }
+    }
+}
+```
 
 ---
 
 ## Request
 
-1. **Replay**: Provide working test event IDs or explain correct API flow
-2. **Recovery**: Clarify rate limit rules and best practices
-3. **AMQP**: Confirm replay message routing architecture
+Please help us understand:
+1. Why the event disappears from playlist between verify and play
+2. The correct API flow and timing requirements
+3. Which test events are currently available and working
 
-**Priority**: Replay API issue > AMQP architecture > Recovery rate limits
+**Priority**: High - Blocking our Replay testing capability
 
