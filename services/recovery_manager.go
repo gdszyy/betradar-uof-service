@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -35,17 +36,28 @@ func (r *RecoveryManager) TriggerFullRecovery() error {
 	log.Println("Starting full recovery for all configured products...")
 	
 	var errors []error
+	var rateLimitErrors int
+	
 	for _, product := range r.config.RecoveryProducts {
 		if err := r.triggerProductRecovery(product); err != nil {
-			log.Printf("Failed to trigger recovery for product %s: %v", product, err)
-			errors = append(errors, err)
+			if bytes.Contains([]byte(err.Error()), []byte("rate limit exceeded")) {
+				log.Printf("⚠️  Recovery for product %s: rate limited, retry scheduled", product)
+				rateLimitErrors++
+			} else {
+				log.Printf("❌ Failed to trigger recovery for product %s: %v", product, err)
+				errors = append(errors, err)
+			}
 		} else {
-			log.Printf("Successfully triggered recovery for product: %s", product)
+			log.Printf("✅ Successfully triggered recovery for product: %s", product)
 		}
 	}
 	
 	if len(errors) > 0 {
 		return fmt.Errorf("recovery failed for %d products", len(errors))
+	}
+	
+	if rateLimitErrors > 0 {
+		log.Printf("ℹ️  %d product(s) rate limited, retries scheduled in background", rateLimitErrors)
 	}
 	
 	log.Println("Full recovery triggered successfully for all products")
@@ -115,6 +127,17 @@ func (r *RecoveryManager) triggerProductRecovery(product string) error {
 	
 	// 检查响应状态
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
+		// 检查是否是频率限制错误
+		if resp.StatusCode == http.StatusForbidden && bytes.Contains(body, []byte("Too many requests")) {
+			log.Printf("⚠️  Recovery rate limit exceeded for product %s", product)
+			log.Printf("   Will schedule retry in background...")
+			
+			// 异步重试，不阻塞启动
+			go r.scheduleRecoveryRetry(product, requestID, 15*time.Minute)
+			
+			// 返回特殊错误，让调用者知道已计划重试
+			return fmt.Errorf("rate limit exceeded, retry scheduled")
+		}
 		return fmt.Errorf("recovery request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 	
@@ -202,5 +225,29 @@ func (r *RecoveryManager) TriggerStatefulMessagesRecovery(product, eventID strin
 	log.Printf("Stateful messages recovery response (status %d): %s", resp.StatusCode, string(body))
 	
 	return nil
+}
+
+
+
+// scheduleRecoveryRetry 计划在指定延迟后重试恢复
+func (r *RecoveryManager) scheduleRecoveryRetry(product string, requestID int, delay time.Duration) {
+	log.Printf("📅 Scheduling recovery retry for product %s in %v", product, delay)
+	
+	time.Sleep(delay)
+	
+	log.Printf("🔄 Retrying recovery for product %s (after rate limit delay)", product)
+	
+	if err := r.triggerProductRecovery(product); err != nil {
+		// 如果再次失败，检查是否还是频率限制
+		if bytes.Contains([]byte(err.Error()), []byte("rate limit exceeded")) {
+			// 如果还是频率限制，再等更长时间重试
+			log.Printf("⚠️  Recovery retry still rate limited, will try again in 30 minutes")
+			go r.scheduleRecoveryRetry(product, requestID, 30*time.Minute)
+		} else {
+			log.Printf("❌ Recovery retry failed for product %s: %v", product, err)
+		}
+	} else {
+		log.Printf("✅ Recovery retry successful for product %s", product)
+	}
 }
 
