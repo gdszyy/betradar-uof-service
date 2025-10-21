@@ -79,24 +79,22 @@ func main() {
 	log.Printf("Web server started on port %s", cfg.Port)
 
 	// 启动比赛监控 (每小时执行一次)
-	if amqpConsumer.GetChannel() != nil {
-		matchMonitor := services.NewMatchMonitor(cfg, amqpConsumer.GetChannel())
+	matchMonitor := services.NewMatchMonitor(cfg, nil)
+	
+	// 立即执行一次
+	go matchMonitor.CheckAndReportWithNotifier(larkNotifier)
+	
+	// 定期执行
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
 		
-		// 立即执行一次
-		go matchMonitor.CheckAndReportWithNotifier(larkNotifier)
-		
-		// 定期执行
-		go func() {
-			ticker := time.NewTicker(1 * time.Hour)
-			defer ticker.Stop()
-			
-			for range ticker.C {
-				matchMonitor.CheckAndReportWithNotifier(larkNotifier)
-			}
-		}()
-		
-		log.Println("Match monitor started (hourly)")
-	}
+		for range ticker.C {
+			matchMonitor.CheckAndReportWithNotifier(larkNotifier)
+		}
+	}()
+	
+	log.Println("Match monitor started (hourly)")
 
 	log.Println("Service is running. Press Ctrl+C to stop.")
 

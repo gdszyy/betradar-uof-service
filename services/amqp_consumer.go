@@ -161,22 +161,6 @@ func (c *AMQPConsumer) Start() error {
 	
 	// 启动消息统计
 	go c.statsTracker.StartPeriodicReport()
-	
-	// 初始化Match监控器
-	c.matchMonitor = NewMatchMonitor(c.config, c.channel)
-	
-	// 启动定期Match监控(每小时一次)
-	go func() {
-		time.Sleep(10 * time.Second) // 等待服务稳定
-		c.matchMonitor.CheckAndReportWithNotifier(c.notifier) // 立即执行一次
-		
-		ticker := time.NewTicker(1 * time.Hour)
-		defer ticker.Stop()
-		
-		for range ticker.C {
-			c.matchMonitor.CheckAndReportWithNotifier(c.notifier)
-		}
-	}()
 		
 	// 自动触发恢复（如果启用）
 	if c.config.AutoRecovery {

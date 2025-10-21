@@ -1,223 +1,187 @@
 package services
 
 import (
-	"bytes"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"time"
 	
-	"github.com/streadway/amqp"
 	"uof-service/config"
 )
 
-// MatchListRequest Match List请求
-type MatchListRequest struct {
-	XMLName          xml.Name `xml:"matchlist"`
-	HoursBack        int      `xml:"hoursback,attr"`
-	HoursForward     int      `xml:"hoursforward,attr"`
-	IncludeAvailable string   `xml:"includeavailable,attr"`
-	Sports           []SportFilter `xml:"sport,omitempty"`
+// ScheduleResponse Schedule API响应
+type ScheduleResponse struct {
+	XMLName     xml.Name     `xml:"schedule"`
+	GeneratedAt string       `xml:"generated_at,attr"`
+	SportEvents []SportEvent `xml:"sport_event"`
 }
 
-type SportFilter struct {
-	SportID string `xml:"sportid,attr"`
+type SportEvent struct {
+	ID           string      `xml:"id,attr"`
+	Scheduled    string      `xml:"scheduled,attr"`
+	Status       string      `xml:"status,attr"`
+	LiveOdds     string      `xml:"liveodds,attr"`
+	NextLiveTime string      `xml:"next_live_time,attr"`
+	Tournament   Tournament  `xml:"tournament"`
+	Competitors  Competitors `xml:"competitors"`
 }
 
-// MatchListResponse Match List响应
-type MatchListResponse struct {
-	XMLName xml.Name      `xml:"matchlist"`
-	Matches []MatchInfo   `xml:"match"`
+type Tournament struct {
+	ID       string   `xml:"id,attr"`
+	Name     string   `xml:"name,attr"`
+	Sport    Sport    `xml:"sport"`
+	Category Category `xml:"category"`
 }
 
-type MatchInfo struct {
-	ID       string      `xml:"id,attr"`
-	Booked   string      `xml:"booked,attr"`
-	SportID  string      `xml:"sportid,attr"`
-	Status   MatchStatus `xml:"status"`
-	Home     TeamInfo    `xml:"hometeam"`
-	Away     TeamInfo    `xml:"awayteam"`
-	Start    string      `xml:"startdate,attr"`
-}
-
-type MatchStatus struct {
+type Sport struct {
 	ID   string `xml:"id,attr"`
 	Name string `xml:"name,attr"`
 }
 
-type TeamInfo struct {
+type Category struct {
+	ID   string `xml:"id,attr"`
 	Name string `xml:"name,attr"`
+}
+
+type Competitors struct {
+	Competitor []Competitor `xml:"competitor"`
+}
+
+type Competitor struct {
+	ID        string `xml:"id,attr"`
+	Name      string `xml:"name,attr"`
+	Qualifier string `xml:"qualifier,attr"`
 }
 
 // MatchMonitor 比赛订阅监控
 type MatchMonitor struct {
-	config  *config.Config
-	channel *amqp.Channel
+	config *config.Config
+	client *http.Client
 }
 
 // NewMatchMonitor 创建比赛监控
-func NewMatchMonitor(cfg *config.Config, channel *amqp.Channel) *MatchMonitor {
+func NewMatchMonitor(cfg *config.Config, _ interface{}) *MatchMonitor {
 	return &MatchMonitor{
-		config:  cfg,
-		channel: channel,
+		config: cfg,
+		client: &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
-// QueryBookedMatches 查询已订阅的比赛
-func (m *MatchMonitor) QueryBookedMatches(hoursBack, hoursForward int) (*MatchListResponse, error) {
-	log.Printf("📋 Querying booked matches (back: %dh, forward: %dh)...", hoursBack, hoursForward)
+// QueryBookedMatches 查询已订阅的比赛 (使用 REST API)
+func (m *MatchMonitor) QueryBookedMatches() (*ScheduleResponse, error) {
+	log.Printf("📋 Querying live matches via REST API...")
 	
-	// 创建请求
-	request := MatchListRequest{
-		HoursBack:        hoursBack,
-		HoursForward:     hoursForward,
-		IncludeAvailable: "yes",
-	}
+	// 使用 Live Schedule API
+	url := fmt.Sprintf("%s/sports/en/schedules/live/schedule.xml", m.config.APIBaseURL)
 	
-	// 序列化为XML
-	xmlData, err := xml.MarshalIndent(request, "", "  ")
+	log.Printf("📤 Calling API: %s", url)
+	
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal XML: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	
-	// 添加XML声明
-	fullXML := []byte(xml.Header + string(xmlData))
+	// 添加认证头
+	req.Header.Set("x-access-token", m.config.AccessToken)
 	
-	log.Printf("📤 Sending Match List request:\n%s", string(fullXML))
-	
-	// 创建临时队列接收响应
-	responseQueue, err := m.channel.QueueDeclare(
-		"",    // 让服务器生成队列名
-		false, // durable
-		true,  // delete when unused
-		true,  // exclusive
-		false, // no-wait
-		nil,   // arguments
-	)
+	// 发送请求
+	resp, err := m.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to declare response queue: %w", err)
+		return nil, fmt.Errorf("failed to call API: %w", err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 	
-	// 发送请求到 unifiedfeed exchange
-	err = m.channel.Publish(
-		"unifiedfeed",         // exchange - 必须使用 unifiedfeed
-		"matchlist",           // routing key
-		false,                 // mandatory
-		false,                 // immediate
-		amqp.Publishing{
-			ContentType:   "text/xml",
-			CorrelationId: fmt.Sprintf("%d", time.Now().Unix()),
-			ReplyTo:       responseQueue.Name,
-			Body:          fullXML,
-		},
-	)
+	log.Printf("📥 Received response (%d bytes)", resp.ContentLength)
+	
+	// 解析响应
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to publish request: %w", err)
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 	
-	log.Println("⏳ Waiting for response...")
-	
-	// 消费响应
-	msgs, err := m.channel.Consume(
-		responseQueue.Name, // queue
-		"",                 // consumer
-		true,               // auto-ack
-		false,              // exclusive
-		false,              // no-local
-		false,              // no-wait
-		nil,                // args
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to consume response: %w", err)
+	var schedule ScheduleResponse
+	if err := xml.Unmarshal(body, &schedule); err != nil {
+		return nil, fmt.Errorf("failed to parse XML: %w", err)
 	}
 	
-	// 等待响应(超时10秒)
-	select {
-	case msg := <-msgs:
-		log.Printf("📥 Received response (%d bytes)", len(msg.Body))
-		
-		// 解析响应
-		var response MatchListResponse
-		decoder := xml.NewDecoder(bytes.NewReader(msg.Body))
-		
-		for {
-			token, err := decoder.Token()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				return nil, fmt.Errorf("XML parsing error: %w", err)
-			}
-			
-			if startElement, ok := token.(xml.StartElement); ok {
-				if startElement.Name.Local == "matchlist" {
-					if err := decoder.DecodeElement(&response, &startElement); err != nil {
-						return nil, fmt.Errorf("failed to decode matchlist: %w", err)
-					}
-					break
-				}
-			}
-		}
-		
-		return &response, nil
-		
-	case <-time.After(10 * time.Second):
-		return nil, fmt.Errorf("timeout waiting for response")
-	}
+	return &schedule, nil
 }
 
 // AnalyzeBookedMatches 分析已订阅的比赛
-func (m *MatchMonitor) AnalyzeBookedMatches(response *MatchListResponse) {
+func (m *MatchMonitor) AnalyzeBookedMatches(schedule *ScheduleResponse) {
 	log.Println("\n" + "═══════════════════════════════════════════════════════════")
 	log.Println("📊 BOOKED MATCHES ANALYSIS")
 	log.Println("═══════════════════════════════════════════════════════════")
 	
-	totalMatches := len(response.Matches)
+	totalMatches := len(schedule.SportEvents)
 	bookedCount := 0
-	availableCount := 0
-	preCount := 0
+	bookableCount := 0
+	notAvailableCount := 0
 	liveCount := 0
+	notStartedCount := 0
 	
-	bookedMatches := []MatchInfo{}
+	bookedMatches := []SportEvent{}
 	
 	// 统计
-	for _, match := range response.Matches {
-		if match.Booked == "1" {
+	for _, event := range schedule.SportEvents {
+		switch event.LiveOdds {
+		case "booked":
 			bookedCount++
-			bookedMatches = append(bookedMatches, match)
+			bookedMatches = append(bookedMatches, event)
 			
-			// 判断pre还是live
-			if match.Status.Name == "NOT_STARTED" {
-				preCount++
-			} else {
+			// 判断是否live
+			if event.Status == "live" || event.Status == "started" {
 				liveCount++
+			} else {
+				notStartedCount++
 			}
-		} else if match.Booked == "0" {
-			availableCount++
+		case "bookable":
+			bookableCount++
+		case "not_available":
+			notAvailableCount++
 		}
 	}
 	
 	log.Printf("📈 Summary:")
-	log.Printf("  Total matches: %d", totalMatches)
+	log.Printf("  Total live matches: %d", totalMatches)
 	log.Printf("  Booked matches: %d", bookedCount)
-	log.Printf("    - Pre-match (NOT_STARTED): %d", preCount)
-	log.Printf("    - Live (other status): %d", liveCount)
-	log.Printf("  Available but not booked: %d", availableCount)
+	log.Printf("    - Live/Started: %d", liveCount)
+	log.Printf("    - Not started: %d", notStartedCount)
+	log.Printf("  Bookable (not booked): %d", bookableCount)
+	log.Printf("  Not available: %d", notAvailableCount)
 	
 	// 显示已订阅的比赛
 	if bookedCount > 0 {
 		log.Println("\n🎯 Booked Matches:")
-		log.Printf("%-20s %-15s %-30s %-30s %s", "Match ID", "Status", "Home", "Away", "Start Time")
-		log.Println(string(bytes.Repeat([]byte("-"), 120)))
+		log.Printf("%-20s %-15s %-30s %-30s %s", "Match ID", "Status", "Home", "Away", "Sport")
+		log.Println("─────────────────────────────────────────────────────────────────────────────────────────────────────────")
 		
-		for _, match := range bookedMatches {
+		for _, event := range bookedMatches {
+			homeName := ""
+			awayName := ""
+			if len(event.Competitors.Competitor) >= 2 {
+				for _, comp := range event.Competitors.Competitor {
+					if comp.Qualifier == "home" {
+						homeName = comp.Name
+					} else if comp.Qualifier == "away" {
+						awayName = comp.Name
+					}
+				}
+			}
+			
 			log.Printf("%-20s %-15s %-30s %-30s %s",
-				match.ID,
-				match.Status.Name,
-				truncate(match.Home.Name, 30),
-				truncate(match.Away.Name, 30),
-				match.Start,
+				truncate(event.ID, 20),
+				event.Status,
+				truncate(homeName, 30),
+				truncate(awayName, 30),
+				event.Tournament.Sport.Name,
 			)
 		}
 	} else {
@@ -225,9 +189,10 @@ func (m *MatchMonitor) AnalyzeBookedMatches(response *MatchListResponse) {
 		log.Println("   This explains why you're not receiving odds_change messages.")
 		log.Println("   You need to subscribe to matches to receive odds updates.")
 		
-		if availableCount > 0 {
-			log.Printf("\n💡 TIP: There are %d available matches you can book.", availableCount)
-			log.Println("   Use bookmatch command to subscribe to matches.")
+		if bookableCount > 0 {
+			log.Printf("\n💡 TIP: There are %d bookable matches available.", bookableCount)
+			log.Println("   Use the booking API to subscribe to matches:")
+			log.Println("   POST /liveodds/booking-calendar/events/{match_id}/book")
 		}
 	}
 	
@@ -238,6 +203,52 @@ func (m *MatchMonitor) AnalyzeBookedMatches(response *MatchListResponse) {
 	}
 	
 	log.Println("═══════════════════════════════════════════════════════════\n")
+}
+
+// CheckAndReport 检查并报告
+func (m *MatchMonitor) CheckAndReport() {
+	schedule, err := m.QueryBookedMatches()
+	if err != nil {
+		log.Printf("❌ Failed to query booked matches: %v", err)
+		return
+	}
+	
+	m.AnalyzeBookedMatches(schedule)
+}
+
+// CheckAndReportWithNotifier 检查并报告(带通知)
+func (m *MatchMonitor) CheckAndReportWithNotifier(notifier *LarkNotifier) {
+	schedule, err := m.QueryBookedMatches()
+	if err != nil {
+		log.Printf("❌ Failed to query booked matches: %v", err)
+		if notifier != nil {
+			notifier.NotifyError("MatchMonitor", fmt.Sprintf("Failed to query: %v", err))
+		}
+		return
+	}
+	
+	m.AnalyzeBookedMatches(schedule)
+	
+	// 发送通知
+	if notifier != nil {
+		totalMatches := len(schedule.SportEvents)
+		bookedCount := 0
+		liveCount := 0
+		notStartedCount := 0
+		
+		for _, event := range schedule.SportEvents {
+			if event.LiveOdds == "booked" {
+				bookedCount++
+				if event.Status == "live" || event.Status == "started" {
+					liveCount++
+				} else {
+					notStartedCount++
+				}
+			}
+		}
+		
+		notifier.NotifyMatchMonitor(totalMatches, bookedCount, notStartedCount, liveCount)
+	}
 }
 
 // MonitorPeriodically 定期监控
@@ -251,52 +262,6 @@ func (m *MatchMonitor) MonitorPeriodically(interval time.Duration) {
 	// 定期执行
 	for range ticker.C {
 		m.CheckAndReport()
-	}
-}
-
-// CheckAndReport 检查并报告
-func (m *MatchMonitor) CheckAndReport() {
-	response, err := m.QueryBookedMatches(6, 24)
-	if err != nil {
-		log.Printf("❌ Failed to query booked matches: %v", err)
-		return
-	}
-	
-	m.AnalyzeBookedMatches(response)
-}
-
-// CheckAndReportWithNotifier 检查并报告(带通知)
-func (m *MatchMonitor) CheckAndReportWithNotifier(notifier *LarkNotifier) {
-	response, err := m.QueryBookedMatches(6, 24)
-	if err != nil {
-		log.Printf("❌ Failed to query booked matches: %v", err)
-		if notifier != nil {
-			notifier.NotifyError("MatchMonitor", fmt.Sprintf("Failed to query: %v", err))
-		}
-		return
-	}
-	
-	m.AnalyzeBookedMatches(response)
-	
-	// 发送通知
-	if notifier != nil {
-		totalMatches := len(response.Matches)
-		bookedCount := 0
-		preCount := 0
-		liveCount := 0
-		
-		for _, match := range response.Matches {
-			if match.Booked == "1" {
-				bookedCount++
-				if match.Status.Name == "NOT_STARTED" {
-					preCount++
-				} else {
-					liveCount++
-				}
-			}
-		}
-		
-		notifier.NotifyMatchMonitor(totalMatches, bookedCount, preCount, liveCount)
 	}
 }
 
