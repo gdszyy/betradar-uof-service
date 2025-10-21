@@ -23,17 +23,25 @@ type Server struct {
 	wsHub           *Hub
 	messageStore    *services.MessageStore
 	recoveryManager *services.RecoveryManager
+	replayClient    *services.ReplayClient
 	httpServer      *http.Server
 	upgrader        websocket.Upgrader
 }
 
 func NewServer(cfg *config.Config, db *sql.DB, hub *Hub) *Server {
+	// 创建Replay客户端(如果凭证可用)
+	var replayClient *services.ReplayClient
+	if cfg.Username != "" && cfg.Password != "" {
+		replayClient = services.NewReplayClient(cfg.Username, cfg.Password)
+	}
+	
 	return &Server{
 		config:          cfg,
 		db:              db,
 		wsHub:           hub,
 		messageStore:    services.NewMessageStore(db),
 		recoveryManager: services.NewRecoveryManager(cfg, services.NewMessageStore(db)),
+		replayClient:    replayClient,
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -59,6 +67,12 @@ func (s *Server) Start() error {
 	api.HandleFunc("/recovery/trigger", s.handleTriggerRecovery).Methods("POST")
 	api.HandleFunc("/recovery/event/{event_id}", s.handleTriggerEventRecovery).Methods("POST")
 	api.HandleFunc("/recovery/status", s.handleGetRecoveryStatus).Methods("GET")
+	
+	// Replay API
+	api.HandleFunc("/replay/start", s.handleReplayStart).Methods("POST")
+	api.HandleFunc("/replay/stop", s.handleReplayStop).Methods("POST")
+	api.HandleFunc("/replay/status", s.handleReplayStatus).Methods("GET")
+	api.HandleFunc("/replay/list", s.handleReplayList).Methods("GET")
 
 	// WebSocket路由
 	router.HandleFunc("/ws", s.handleWebSocket)
@@ -302,5 +316,166 @@ func (s *Server) handleGetRecoveryStatus(w http.ResponseWriter, r *http.Request)
 		"count":     len(statuses),
 		"recoveries": statuses,
 	})
+}
+
+
+
+// handleReplayStart 启动重放测试
+func (s *Server) handleReplayStart(w http.ResponseWriter, r *http.Request) {
+	if s.replayClient == nil {
+		http.Error(w, "Replay client not configured. Please set UOF_USERNAME and UOF_PASSWORD", http.StatusServiceUnavailable)
+		return
+	}
+	
+	// 解析请求体
+	var req struct {
+		EventID            string `json:"event_id"`
+		Speed              int    `json:"speed,omitempty"`
+		Duration           int    `json:"duration,omitempty"`
+		NodeID             int    `json:"node_id,omitempty"`
+		MaxDelay           int    `json:"max_delay,omitempty"`
+		UseReplayTimestamp bool   `json:"use_replay_timestamp,omitempty"`
+	}
+	
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	
+	// 验证必需参数
+	if req.EventID == "" {
+		http.Error(w, "event_id is required", http.StatusBadRequest)
+		return
+	}
+	
+	// 设置默认值
+	if req.Speed == 0 {
+		req.Speed = 20
+	}
+	if req.NodeID == 0 {
+		req.NodeID = 1
+	}
+	if req.MaxDelay == 0 {
+		req.MaxDelay = 10000
+	}
+	
+	log.Printf("🎬 Starting replay via API: event=%s, speed=%dx, node_id=%d", 
+		req.EventID, req.Speed, req.NodeID)
+	
+	// 异步启动重放
+	go func() {
+		// 1. 重置
+		if err := s.replayClient.Reset(); err != nil {
+			log.Printf("⚠️  Replay reset failed: %v", err)
+		}
+		
+		// 2. 添加赛事
+		if err := s.replayClient.AddEvent(req.EventID, 0); err != nil {
+			log.Printf("❌ Failed to add event: %v", err)
+			return
+		}
+		
+		// 3. 开始重放
+		options := services.PlayOptions{
+			Speed:              req.Speed,
+			MaxDelay:           req.MaxDelay,
+			NodeID:             req.NodeID,
+			UseReplayTimestamp: req.UseReplayTimestamp,
+		}
+		
+		if err := s.replayClient.Play(options); err != nil {
+			log.Printf("❌ Failed to start replay: %v", err)
+			return
+		}
+		
+		// 4. 等待准备就绪
+		if err := s.replayClient.WaitUntilReady(30 * time.Second); err != nil {
+			log.Printf("⚠️  Replay may not be ready: %v", err)
+		} else {
+			log.Printf("✅ Replay started successfully: %s", req.EventID)
+		}
+		
+		// 5. 如果指定了duration,自动停止
+		if req.Duration > 0 {
+			log.Printf("⏱️  Replay will run for %d seconds", req.Duration)
+			time.Sleep(time.Duration(req.Duration) * time.Second)
+			
+			if err := s.replayClient.Stop(); err != nil {
+				log.Printf("⚠️  Failed to stop replay: %v", err)
+			} else {
+				log.Printf("🛑 Replay stopped after %d seconds", req.Duration)
+			}
+		}
+	}()
+	
+	// 立即返回响应
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "accepted",
+		"message": "Replay request accepted and processing",
+		"event_id": req.EventID,
+		"speed":   req.Speed,
+		"node_id": req.NodeID,
+		"duration": req.Duration,
+		"time":    time.Now().Unix(),
+	})
+}
+
+// handleReplayStop 停止重放
+func (s *Server) handleReplayStop(w http.ResponseWriter, r *http.Request) {
+	if s.replayClient == nil {
+		http.Error(w, "Replay client not configured", http.StatusServiceUnavailable)
+		return
+	}
+	
+	log.Println("🛑 Stopping replay via API...")
+	
+	if err := s.replayClient.Stop(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	
+	log.Println("✅ Replay stopped successfully")
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "success",
+		"message": "Replay stopped",
+		"time":    time.Now().Unix(),
+	})
+}
+
+// handleReplayStatus 获取重放状态
+func (s *Server) handleReplayStatus(w http.ResponseWriter, r *http.Request) {
+	if s.replayClient == nil {
+		http.Error(w, "Replay client not configured", http.StatusServiceUnavailable)
+		return
+	}
+	
+	status, err := s.replayClient.GetStatus()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	
+	w.Header().Set("Content-Type", "application/xml")
+	w.Write([]byte(status))
+}
+
+// handleReplayList 列出重放列表
+func (s *Server) handleReplayList(w http.ResponseWriter, r *http.Request) {
+	if s.replayClient == nil {
+		http.Error(w, "Replay client not configured", http.StatusServiceUnavailable)
+		return
+	}
+	
+	events, err := s.replayClient.ListEvents()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	
+	w.Header().Set("Content-Type", "application/xml")
+	w.Write([]byte(events))
 }
 
