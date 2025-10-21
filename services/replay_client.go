@@ -60,12 +60,10 @@ func (r *ReplayClient) doRequest(method, path string, body interface{}) ([]byte,
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	// 添加access token到URL参数
+	// 添加access token到HTTP header
 	if r.accessToken != "" {
-		q := req.URL.Query()
-		q.Add("token", r.accessToken)
-		req.URL.RawQuery = q.Encode()
-		log.Printf("[ReplayClient] Making %s request to %s with token", method, path)
+		req.Header.Set("x-access-token", r.accessToken)
+		log.Printf("[ReplayClient] Making %s request to %s with x-access-token header", method, path)
 	} else {
 		log.Printf("[ReplayClient] ⚠️  Making %s request to %s WITHOUT token", method, path)
 	}
