@@ -9,7 +9,7 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
-	"github.com/yourusername/uof-go-service/services"
+	"uof-service/services"
 )
 
 func main() {
