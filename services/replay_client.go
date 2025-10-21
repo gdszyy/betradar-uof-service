@@ -244,7 +244,21 @@ func (r *ReplayClient) QuickReplay(eventID string, speed int, nodeID int) error 
 		return fmt.Errorf("add event: %w", err)
 	}
 	
-	// 3. 开始重放
+	// 3. 等待一下让事件被添加到列表
+	log.Println("⏳ Waiting for event to be added to playlist...")
+	time.Sleep(2 * time.Second)
+	
+	// 4. 验证事件已在列表中
+	events, err := r.ListEvents()
+	if err != nil {
+		log.Printf("⚠️  Could not verify playlist: %v", err)
+	} else if len(events) == 0 {
+		return fmt.Errorf("event not in playlist after adding")
+	} else {
+		log.Printf("✅ Event confirmed in playlist (%d events total)", len(events))
+	}
+	
+	// 5. 开始重放
 	options := PlayOptions{
 		Speed:              speed,
 		MaxDelay:           10000,
@@ -256,7 +270,7 @@ func (r *ReplayClient) QuickReplay(eventID string, speed int, nodeID int) error 
 		return fmt.Errorf("start replay: %w", err)
 	}
 	
-	// 4. 等待准备就绪
+	// 6. 等待准备就绪
 	if err := r.WaitUntilReady(30 * time.Second); err != nil {
 		return fmt.Errorf("wait for ready: %w", err)
 	}
