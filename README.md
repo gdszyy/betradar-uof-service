@@ -19,6 +19,7 @@ Betradar AMQP → Go服务(Railway) → PostgreSQL → WebSocket → 前端浏�
 - ✅ **消息过滤** - 支持按消息类型和赛事ID过滤
 - ✅ **自动重连** - AMQP和WebSocket自动重连
 - ✅ **生产者监控** - 监控alive消息,跟踪生产者状态
+- ✅ **飞书集成** - 自动发送监控通知和统计报告到飞书群组
 
 ## 快速开始
 
@@ -47,6 +48,9 @@ BETRADAR_API_BASE_URL=https://stgapi.betradar.com/v1
 ROUTING_KEYS=#
 DATABASE_URL=postgres://localhost:5432/uof?sslmode=disable
 PORT=8080
+
+# 可选: 飞书通知
+LARK_WEBHOOK_URL=https://open.larksuite.com/open-apis/bot/v2/hook/your-webhook-id
 ```
 
 #### 3. 启动PostgreSQL
@@ -464,6 +468,30 @@ Routing key格式:
 | DATABASE_URL | PostgreSQL连接URL | (必填) |
 | PORT | HTTP服务器端口 | 8080 |
 | ENVIRONMENT | 环境(development/production) | development |
+| LARK_WEBHOOK_URL | 飞书机器人Webhook URL | (可选) |
+| BOOKMAKER_ID | Bookmaker ID | (自动获取) |
+| PRODUCTS | 订阅的产品列表 | liveodds,pre |
+
+## 飞书集成
+
+服务支持自动发送监控通知到飞书群组:
+
+### 自动通知
+
+- 🚀 **服务启动通知** - 服务启动时自动发送
+- 📊 **消息统计报告** - 每5分钟自动统计并发送
+- 🎯 **比赛监控报告** - 每小时自动检查已订阅的比赛
+- ✅ **恢复完成通知** - Recovery请求完成时通知
+- ❌ **错误通知** - 关键错误发生时通知
+
+### 配置飞书通知
+
+1. 在飞书中创建一个群组
+2. 群组设置 → 群机器人 → 添加机器人 → 自定义机器人
+3. 复制 Webhook 地址
+4. 在 Railway 或 `.env` 中配置 `LARK_WEBHOOK_URL`
+
+详细文档: [docs/FEISHU-INTEGRATION.md](docs/FEISHU-INTEGRATION.md)
 
 ## 监控和日志
 
