@@ -9,6 +9,8 @@ import (
 type Config struct {
 	// Betradar配置
 	AccessToken   string
+	Username      string
+	Password      string
 	MessagingHost string
 	APIBaseURL    string
 	RoutingKeys   []string
@@ -32,6 +34,8 @@ func Load() *Config {
 	return &Config{
 		// Betradar配置
 		AccessToken:   getEnv("BETRADAR_ACCESS_TOKEN", ""),
+		Username:      getEnv("UOF_USERNAME", ""),
+		Password:      getEnv("UOF_PASSWORD", ""),
 		MessagingHost: getEnv("BETRADAR_MESSAGING_HOST", "stgmq.betradar.com:5671"),
 		APIBaseURL:    getEnv("BETRADAR_API_BASE_URL", "https://stgapi.betradar.com/v1"),
 		RoutingKeys:   getRoutingKeys(),
