@@ -98,15 +98,30 @@ func Migrate(db *sql.DB) error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_bet_settlements_event_id ON bet_settlements(event_id)`,
 
-		// 生产者状态表
-		`CREATE TABLE IF NOT EXISTS producer_status (
-			id BIGSERIAL PRIMARY KEY,
-			product_id INTEGER UNIQUE NOT NULL,
-			status VARCHAR(20) DEFAULT 'unknown',
-			last_alive BIGINT NOT NULL,
-			subscribed INTEGER DEFAULT 0,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		)`,
+			// 生产者状态表
+			`CREATE TABLE IF NOT EXISTS producer_status (
+				id BIGSERIAL PRIMARY KEY,
+				product_id INTEGER UNIQUE NOT NULL,
+				status VARCHAR(20) DEFAULT 'unknown',
+				last_alive BIGINT NOT NULL,
+				subscribed INTEGER DEFAULT 0,
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			)`,
+
+			// 恢复状态表
+			`CREATE TABLE IF NOT EXISTS recovery_status (
+				id BIGSERIAL PRIMARY KEY,
+				request_id INTEGER NOT NULL,
+				product_id INTEGER NOT NULL,
+				node_id INTEGER NOT NULL,
+				status VARCHAR(20) DEFAULT 'initiated',
+				timestamp BIGINT,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				completed_at TIMESTAMP
+			)`,
+			`CREATE INDEX IF NOT EXISTS idx_recovery_status_request_id ON recovery_status(request_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_recovery_status_product_id ON recovery_status(product_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_recovery_status_status ON recovery_status(status)`,
 	}
 
 	for _, migration := range migrations {

@@ -262,3 +262,80 @@ func (s *MessageStore) GetEventMessages(eventID string) ([]map[string]interface{
 	return messages, nil
 }
 
+
+
+// SaveRecoveryInitiated 保存恢复请求初始化记录
+func (s *MessageStore) SaveRecoveryInitiated(requestID, productID, nodeID int) error {
+	query := `
+		INSERT INTO recovery_status (request_id, product_id, node_id, status, created_at)
+		VALUES ($1, $2, $3, 'initiated', $4)
+	`
+	_, err := s.db.Exec(query, requestID, productID, nodeID, time.Now())
+	return err
+}
+
+// UpdateRecoveryCompleted 更新恢复完成状态
+func (s *MessageStore) UpdateRecoveryCompleted(requestID, productID int, timestamp int64) error {
+	query := `
+		UPDATE recovery_status
+		SET status = 'completed', timestamp = $3, completed_at = $4
+		WHERE request_id = $1 AND product_id = $2
+	`
+	_, err := s.db.Exec(query, requestID, productID, timestamp, time.Now())
+	return err
+}
+
+// GetRecoveryStatus 获取恢复状态列表
+func (s *MessageStore) GetRecoveryStatus(limit int) ([]map[string]interface{}, error) {
+	query := `
+		SELECT id, request_id, product_id, node_id, status, timestamp, created_at, completed_at
+		FROM recovery_status
+		ORDER BY created_at DESC
+		LIMIT $1
+	`
+
+	rows, err := s.db.Query(query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var statuses []map[string]interface{}
+	for rows.Next() {
+		var (
+			id          int64
+			requestID   int
+			productID   int
+			nodeID      int
+			status      string
+			timestamp   sql.NullInt64
+			createdAt   time.Time
+			completedAt sql.NullTime
+		)
+
+		if err := rows.Scan(&id, &requestID, &productID, &nodeID, &status, &timestamp, &createdAt, &completedAt); err != nil {
+			return nil, err
+		}
+
+		s := map[string]interface{}{
+			"id":         id,
+			"request_id": requestID,
+			"product_id": productID,
+			"node_id":    nodeID,
+			"status":     status,
+			"created_at": createdAt,
+		}
+
+		if timestamp.Valid {
+			s["timestamp"] = timestamp.Int64
+		}
+		if completedAt.Valid {
+			s["completed_at"] = completedAt.Time
+		}
+
+		statuses = append(statuses, s)
+	}
+
+	return statuses, nil
+}
+

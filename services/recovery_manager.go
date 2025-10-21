@@ -11,16 +11,22 @@ import (
 )
 
 type RecoveryManager struct {
-	config *config.Config
-	client *http.Client
+	config           *config.Config
+	client           *http.Client
+	messageStore     *MessageStore // 用于保存恢复状态
+	nodeID           int // 用于区分会话的节点ID
+	requestIDCounter int // 用于生成唯一的request_id
 }
 
-func NewRecoveryManager(cfg *config.Config) *RecoveryManager {
+func NewRecoveryManager(cfg *config.Config, store *MessageStore) *RecoveryManager {
 	return &RecoveryManager{
-		config: cfg,
-		client: &http.Client{
+		config:           cfg,
+		client:           &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		messageStore:     store,
+		nodeID:           1, // 默认节点ID为1，可以通过环境变量配置
+		requestIDCounter: int(time.Now().Unix()), // 使用当前时间戳作为起始ID
 	}
 }
 
@@ -48,6 +54,10 @@ func (r *RecoveryManager) TriggerFullRecovery() error {
 
 // triggerProductRecovery 触发单个产品的恢复
 func (r *RecoveryManager) triggerProductRecovery(product string) error {
+	// 生成唯一的request_id
+	r.requestIDCounter++
+	requestID := r.requestIDCounter
+	
 	// 构建恢复URL
 	url := fmt.Sprintf("%s/%s/recovery/initiate_request", r.config.APIBaseURL, product)
 	
@@ -62,16 +72,20 @@ func (r *RecoveryManager) triggerProductRecovery(product string) error {
 			hours = 10
 		}
 		afterTimestamp := time.Now().Add(-time.Duration(hours) * time.Hour).UnixMilli()
-		url = fmt.Sprintf("%s?after=%d", url, afterTimestamp)
-		log.Printf("Recovery for %s: requesting data after %s (%d hours ago)", 
+		url = fmt.Sprintf("%s?after=%d&request_id=%d&node_id=%d", url, afterTimestamp, requestID, r.nodeID)
+		log.Printf("Recovery for %s: requesting data after %s (%d hours ago) [request_id=%d, node_id=%d]", 
 			product, 
 			time.UnixMilli(afterTimestamp).Format(time.RFC3339),
-			hours)
+			hours,
+			requestID,
+			r.nodeID)
 	} else {
+		// 即使不使用after参数，也添加request_id和node_id用于追踪
+		url = fmt.Sprintf("%s?request_id=%d&node_id=%d", url, requestID, r.nodeID)
 		if product == "liveodds" {
-			log.Printf("Recovery for %s: using default range (no 'after' parameter for liveodds)", product)
+			log.Printf("Recovery for %s: using default range (no 'after' parameter) [request_id=%d, node_id=%d]", product, requestID, r.nodeID)
 		} else {
-			log.Printf("Recovery for %s: using default range (Betradar default)", product)
+			log.Printf("Recovery for %s: using default range (Betradar default) [request_id=%d, node_id=%d]", product, requestID, r.nodeID)
 		}
 	}
 	
@@ -105,6 +119,19 @@ func (r *RecoveryManager) triggerProductRecovery(product string) error {
 	}
 	
 	log.Printf("Recovery response for %s (status %d): %s", product, resp.StatusCode, string(body))
+	
+	// 保存恢复初始化状态
+	if r.messageStore != nil {
+		// 获取product ID
+		productID := 1 // liveodds
+		if product == "pre" {
+			productID = 3
+		}
+		
+		if err := r.messageStore.SaveRecoveryInitiated(requestID, productID, r.nodeID); err != nil {
+			log.Printf("Warning: Failed to save recovery status: %v", err)
+		}
+	}
 	
 	return nil
 }

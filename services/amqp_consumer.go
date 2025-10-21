@@ -35,7 +35,7 @@ func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster Messag
 		config:          cfg,
 		messageStore:    store,
 		broadcaster:     broadcaster,
-		recoveryManager: NewRecoveryManager(cfg),
+		recoveryManager: NewRecoveryManager(cfg, store),
 		done:            make(chan bool),
 	}
 }
@@ -550,6 +550,15 @@ func (c *AMQPConsumer) handleSnapshotComplete(xmlContent string) {
 		return
 	}
 
-	log.Printf("Snapshot complete: product=%d, request_id=%d", snapshot.Product, snapshot.RequestID)
+	log.Printf("✅ Snapshot complete: product=%d, request_id=%d, timestamp=%d", snapshot.Product, snapshot.RequestID, snapshot.Timestamp)
+	
+	// 更新恢复状态
+	if snapshot.RequestID > 0 {
+		if err := c.messageStore.UpdateRecoveryCompleted(snapshot.RequestID, snapshot.Product, snapshot.Timestamp); err != nil {
+			log.Printf("Failed to update recovery status: %v", err)
+		} else {
+			log.Printf("Recovery request %d for product %d marked as completed", snapshot.RequestID, snapshot.Product)
+		}
+	}
 }
 

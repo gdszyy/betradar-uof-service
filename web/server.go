@@ -33,7 +33,7 @@ func NewServer(cfg *config.Config, db *sql.DB, hub *Hub) *Server {
 		db:              db,
 		wsHub:           hub,
 		messageStore:    services.NewMessageStore(db),
-		recoveryManager: services.NewRecoveryManager(cfg),
+		recoveryManager: services.NewRecoveryManager(cfg, services.NewMessageStore(db)),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -58,6 +58,7 @@ func (s *Server) Start() error {
 	// 恢复API
 	api.HandleFunc("/recovery/trigger", s.handleTriggerRecovery).Methods("POST")
 	api.HandleFunc("/recovery/event/{event_id}", s.handleTriggerEventRecovery).Methods("POST")
+	api.HandleFunc("/recovery/status", s.handleGetRecoveryStatus).Methods("GET")
 
 	// WebSocket路由
 	router.HandleFunc("/ws", s.handleWebSocket)
@@ -273,6 +274,33 @@ func (s *Server) handleTriggerEventRecovery(w http.ResponseWriter, r *http.Reque
 		"event_id": eventID,
 		"product":  product,
 		"time":     time.Now().Unix(),
+	})
+}
+
+
+
+// handleGetRecoveryStatus 获取恢复状态
+func (s *Server) handleGetRecoveryStatus(w http.ResponseWriter, r *http.Request) {
+	// 获取limit参数（默认20）
+	limitStr := r.URL.Query().Get("limit")
+	limit := 20
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+	
+	statuses, err := s.messageStore.GetRecoveryStatus(limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":    "success",
+		"count":     len(statuses),
+		"recoveries": statuses,
 	})
 }
 

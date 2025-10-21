@@ -74,3 +74,16 @@ type ProducerStatus struct {
 	UpdatedAt    time.Time `db:"updated_at"`
 }
 
+
+// RecoveryStatus 恢复状态记录
+type RecoveryStatus struct {
+	ID         int64     `db:"id"`
+	RequestID  int       `db:"request_id"`
+	ProductID  int       `db:"product_id"`
+	NodeID     int       `db:"node_id"`
+	Status     string    `db:"status"` // initiated, completed, failed
+	Timestamp  int64     `db:"timestamp"`
+	CreatedAt  time.Time `db:"created_at"`
+	CompletedAt *time.Time `db:"completed_at"`
+}
+
