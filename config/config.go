@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strings"
 )
@@ -31,11 +32,29 @@ type Config struct {
 }
 
 func Load() *Config {
+	log.Println("[Config] Loading configuration from environment variables...")
+	
+	username := getEnv("UOF_USERNAME", "")
+	password := getEnv("UOF_PASSWORD", "")
+	
+	// 记录凭证状态（隐藏密码）
+	if username != "" {
+		log.Printf("[Config] ✅ UOF_USERNAME loaded: %s", username)
+	} else {
+		log.Println("[Config] ⚠️  UOF_USERNAME not set")
+	}
+	
+	if password != "" {
+		log.Printf("[Config] ✅ UOF_PASSWORD loaded: %s (length: %d)", maskPassword(password), len(password))
+	} else {
+		log.Println("[Config] ⚠️  UOF_PASSWORD not set")
+	}
+	
 	return &Config{
 		// Betradar配置
 		AccessToken:   getEnv("BETRADAR_ACCESS_TOKEN", ""),
-		Username:      getEnv("UOF_USERNAME", ""),
-		Password:      getEnv("UOF_PASSWORD", ""),
+		Username:      username,
+		Password:      password,
 		MessagingHost: getEnv("BETRADAR_MESSAGING_HOST", "stgmq.betradar.com:5671"),
 		APIBaseURL:    getEnv("BETRADAR_API_BASE_URL", "https://stgapi.betradar.com/v1"),
 		RoutingKeys:   getRoutingKeys(),
@@ -85,5 +104,19 @@ func getEnvInt(key string, defaultValue int) int {
 func getRecoveryProducts() []string {
 	products := getEnv("RECOVERY_PRODUCTS", "liveodds,pre")
 	return strings.Split(products, ",")
+}
+
+
+
+// maskPassword 隐藏密码，只显示前2个和后2个字符
+func maskPassword(password string) string {
+	if password == "" {
+		return ""
+	}
+	length := len(password)
+	if length <= 4 {
+		return "****"
+	}
+	return password[:2] + "****" + password[length-2:]
 }
 

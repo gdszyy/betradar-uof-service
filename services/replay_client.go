@@ -26,6 +26,20 @@ type ReplayStatus struct {
 
 // NewReplayClient 创建重放客户端
 func NewReplayClient(username, password string) *ReplayClient {
+	log.Println("[ReplayClient] Initializing Replay API client...")
+	
+	if username != "" {
+		log.Printf("[ReplayClient] ✅ Using username: %s", username)
+	} else {
+		log.Println("[ReplayClient] ⚠️  Username is empty")
+	}
+	
+	if password != "" {
+		log.Printf("[ReplayClient] ✅ Password configured (length: %d)", len(password))
+	} else {
+		log.Println("[ReplayClient] ⚠️  Password is empty")
+	}
+	
 	return &ReplayClient{
 		baseURL:  "https://api.betradar.com/v1",
 		username: username,
@@ -53,7 +67,14 @@ func (r *ReplayClient) doRequest(method, path string, body interface{}) ([]byte,
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	req.SetBasicAuth(r.username, r.password)
+	// 设置认证并记录
+	if r.username != "" && r.password != "" {
+		log.Printf("[ReplayClient] Making %s request to %s with auth (user: %s)", method, path, r.username)
+		req.SetBasicAuth(r.username, r.password)
+	} else {
+		log.Printf("[ReplayClient] ⚠️  Making %s request to %s WITHOUT auth (credentials missing)", method, path)
+		req.SetBasicAuth(r.username, r.password) // 仍然设置，但会失败
+	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
