@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"uof-service/config"
 	"uof-service/database"
@@ -32,6 +33,14 @@ func main() {
 
 	log.Println("Database connected and migrated")
 
+	// 创建 Feishu 通知器
+	larkNotifier := services.NewLarkNotifier(cfg.LarkWebhook)
+	
+	// 发送服务启动通知
+	if err := larkNotifier.NotifyServiceStart(cfg.BookmakerID, cfg.Products); err != nil {
+		log.Printf("Failed to send startup notification: %v", err)
+	}
+
 	// 创建消息存储服务
 	messageStore := services.NewMessageStore(db)
 
@@ -39,25 +48,56 @@ func main() {
 	wsHub := web.NewHub()
 	go wsHub.Run()
 
+	// 创建消息统计追踪器 (5分钟间隔)
+	statsTracker := services.NewMessageStatsTracker(larkNotifier, 5*time.Minute)
+	go statsTracker.StartPeriodicReport()
+
 	// 启动AMQP消费者
 	amqpConsumer := services.NewAMQPConsumer(cfg, messageStore, wsHub)
+	
+	// 设置消息统计回调
+	amqpConsumer.SetStatsTracker(statsTracker)
+	
 	go func() {
 		if err := amqpConsumer.Start(); err != nil {
 			log.Fatalf("AMQP consumer error: %v", err)
+			larkNotifier.NotifyError("AMQP Consumer", err.Error())
 		}
 	}()
 
 	log.Println("AMQP consumer started")
 
 	// 启动Web服务器
-	server := web.NewServer(cfg, db, wsHub)
+	server := web.NewServer(cfg, db, wsHub, larkNotifier)
 	go func() {
 		if err := server.Start(); err != nil {
 			log.Fatalf("Web server error: %v", err)
+			larkNotifier.NotifyError("Web Server", err.Error())
 		}
 	}()
 
 	log.Printf("Web server started on port %s", cfg.Port)
+
+	// 启动比赛监控 (每小时执行一次)
+	if amqpConsumer.GetChannel() != nil {
+		matchMonitor := services.NewMatchMonitor(cfg, amqpConsumer.GetChannel())
+		
+		// 立即执行一次
+		go matchMonitor.CheckAndReportWithNotifier(larkNotifier)
+		
+		// 定期执行
+		go func() {
+			ticker := time.NewTicker(1 * time.Hour)
+			defer ticker.Stop()
+			
+			for range ticker.C {
+				matchMonitor.CheckAndReportWithNotifier(larkNotifier)
+			}
+		}()
+		
+		log.Println("Match monitor started (hourly)")
+	}
+
 	log.Println("Service is running. Press Ctrl+C to stop.")
 
 	// 等待中断信号

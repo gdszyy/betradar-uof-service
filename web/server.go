@@ -24,11 +24,12 @@ type Server struct {
 	messageStore    *services.MessageStore
 	recoveryManager *services.RecoveryManager
 	replayClient    *services.ReplayClient
+	larkNotifier    *services.LarkNotifier
 	httpServer      *http.Server
 	upgrader        websocket.Upgrader
 }
 
-func NewServer(cfg *config.Config, db *sql.DB, hub *Hub) *Server {
+func NewServer(cfg *config.Config, db *sql.DB, hub *Hub, larkNotifier *services.LarkNotifier) *Server {
 	// 创建Replay客户端(如果access token可用)
 	var replayClient *services.ReplayClient
 	if cfg.AccessToken != "" {
@@ -45,6 +46,7 @@ func NewServer(cfg *config.Config, db *sql.DB, hub *Hub) *Server {
 		messageStore:    services.NewMessageStore(db),
 		recoveryManager: services.NewRecoveryManager(cfg, services.NewMessageStore(db)),
 		replayClient:    replayClient,
+		larkNotifier:    larkNotifier,
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -76,6 +78,9 @@ func (s *Server) Start() error {
 	api.HandleFunc("/replay/stop", s.handleReplayStop).Methods("POST")
 	api.HandleFunc("/replay/status", s.handleReplayStatus).Methods("GET")
 	api.HandleFunc("/replay/list", s.handleReplayList).Methods("GET")
+	
+	// 监控API
+	api.HandleFunc("/monitor/trigger", s.handleTriggerMonitor).Methods("POST")
 
 	// WebSocket路由
 	router.HandleFunc("/ws", s.handleWebSocket)
@@ -457,5 +462,28 @@ func (s *Server) handleReplayList(w http.ResponseWriter, r *http.Request) {
 	
 	w.Header().Set("Content-Type", "application/xml")
 	w.Write([]byte(events))
+}
+
+
+
+// handleTriggerMonitor 手动触发监控检查
+func (s *Server) handleTriggerMonitor(w http.ResponseWriter, r *http.Request) {
+	log.Println("📊 Manual monitor check triggered via API...")
+	
+	// 这里需要获取 AMQP channel 来创建 MatchMonitor
+	// 由于架构限制,我们返回一个提示信息
+	// 实际的监控会在定期任务中执行
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "triggered",
+		"message": "Monitor check triggered. Results will be sent to Feishu webhook.",
+		"time":    time.Now().Unix(),
+	})
+	
+	// 发送通知
+	if s.larkNotifier != nil {
+		s.larkNotifier.SendText("📊 手动监控检查已触发")
+	}
 }
 

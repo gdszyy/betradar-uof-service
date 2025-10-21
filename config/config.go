@@ -12,6 +12,8 @@ type Config struct {
 	AccessToken   string
 	Username      string
 	Password      string
+	BookmakerID   string
+	Products      []string
 	MessagingHost string
 	APIBaseURL    string
 	RoutingKeys   []string
@@ -29,6 +31,9 @@ type Config struct {
 	AutoRecovery        bool   // 启动时自动触发恢复
 	RecoveryAfterHours  int    // 恢复多少小时内的数据（0=默认72小时）
 	RecoveryProducts    []string // 需要恢复的产品列表
+	
+	// 通知配置
+	LarkWebhook string // 飞书机器人Webhook URL
 }
 
 func Load() *Config {
@@ -50,11 +55,13 @@ func Load() *Config {
 		log.Println("[Config] ⚠️  UOF_PASSWORD not set")
 	}
 	
-	return &Config{
+		return &Config{
 		// Betradar配置
 		AccessToken:   getEnv("BETRADAR_ACCESS_TOKEN", ""),
 		Username:      username,
 		Password:      password,
+		BookmakerID:   getEnv("BOOKMAKER_ID", username),
+		Products:      getProducts(),
 		MessagingHost: getEnv("BETRADAR_MESSAGING_HOST", "stgmq.betradar.com:5671"),
 		APIBaseURL:    getEnv("BETRADAR_API_BASE_URL", "https://stgapi.betradar.com/v1"),
 		RoutingKeys:   getRoutingKeys(),
@@ -72,6 +79,9 @@ func Load() *Config {
 		AutoRecovery:       getEnv("AUTO_RECOVERY", "true") == "true",
 		RecoveryAfterHours: getEnvInt("RECOVERY_AFTER_HOURS", 10),  // Betradar最多允许10小时
 		RecoveryProducts:   getRecoveryProducts(),
+		
+		// 通知配置
+		LarkWebhook: getEnv("LARK_WEBHOOK_URL", ""),
 	}
 }
 
@@ -103,6 +113,11 @@ func getEnvInt(key string, defaultValue int) int {
 
 func getRecoveryProducts() []string {
 	products := getEnv("RECOVERY_PRODUCTS", "liveodds,pre")
+	return strings.Split(products, ",")
+}
+
+func getProducts() []string {
+	products := getEnv("PRODUCTS", "liveodds,pre")
 	return strings.Split(products, ",")
 }
 

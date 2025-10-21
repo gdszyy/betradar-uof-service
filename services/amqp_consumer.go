@@ -25,17 +25,25 @@ type AMQPConsumer struct {
 	messageStore    *MessageStore
 	broadcaster     MessageBroadcaster
 	recoveryManager *RecoveryManager
+	notifier        *LarkNotifier
+	statsTracker    *MessageStatsTracker
+	matchMonitor    *MatchMonitor
 	conn            *amqp.Connection
 	channel         *amqp.Channel
 	done            chan bool
 }
 
 func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster MessageBroadcaster) *AMQPConsumer {
+	notifier := NewLarkNotifier(cfg.LarkWebhook)
+	statsTracker := NewMessageStatsTracker(notifier, 5*time.Minute)
+	
 	return &AMQPConsumer{
 		config:          cfg,
 		messageStore:    store,
 		broadcaster:     broadcaster,
 		recoveryManager: NewRecoveryManager(cfg, store),
+		notifier:        notifier,
+		statsTracker:    statsTracker,
 		done:            make(chan bool),
 	}
 }
@@ -148,6 +156,28 @@ func (c *AMQPConsumer) Start() error {
 
 	log.Println("Started consuming messages")
 	
+	// 发送服务启动通知
+	go c.notifier.NotifyServiceStart(bookmakerId, c.config.RecoveryProducts)
+	
+	// 启动消息统计
+	go c.statsTracker.StartPeriodicReport()
+	
+	// 初始化Match监控器
+	c.matchMonitor = NewMatchMonitor(c.config, c.channel)
+	
+	// 启动定期Match监控(每小时一次)
+	go func() {
+		time.Sleep(10 * time.Second) // 等待服务稳定
+		c.matchMonitor.CheckAndReportWithNotifier(c.notifier) // 立即执行一次
+		
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		
+		for range ticker.C {
+			c.matchMonitor.CheckAndReportWithNotifier(c.notifier)
+		}
+	}()
+		
 	// 自动触发恢复（如果启用）
 	if c.config.AutoRecovery {
 		log.Println("Auto recovery is enabled, triggering full recovery...")
@@ -195,6 +225,11 @@ func (c *AMQPConsumer) processMessage(msg amqp.Delivery) {
 
 	// 解析消息类型
 	messageType, eventID, productID, sportID, timestamp := c.parseMessage(xmlContent)
+	
+	// 统计消息
+	if messageType != "" {
+		c.statsTracker.Record(messageType)
+	}
 
 	// 存储到数据库
 	if err := c.messageStore.SaveMessage(messageType, eventID, productID, sportID, routingKey, xmlContent, timestamp); err != nil {
@@ -455,12 +490,20 @@ func (c *AMQPConsumer) getBookmakerInfo() (bookmakerId, virtualHost string, err 
 		return "", "", fmt.Errorf("virtual_host not found in response")
 	}
 
-	return response.BookmakerID, response.VirtualHost, nil
-}
-
-
-
-// handleBetCancel 处理投注取消消息
+		return response.BookmakerID, response.VirtualHost, nil
+	}
+	
+	// SetStatsTracker 设置消息统计追踪器
+	func (c *AMQPConsumer) SetStatsTracker(tracker *MessageStatsTracker) {
+		c.statsTracker = tracker
+	}
+	
+	// GetChannel 获取AMQP通道
+	func (c *AMQPConsumer) GetChannel() *amqp.Channel {
+		return c.channel
+	}
+	
+	// handleBetCancel 处理投注取消消息
 func (c *AMQPConsumer) handleBetCancel(eventID string, productID *int, xmlContent string, timestamp int64) {
 	if eventID == "" || productID == nil {
 		return
@@ -550,15 +593,21 @@ func (c *AMQPConsumer) handleSnapshotComplete(xmlContent string) {
 		return
 	}
 
-	log.Printf("✅ Snapshot complete: product=%d, request_id=%d, timestamp=%d", snapshot.Product, snapshot.RequestID, snapshot.Timestamp)
-	
-	// 更新恢复状态
-	if snapshot.RequestID > 0 {
-		if err := c.messageStore.UpdateRecoveryCompleted(snapshot.RequestID, snapshot.Product, snapshot.Timestamp); err != nil {
-			log.Printf("Failed to update recovery status: %v", err)
-		} else {
-			log.Printf("Recovery request %d for product %d marked as completed", snapshot.RequestID, snapshot.Product)
+		log.Printf("✅ Snapshot complete: product=%d, request_id=%d, timestamp=%d", snapshot.Product, snapshot.RequestID, snapshot.Timestamp)
+		
+		// 更新恢复状态
+		if snapshot.RequestID > 0 {
+			if err := c.messageStore.UpdateRecoveryCompleted(snapshot.RequestID, snapshot.Product, snapshot.Timestamp); err != nil {
+				log.Printf("Failed to update recovery status: %v", err)
+				if c.notifier != nil {
+					c.notifier.NotifyError("Recovery", fmt.Sprintf("Failed to update recovery status: %v", err))
+				}
+			} else {
+				log.Printf("Recovery request %d for product %d marked as completed", snapshot.RequestID, snapshot.Product)
+				if c.notifier != nil {
+					c.notifier.NotifyRecoveryComplete(snapshot.Product, int64(snapshot.RequestID))
+				}
+			}
 		}
-	}
 }
 

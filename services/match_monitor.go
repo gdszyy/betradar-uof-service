@@ -246,16 +246,16 @@ func (m *MatchMonitor) MonitorPeriodically(interval time.Duration) {
 	defer ticker.Stop()
 	
 	// 立即执行一次
-	m.checkAndReport()
+	m.CheckAndReport()
 	
 	// 定期执行
 	for range ticker.C {
-		m.checkAndReport()
+		m.CheckAndReport()
 	}
 }
 
-// checkAndReport 检查并报告
-func (m *MatchMonitor) checkAndReport() {
+// CheckAndReport 检查并报告
+func (m *MatchMonitor) CheckAndReport() {
 	response, err := m.QueryBookedMatches(6, 24)
 	if err != nil {
 		log.Printf("❌ Failed to query booked matches: %v", err)
@@ -263,6 +263,41 @@ func (m *MatchMonitor) checkAndReport() {
 	}
 	
 	m.AnalyzeBookedMatches(response)
+}
+
+// CheckAndReportWithNotifier 检查并报告(带通知)
+func (m *MatchMonitor) CheckAndReportWithNotifier(notifier *LarkNotifier) {
+	response, err := m.QueryBookedMatches(6, 24)
+	if err != nil {
+		log.Printf("❌ Failed to query booked matches: %v", err)
+		if notifier != nil {
+			notifier.NotifyError("MatchMonitor", fmt.Sprintf("Failed to query: %v", err))
+		}
+		return
+	}
+	
+	m.AnalyzeBookedMatches(response)
+	
+	// 发送通知
+	if notifier != nil {
+		totalMatches := len(response.Matches)
+		bookedCount := 0
+		preCount := 0
+		liveCount := 0
+		
+		for _, match := range response.Matches {
+			if match.Booked == "1" {
+				bookedCount++
+				if match.Status.Name == "NOT_STARTED" {
+					preCount++
+				} else {
+					liveCount++
+				}
+			}
+		}
+		
+		notifier.NotifyMatchMonitor(totalMatches, bookedCount, preCount, liveCount)
+	}
 }
 
 // truncate 截断字符串
