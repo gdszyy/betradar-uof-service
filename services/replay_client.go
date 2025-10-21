@@ -248,21 +248,48 @@ func (r *ReplayClient) QuickReplay(eventID string, speed int, nodeID int) error 
 	log.Println("⏳ Waiting for event to be added to playlist...")
 	time.Sleep(3 * time.Second)
 	
-	// 4. 验证事件已在列表中
-	eventsXML, err := r.ListEvents()
-	if err != nil {
-		return fmt.Errorf("verify playlist: %w", err)
+	// 4. 验证事件已在列表中 (最多重试5次)
+	var eventsXML string
+	var err error
+	for i := 0; i < 5; i++ {
+		eventsXML, err = r.ListEvents()
+		if err != nil {
+			return fmt.Errorf("verify playlist: %w", err)
+		}
+		
+		// 检查是否为空
+		if bytes.Contains([]byte(eventsXML), []byte("size=\"0\"")) {
+			if i < 4 {
+				log.Printf("⚠️  Playlist still empty, waiting 2 more seconds... (attempt %d/5)", i+1)
+				time.Sleep(2 * time.Second)
+				continue
+			}
+		}
+		
+		// 检查XML中是否包含我们的事件
+		if bytes.Contains([]byte(eventsXML), []byte(eventID)) {
+			log.Printf("✅ Event %s confirmed in playlist (attempt %d)", eventID, i+1)
+			break
+		}
+		
+		if i < 4 {
+			log.Printf("⚠️  Event not in playlist yet, waiting 2 more seconds... (attempt %d/5)", i+1)
+			time.Sleep(2 * time.Second)
+		}
 	}
 	
-	// 检查XML中是否包含我们的事件
+	// 最终验证
 	if !bytes.Contains([]byte(eventsXML), []byte(eventID)) {
-		log.Printf("❌ Playlist verification failed!")
+		log.Printf("❌ Playlist verification failed after 5 attempts!")
 		log.Printf("   Expected event: %s", eventID)
 		log.Printf("   Playlist response: %s", eventsXML)
-		return fmt.Errorf("event %s not found in playlist after adding", eventID)
+		log.Printf("   ")
+		log.Printf("ℹ️  Possible reasons:")
+		log.Printf("   1. Event is less than 48 hours old (only older events are replayable)")
+		log.Printf("   2. Event ID is invalid or not available in Replay server")
+		log.Printf("   3. Event was added but immediately removed by Betradar")
+		return fmt.Errorf("event %s not found in playlist - may be too recent (need >48h old) or invalid", eventID)
 	}
-	
-	log.Printf("✅ Event %s confirmed in playlist", eventID)
 	
 	// 5. 开始重放
 	options := PlayOptions{
