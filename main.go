@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -35,6 +36,22 @@ func main() {
 
 	// 创建 Feishu 通知器
 	larkNotifier := services.NewLarkNotifier(cfg.LarkWebhook)
+	
+	// 测试1: 使用写死的 webhook 发送测试消息
+	hardcodedNotifier := services.NewLarkNotifier("https://open.larksuite.com/open-apis/bot/v2/hook/706b2677-d917-4d15-a3f8-6723de0caa15")
+	if err := hardcodedNotifier.SendText("🧪 测试1: 使用硬编码 webhook 发送 (服务启动)"); err != nil {
+		log.Printf("❌ Hardcoded webhook test failed: %v", err)
+	} else {
+		log.Println("✅ Hardcoded webhook test sent")
+	}
+	
+	// 测试2: 使用配置的 webhook 发送测试消息
+	log.Printf("[Config] LarkWebhook value: '%s' (length: %d)", cfg.LarkWebhook, len(cfg.LarkWebhook))
+	if err := larkNotifier.SendText(fmt.Sprintf("🧪 测试2: 使用配置 webhook 发送 (服务启动) - Webhook: %s", cfg.LarkWebhook)); err != nil {
+		log.Printf("❌ Config webhook test failed: %v", err)
+	} else {
+		log.Println("✅ Config webhook test sent")
+	}
 	
 	// 发送服务启动通知
 	if err := larkNotifier.NotifyServiceStart(cfg.BookmakerID, cfg.Products); err != nil {
