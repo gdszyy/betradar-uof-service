@@ -99,10 +99,10 @@ func (m *MatchMonitor) QueryBookedMatches(hoursBack, hoursForward int) (*MatchLi
 		return nil, fmt.Errorf("failed to declare response queue: %w", err)
 	}
 	
-	// 发送请求
+	// 发送请求到 unifiedfeed exchange
 	err = m.channel.Publish(
-		"",                    // exchange
-		"matchlist",           // routing key (根据文档可能需要调整)
+		"unifiedfeed",         // exchange - 必须使用 unifiedfeed
+		"matchlist",           // routing key
 		false,                 // mandatory
 		false,                 // immediate
 		amqp.Publishing{
