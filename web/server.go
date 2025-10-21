@@ -470,9 +470,11 @@ func (s *Server) handleReplayList(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleTriggerMonitor(w http.ResponseWriter, r *http.Request) {
 	log.Println("📊 Manual monitor check triggered via API...")
 	
-	// 这里需要获取 AMQP channel 来创建 MatchMonitor
-	// 由于架构限制,我们返回一个提示信息
-	// 实际的监控会在定期任务中执行
+	// 创建 MatchMonitor 并执行检查
+	monitor := services.NewMatchMonitor(s.config, nil)
+	
+	// 异步执行监控检查
+	go monitor.CheckAndReportWithNotifier(s.larkNotifier)
 	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -480,10 +482,5 @@ func (s *Server) handleTriggerMonitor(w http.ResponseWriter, r *http.Request) {
 		"message": "Monitor check triggered. Results will be sent to Feishu webhook.",
 		"time":    time.Now().Unix(),
 	})
-	
-	// 发送通知
-	if s.larkNotifier != nil {
-		s.larkNotifier.SendText("📊 手动监控检查已触发")
-	}
 }
 
