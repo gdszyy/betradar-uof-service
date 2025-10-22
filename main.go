@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -109,12 +110,17 @@ func main() {
 	
 	log.Println("Match monitor started (hourly)")
 	
-	// 启动 Live Data 客户端 (暂时禁用，需要先配置 IP 白名单)
-	// TODO: 联系 Sportradar 将 Railway IP 添加到白名单后，通过 API 手动启动
-	// 使用: POST /api/ld/connect
-	
-	log.Println("[LD] ⚠️  Live Data client created but not started (IP whitelist required)")
-	log.Println("[LD] Use POST /api/ld/connect to start manually after IP whitelisting")
+	// 启动 Live Data 客户端
+	log.Println("[LD] Starting Live Data client...")
+	go func() {
+		if err := ldClient.Connect(); err != nil {
+			log.Printf("[LD] ❌ Failed to connect: %v", err)
+			larkNotifier.NotifyError("Live Data Client", fmt.Sprintf("failed to connect: %v", err))
+		} else {
+			log.Println("[LD] ✅ Live Data client connected successfully")
+			larkNotifier.SendText("🟢 Live Data 客户端已连接")
+		}
+	}()
 
 	log.Println("Service is running. Press Ctrl+C to stop.")
 
