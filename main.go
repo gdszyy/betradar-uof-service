@@ -112,6 +112,28 @@ func main() {
 	}()
 	
 	log.Println("Match monitor started (hourly)")
+	
+	// 启动 Live Data 客户端
+	ldClient := services.NewLDClient(cfg)
+	ldEventHandler := services.NewLDEventHandler(db, larkNotifier)
+	
+	// 设置事件处理器
+	ldClient.SetEventHandler(ldEventHandler.HandleEvent)
+	ldClient.SetMatchInfoHandler(ldEventHandler.HandleMatchInfo)
+	ldClient.SetLineupHandler(ldEventHandler.HandleLineup)
+	
+	// 连接到 LD 服务器
+	go func() {
+		if err := ldClient.Connect(); err != nil {
+			log.Printf("[LD] ❌ Failed to connect: %v", err)
+			larkNotifier.NotifyError("Live Data Client", err.Error())
+		} else {
+			log.Println("[LD] ✅ Live Data client started")
+			
+			// 发送通知
+			larkNotifier.SendText("🟢 Live Data 客户端已启动")
+		}
+	}()
 
 	log.Println("Service is running. Press Ctrl+C to stop.")
 
