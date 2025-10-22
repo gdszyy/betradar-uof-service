@@ -31,6 +31,9 @@ type LDClient struct {
 	// 已订阅的比赛
 	subscribedMatches map[string]bool
 	matchesMu         sync.RWMutex
+	
+	// 飞书通知
+	larkNotifier *LarkNotifier
 }
 
 // NewLDClient 创建 LD 客户端
@@ -67,9 +70,20 @@ func NewLDClient(cfg *config.Config) *LDClient {
 	
 	log.Println("[LD] ✅ Connected to Live Data server")
 	
+	// 发送飞书通知
+	if c.larkNotifier != nil {
+		c.larkNotifier.NotifyLiveDataConnected(host)
+	}
+	
 	// 发送登录消息
 	if err := c.login(); err != nil {
 		c.conn.Close()
+		
+		// 发送错误通知
+		if c.larkNotifier != nil {
+			c.larkNotifier.NotifyError("Live Data Client", fmt.Sprintf("Login failed: %v", err))
+		}
+		
 		return fmt.Errorf("login failed: %w", err)
 	}
 	
@@ -307,6 +321,11 @@ func (c *LDClient) reconnect() {
 	c.mu.Unlock()
 	
 	log.Println("[LD] 🔄 Reconnecting in 5 seconds...")
+	
+	// 发送断线通知
+	if c.larkNotifier != nil {
+		c.larkNotifier.NotifyError("Live Data Client", "Connection lost, reconnecting...")
+	}
 	time.Sleep(5 * time.Second)
 	
 	c.mu.Lock()
@@ -315,8 +334,21 @@ func (c *LDClient) reconnect() {
 	
 	if err := c.Connect(); err != nil {
 		log.Printf("[LD] ❌ Reconnect failed: %v", err)
+		
+		// 发送重连失败通知
+		if c.larkNotifier != nil {
+			c.larkNotifier.NotifyError("Live Data Client", fmt.Sprintf("Reconnect failed: %v", err))
+		}
+		
 		go c.reconnect()
 		return
+	}
+	
+	log.Println("[LD] ✅ Reconnected successfully")
+	
+	// 发送重连成功通知
+	if c.larkNotifier != nil {
+		c.larkNotifier.NotifyLiveDataConnected("livedata.betradar.com:2017 (reconnected)")
 	}
 	
 	// 重新订阅比赛
@@ -403,5 +435,12 @@ func (c *LDClient) Close() error {
 	}
 	
 	return nil
+}
+
+
+
+// SetLarkNotifier 设置飞书通知器
+func (c *LDClient) SetLarkNotifier(notifier *LarkNotifier) {
+	c.larkNotifier = notifier
 }
 

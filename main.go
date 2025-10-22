@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -112,13 +111,11 @@ func main() {
 	
 	// 启动 Live Data 客户端
 	log.Println("[LD] Starting Live Data client...")
+	ldClient.SetLarkNotifier(larkNotifier)
 	go func() {
 		if err := ldClient.Connect(); err != nil {
 			log.Printf("[LD] ❌ Failed to connect: %v", err)
-			larkNotifier.NotifyError("Live Data Client", fmt.Sprintf("failed to connect: %v", err))
-		} else {
-			log.Println("[LD] ✅ Live Data client connected successfully")
-			larkNotifier.SendText("🟢 Live Data 客户端已连接")
+			// 错误通知已在 Connect 方法中处理
 		}
 	}()
 
