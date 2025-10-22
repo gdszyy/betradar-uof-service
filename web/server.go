@@ -28,6 +28,7 @@ type Server struct {
 	replayClient    *services.ReplayClient
 	larkNotifier    *services.LarkNotifier
 	ldClient        *services.LDClient
+	autoBooking     *services.AutoBookingService
 	httpServer      *http.Server
 	upgrader        websocket.Upgrader
 }
@@ -50,6 +51,7 @@ func NewServer(cfg *config.Config, db *sql.DB, hub *Hub, larkNotifier *services.
 		recoveryManager: services.NewRecoveryManager(cfg, services.NewMessageStore(db)),
 		replayClient:    replayClient,
 		larkNotifier:    larkNotifier,
+		autoBooking:     services.NewAutoBookingService(cfg, larkNotifier),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -84,6 +86,10 @@ func (s *Server) Start() error {
 	
 	// 监控API
 	api.HandleFunc("/monitor/trigger", s.handleTriggerMonitor).Methods("POST")
+	
+	// 自动订阅API
+	api.HandleFunc("/booking/auto", s.handleAutoBooking).Methods("POST")
+	api.HandleFunc("/booking/match/{match_id}", s.handleBookMatch).Methods("POST")
 	
 	// IP 查询API
 	api.HandleFunc("/ip", s.handleGetIP).Methods("GET")
@@ -529,6 +535,58 @@ func (s *Server) handleGetIP(w http.ResponseWriter, r *http.Request) {
 		"ip":      ip,
 		"message": "This is your Railway service's public IP address. Use this for Sportradar Live Data whitelist.",
 		"time":    time.Now().Unix(),
+	})
+}
+
+
+
+// handleAutoBooking 自动订阅所有 bookable 比赛
+func (s *Server) handleAutoBooking(w http.ResponseWriter, r *http.Request) {
+	log.Println("[API] Auto booking triggered...")
+	
+	go func() {
+		bookable, success, err := s.autoBooking.BookAllBookableMatches()
+		if err != nil {
+			log.Printf("[API] Auto booking failed: %v", err)
+		} else {
+			log.Printf("[API] Auto booking completed: %d bookable, %d success", bookable, success)
+		}
+	}()
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "triggered",
+		"message": "Auto booking process started. Check Feishu for results.",
+		"time":    time.Now().Unix(),
+	})
+}
+
+// handleBookMatch 订阅单个比赛
+func (s *Server) handleBookMatch(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	matchID := vars["match_id"]
+	
+	if matchID == "" {
+		http.Error(w, "match_id is required", http.StatusBadRequest)
+		return
+	}
+	
+	log.Printf("[API] Booking match: %s", matchID)
+	
+	go func() {
+		if err := s.autoBooking.BookMatch(matchID); err != nil {
+			log.Printf("[API] Failed to book match %s: %v", matchID, err)
+		} else {
+			log.Printf("[API] Successfully booked match: %s", matchID)
+		}
+	}()
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":   "triggered",
+		"message":  fmt.Sprintf("Booking request sent for match %s", matchID),
+		"match_id": matchID,
+		"time":     time.Now().Unix(),
 	})
 }
 
