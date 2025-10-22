@@ -301,10 +301,13 @@ POST /v1/{product}/odds/events/{event_id}/initiate_request
 
 ### 恢复窗口
 
-**重要限制**: 
-- 默认恢复窗口: **3 小时**
-- 超过 3 小时的数据无法通过 Recovery API 获取
-- 需要历史数据请联系 SportRadar
+**重要限制** (按 Producer 类型): 
+- **Live Odds producers**: 10 小时
+- **Gaming producers**: 3 小时
+- **Premium Cricket**: 最少 7 天
+- **其他 producers**: 72 小时
+
+超过恢复窗口的数据无法通过 Recovery API 获取。
 
 ### 历史数据获取
 
