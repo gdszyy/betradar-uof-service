@@ -42,11 +42,12 @@ func NewLDClient(cfg *config.Config) *LDClient {
 	}
 }
 
-// Connect 连接到 LD 服务器
-func (c *LDClient) Connect() error {
-	host := "livedata.betradar.com:2017"
-	
-	log.Printf("[LD] Connecting to %s...", host)
+	// Connect 连接到 LD 服务器
+	func (c *LDClient) Connect() error {
+		// 使用集成环境服务器
+		host := "stglivedata.betradar.com:2017"
+		
+		log.Printf("[LD] Connecting to integration server: %s...", host)
 	
 	// 创建 TLS 配置
 	tlsConfig := &tls.Config{
