@@ -82,10 +82,10 @@ func NewLDClient(cfg *config.Config) *LDClient {
 	return nil
 }
 
-// login 发送登录消息
-func (c *LDClient) login() error {
-	loginMsg := fmt.Sprintf(`<login username="%s" password="%s" />%c`,
-		c.config.Username, c.config.Password, 0x00)
+	// login 发送登录消息
+	func (c *LDClient) login() error {
+		loginMsg := fmt.Sprintf(`<login><credential><loginname value="%s"/><password value="%s"/></credential></login>%c`,
+			c.config.Username, c.config.Password, 0x00)
 	
 	log.Println("[LD] Sending login message...")
 	
