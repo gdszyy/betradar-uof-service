@@ -1,7 +1,7 @@
 # SportRadar 产品接入指南
 
 **版本**: 1.0.x  
-**目标**: 快速接入 SportRadar UOF 和 Live Data 产品  
+**目标**: 理解 SportRadar 产品的关键业务规则和接入顺序  
 **适用对象**: 开发人员
 
 ---
@@ -10,11 +10,11 @@
 
 1. [产品概述](#产品概述)
 2. [接入准备](#接入准备)
-3. [UOF (Unified Odds Feed) 接入](#uof-unified-odds-feed-接入)
-4. [Live Data 接入](#live-data-接入)
-5. [数据关联](#数据关联)
-6. [监控与告警](#监控与告警)
-7. [常见问题](#常见问题)
+3. [UOF 接入关键规则](#uof-接入关键规则)
+4. [Live Data 接入关键规则](#live-data-接入关键规则)
+5. [Producer 交接机制](#producer-交接机制)
+6. [数据恢复规则](#数据恢复规则)
+7. [常见陷阱](#常见陷阱)
 
 ---
 
@@ -23,276 +23,340 @@
 ### UOF (Unified Odds Feed)
 **用途**: 实时赔率数据  
 **协议**: AMQP (RabbitMQ)  
-**数据类型**:
-- `odds_change` - 赔率变化
-- `bet_stop` - 投注停止
-- `bet_settlement` - 投注结算
-- `bet_cancel` - 投注取消
-- `fixture_change` - 赛程变更
+**核心概念**:
+- **Producer**: 数据生产者,不同 Producer 负责不同阶段
+  - `Pre-match Odds (ID: 3)`: 赛前赔率
+  - `Live Odds (ID: 1)`: 比赛进行中的赔率
+  - `Ctrl (ID: 3)`: 控制和管理
+- **Market**: 投注市场 (如 1X2, Over/Under)
+- **Outcome**: 市场中的投注选项
 
 ### Live Data (LD)
 **用途**: 实时比赛事件数据  
 **协议**: Socket (SSL, Port 2017)  
-**数据类型**:
-- Match events (进球、红黄牌、角球等)
-- Score updates (比分更新)
-- Lineups (阵容信息)
-- Match info (比赛基本信息)
+**核心概念**:
+- **Match**: 比赛
+- **Event**: 比赛事件 (进球、红牌等)
+- **Sequence Number**: 消息序列号,**必须连续**
 
-### 产品互补关系
+### 产品组合
 
 ```
-UOF (赔率数据) + Live Data (比赛事件) = 完整的体育数据解决方案
+UOF (赔率) + Live Data (事件) = 完整数据
 ```
 
 ---
 
 ## 接入准备
 
-### 1. 获取 SportRadar 账户
+### 1. 获取凭证
 
-联系 SportRadar 销售团队获取:
-- **UOF 凭证**: Username + Password
-- **Live Data 凭证**: Username + Password (可能与 UOF 相同)
-- **Bookmaker ID**: 您的博彩商标识符
+联系 SportRadar 获取:
+- UOF Username + Password
+- Live Data Username + Password
+- Bookmaker ID
+- 确认开通的 Producer 权限
 
-### 2. 确认产品权限
+### 2. IP 白名单
 
-确保您的账户已开通以下权限:
-- ✅ UOF - Unified Odds Feed
-- ✅ Live Data - Match Events
-- ✅ API Access - REST API 访问
+**Live Data 必须配置 IP 白名单**:
+1. 获取服务器出口 IP
+2. 提供给 SportRadar 技术支持
+3. 等待确认 (1-2 工作日)
 
-### 3. IP 白名单配置
+**UOF 不需要 IP 白名单**
 
-**Live Data 需要 IP 白名单**:
-1. 获取服务器出口 IP 地址
-2. 联系 SportRadar 技术支持
-3. 提供 IP 地址请求加入白名单
-4. 等待确认 (通常 1-2 个工作日)
+### 3. 了解环境
 
----
-
-## UOF (Unified Odds Feed) 接入
-
-### 第一步: 了解 UOF 架构
-
-```
-SportRadar AMQP → 您的服务 → 数据库 → 业务逻辑
-```
-
-**关键概念**:
-- **Producer**: 数据生产者 (如 LiveOdds, Ctrl)
-- **Event**: 比赛/赛事
-- **Market**: 投注市场 (如 1X2, Over/Under)
-- **Outcome**: 投注结果选项
-
-### 第二步: 配置 AMQP 连接
-
-**连接参数**:
-```
-Host: stgmq.betradar.com (集成环境)
-      mq.betradar.com (生产环境)
-Port: 5671 (SSL)
-VHost: /unifiedfeed/<bookmaker_id>
-Username: <your_username>
-Password: <your_password>
-Exchange: unifiedfeed
-```
-
-**本项目配置**:
-```go
-// services/amqp_consumer.go
-func (ac *AMQPConsumer) Start() error {
-    // 1. 建立连接
-    conn, err := amqp.DialTLS(amqpURL, tlsConfig)
-    
-    // 2. 创建 Channel
-    channel, err := conn.Channel()
-    
-    // 3. 声明队列 (服务器自动命名)
-    queue, err := channel.QueueDeclare("", false, true, true, false, nil)
-    
-    // 4. 绑定路由键
-    routingKeys := []string{
-        "#.odds_change.#",
-        "#.bet_stop.#",
-        "#.bet_settlement.#",
-        // ...
-    }
-    
-    for _, key := range routingKeys {
-        channel.QueueBind(queue.Name, key, "unifiedfeed", false, nil)
-    }
-    
-    // 5. 开始消费
-    msgs, err := channel.Consume(queue.Name, "", false, false, false, false, nil)
-}
-```
-
-### 第三步: 消息处理
-
-**消息格式**: XML
-
-**处理流程**:
-1. 接收 AMQP 消息
-2. 解析 XML
-3. 提取关键字段
-4. 存储到数据库
-5. 通知业务层
-
-**示例代码**:
-```go
-// services/amqp_consumer.go
-func (ac *AMQPConsumer) handleMessage(msg amqp.Delivery) {
-    // 1. 解析消息类型
-    messageType := extractMessageType(msg.Body)
-    
-    // 2. 根据类型处理
-    switch messageType {
-    case "odds_change":
-        ac.handleOddsChange(msg.Body)
-    case "bet_stop":
-        ac.handleBetStop(msg.Body)
-    // ...
-    }
-    
-    // 3. 确认消息
-    msg.Ack(false)
-}
-```
-
-### 第四步: 数据恢复 (Recovery)
-
-**为什么需要恢复?**
-- 服务重启时丢失的消息
-- 网络中断期间的消息
-- Producer 宕机恢复后的消息
-
-**恢复类型**:
-
-1. **全量恢复 (Full Recovery)**
-   ```bash
-   POST /v1/{product}/recovery/initiate_request
-   ```
-   用于首次启动或长时间离线
-
-2. **事件恢复 (Event Recovery)**
-   ```bash
-   POST /v1/{product}/odds/events/{event_id}/initiate_request
-   ```
-   用于特定比赛的数据恢复
-
-**本项目实现**:
-```go
-// services/recovery_manager.go
-func (rm *RecoveryManager) InitiateFullRecovery(producerID int, after int64) error {
-    url := fmt.Sprintf("%s/v1/%s/recovery/initiate_request?after=%d&request_id=%d",
-        rm.apiBaseURL, rm.product, after, producerID)
-    
-    req, _ := http.NewRequest("POST", url, nil)
-    req.Header.Set("x-access-token", rm.accessToken)
-    
-    resp, err := rm.client.Do(req)
-    // ...
-}
-```
-
-### 第五步: 比赛订阅 (Booking)
-
-**为什么需要订阅?**
-- 默认情况下不会收到任何赔率数据
-- 必须主动订阅感兴趣的比赛
-- 订阅后才会收到 `odds_change` 消息
-
-**订阅方式**:
-
-1. **查询可订阅比赛**
-   ```bash
-   GET /v1/sports/en/schedules/live/schedule.xml
-   ```
-
-2. **订阅比赛**
-   ```bash
-   POST /v1/liveodds/booking-calendar/events/{event_id}/book
-   ```
-
-**本项目实现**:
-```go
-// services/auto_booking.go
-func (ab *AutoBookingService) BookAllLiveMatches() ([]string, error) {
-    // 1. 查询 live 比赛
-    matches, err := ab.fetchLiveMatches()
-    
-    // 2. 过滤 bookable 比赛
-    bookableMatches := filterBookable(matches)
-    
-    // 3. 批量订阅
-    for _, match := range bookableMatches {
-        ab.bookMatch(match.ID)
-    }
-}
-```
-
-**API 使用**:
-```bash
-# 自动订阅所有 bookable 比赛
-curl -X POST http://your-server:8080/api/booking/auto
-
-# 订阅单个比赛
-curl -X POST http://your-server:8080/api/booking/match/sr:match:12345678
-```
+- **Integration (集成)**: 测试环境
+  - UOF: `stgmq.betradar.com:5671`
+  - Live Data: 使用生产服务器 (无单独集成环境)
+  
+- **Production (生产)**: 正式环境
+  - UOF: `mq.betradar.com:5671`
+  - Live Data: `livedata.betradar.com:2017`
 
 ---
 
-## Live Data 接入
+## UOF 接入关键规则
 
-### 第一步: 了解 Live Data 架构
+### 规则 1: 首次连接必须做数据恢复
 
+**为什么?**
+- 首次连接时,队列是空的
+- 不会自动接收历史数据
+- 必须主动请求恢复
+
+**恢复流程**:
 ```
-SportRadar Socket Server → SSL 连接 → 您的服务 → 数据库
-```
-
-**关键概念**:
-- **Match**: 比赛
-- **Event**: 比赛事件 (进球、红牌等)
-- **Sequence Number**: 消息序列号 (用于检测丢失)
-- **Data Source**: 数据来源 (BC/DC/iScout)
-
-### 第二步: 配置 Socket 连接
-
-**连接参数**:
-```
-Host: livedata.betradar.com
-Port: 2017
-Protocol: SSL/TLS
+1. 连接 AMQP
+2. 立即调用 Recovery API
+3. 等待接收 snapshot_complete 消息
+4. 开始正常消费
 ```
 
-**本项目配置**:
-```go
-// services/ld_client.go
-func (ldc *LDClient) Connect() error {
-    // 1. 建立 TLS 连接
-    conn, err := tls.Dial("tcp", "livedata.betradar.com:2017", &tls.Config{})
+**关键消息**: `snapshot_complete`
+```xml
+<snapshot_complete product="3" request_id="123" timestamp="1234567890" />
+```
+
+收到此消息表示恢复完成,可以开始正常处理赔率数据。
+
+**重要**: 
+- ⚠️ 恢复只返回**当前最新赔率**,不包含历史变化
+- ⚠️ 历史赔率数据需要从 **Ctrl 后台下载**
+
+### 规则 2: 必须订阅比赛才能收到赔率
+
+**默认行为**: 连接后不会收到任何赔率数据
+
+**订阅流程**:
+```
+1. 查询 live 比赛列表 (Schedule API)
+2. 筛选 bookable=true 的比赛
+3. 调用 Booking API 订阅
+4. 开始接收 odds_change 消息
+```
+
+**订阅时机**:
+- 比赛开始前 1-2 小时
+- 比赛进行中随时可订阅
+- 订阅后立即生效
+
+### 规则 3: Producer 有不同的职责
+
+| Producer ID | 名称 | 职责 | 何时活跃 |
+| :--- | :--- | :--- | :--- |
+| 1 | Live Odds | 实时赔率 | 比赛进行中 |
+| 3 | Pre-match Odds / Ctrl | 赛前赔率 + 控制 | 比赛前 + 全程 |
+| 5 | Premium Cricket | 板球专用 | 板球比赛 |
+
+**关键**: 同一个比赛可能同时有多个 Producer 发送消息
+
+### 规则 4: 消息中的关键字段
+
+**每条 odds_change 消息包含**:
+- `product`: Producer ID (1, 3, 5...)
+- `event_id`: 比赛 ID (如 `sr:match:12345678`)
+- `timestamp`: 消息时间戳
+- `markets`: 市场和赔率数据
+  - `market.id`: 市场 ID
+  - `market.status`: 市场状态
+  - `outcome`: 投注选项和赔率
+
+**市场状态**:
+- `0`: 正常活跃
+- `-1`: 暂停
+- `-2`: **handed_over** (已交接给新 Producer)
+- `-3`: 结算
+- `-4`: 取消
+
+---
+
+## Producer 交接机制
+
+### 什么是交接?
+
+当比赛从赛前进入 live 状态时,赔率数据的责任从 **Pre-match Producer (3)** 转移到 **Live Producer (1)**。
+
+### 交接流程
+
+```mermaid
+graph TD
+    Start([比赛进行中]) --> ReceiveMsg{收到 odds_change}
     
-    // 2. 发送登录消息
-    loginMsg := fmt.Sprintf(`<login>
-<credential>
-<loginname value="%s"/>
-<password value="%s"/>
-</credential>
-</login>`, username, password)
+    ReceiveMsg --> CheckProduct[检查 product 字段]
     
-    conn.Write([]byte(loginMsg))
+    CheckProduct --> IsLive{是否为 LIVE?}
     
-    // 3. 等待登录响应
-    // 4. 开始接收消息
+    IsLive -->|是 LIVE| ProcessLive[立即使用 LIVE 消息]
+    IsLive -->|否| CheckStatus{检查 market.status}
+    
+    ProcessLive --> UpdateMarket[更新市场<br/>product = LIVE]
+    UpdateMarket --> WaitNext[等待后续消息]
+    
+    CheckStatus -->|status = -2<br/>handed_over| CheckIfLiveReceived{已收到 LIVE?}
+    CheckStatus -->|status = 0<br/>正常| UpdateOldProducer[使用旧 producer]
+    CheckStatus -->|status = -3/-4| CloseMarket[关闭市场]
+    
+    CheckIfLiveReceived -->|已收到| IgnoreHandover[忽略 handed_over]
+    CheckIfLiveReceived -->|未收到| WaitForLive[等待 LIVE 消息]
+    
+    WaitForLive --> NextLive[收到 LIVE 消息]
+    NextLive --> ProcessLive
+    
+    IgnoreHandover --> WaitNext
+    CloseMarket --> End1([市场已关闭])
+    UpdateOldProducer --> WaitNext
+    WaitNext --> ReceiveMsg
+```
+
+### 关键规则
+
+#### 规则 A: LIVE 消息优先级最高
+
+一旦收到 `product=1` (Live Odds) 的消息,**立即使用**,忽略其他 Producer 的消息。
+
+#### 规则 B: handed_over 的处理
+
+收到 `status=-2` (handed_over) 时:
+
+**情况 1**: 已经收到 LIVE 消息
+```
+→ 忽略此 handed_over 消息
+→ 继续使用 LIVE 数据
+```
+
+**情况 2**: 还未收到 LIVE 消息
+```
+→ 暂停更新此市场
+→ 等待 LIVE producer 发送同 market_id 的消息
+→ 收到后开始使用 LIVE 数据
+```
+
+#### 规则 C: 可能存在时序问题
+
+⚠️ **重要**: LIVE 消息可能比 handed_over 消息**更早**到达!
+
+**原因**:
+- 不同 Producer 的消息通过不同的队列
+- 网络延迟不同
+- 处理速度不同
+
+**正确处理**:
+```
+if (message.product == 1) {  // LIVE
+    // 直接使用,不管之前是什么状态
+    updateMarket(message);
+    markAsLive(market_id);
+} else if (message.status == -2) {  // handed_over
+    if (isAlreadyLive(market_id)) {
+        // 已经在用 LIVE 了,忽略
+        ignore(message);
+    } else {
+        // 等待 LIVE
+        waitForLive(market_id);
+    }
 }
 ```
 
-### 第三步: 消息订阅
+### 实际案例
 
-**订阅比赛**:
+**时间线**:
+```
+10:00:00 - 比赛开始
+10:00:01 - 收到 LIVE (product=1) 的 odds_change
+10:00:03 - 收到 Pre-match (product=3) 的 handed_over (status=-2)
+```
+
+**正确处理**:
+1. 10:00:01 收到 LIVE → 立即使用,标记市场为 LIVE
+2. 10:00:03 收到 handed_over → 检查发现已经是 LIVE,忽略
+
+**错误处理**:
+1. 10:00:01 收到 LIVE → 使用
+2. 10:00:03 收到 handed_over → 错误地暂停市场,等待 LIVE (实际已经收到了!)
+
+---
+
+## 数据恢复规则
+
+### 恢复类型
+
+#### 1. 全量恢复 (Full Recovery)
+
+**何时使用**:
+- 首次连接
+- 长时间断线 (>3小时)
+- 数据库清空后重启
+
+**API**:
+```
+POST /v1/{product}/recovery/initiate_request?after={timestamp}&request_id={producer_id}
+```
+
+**参数**:
+- `after`: Unix 时间戳 (毫秒),恢复此时间点之后的数据
+- `request_id`: Producer ID
+
+**返回数据**:
+- 所有活跃比赛的当前赔率
+- 不包含历史变化记录
+- 以 `snapshot_complete` 消息结束
+
+#### 2. 事件恢复 (Event Recovery)
+
+**何时使用**:
+- 特定比赛数据丢失
+- 怀疑某场比赛数据不完整
+
+**API**:
+```
+POST /v1/{product}/odds/events/{event_id}/initiate_request
+```
+
+**返回数据**:
+- 该比赛的当前赔率
+- 立即返回,不等待 snapshot_complete
+
+### 恢复窗口
+
+**重要限制**: 
+- 默认恢复窗口: **3 小时**
+- 超过 3 小时的数据无法通过 Recovery API 获取
+- 需要历史数据请联系 SportRadar
+
+### 历史数据获取
+
+**Recovery API 的局限**:
+- ❌ 不提供历史赔率变化
+- ❌ 不提供已结束比赛的数据
+- ✅ 只提供当前活跃比赛的最新赔率
+
+**获取历史数据**:
+1. 登录 **Ctrl 后台** (https://ctrl.betradar.com)
+2. 导航到数据下载页面
+3. 选择日期范围和数据类型
+4. 下载 CSV/XML 文件
+5. 导入到数据库
+
+**Ctrl 后台提供**:
+- 历史赔率变化记录
+- 已结束比赛的完整数据
+- 结算结果
+- 统计数据
+
+---
+
+## Live Data 接入关键规则
+
+### 规则 1: 序列号必须连续
+
+**每条消息包含 sequence_number**:
+```xml
+<event sequence="12345" ...>
+```
+
+**检查逻辑**:
+```
+if (current_seq != last_seq + 1) {
+    // 检测到间隙!
+    gap = current_seq - last_seq - 1;
+    log.error("Missing {} messages", gap);
+    // 触发告警
+}
+```
+
+**如果检测到间隙**:
+1. 记录日志和告警
+2. 继续处理后续消息 (不阻塞)
+3. 联系 SportRadar 确认是否需要补数据
+
+### 规则 2: 订阅后才接收数据
+
+**默认行为**: 连接后不会收到任何数据
+
+**订阅消息**:
 ```xml
 <match matchid="944423"/>
 ```
@@ -302,269 +366,92 @@ func (ldc *LDClient) Connect() error {
 <unmatch matchid="944423"/>
 ```
 
-**本项目实现**:
-```go
-// services/ld_client.go
-func (ldc *LDClient) SubscribeMatch(matchID string) error {
-    msg := fmt.Sprintf(`<match matchid="%s"/>`, matchID)
-    _, err := ldc.conn.Write([]byte(msg))
-    return err
-}
+**建议**: 订阅 UOF 中已订阅的比赛,保持一致性
+
+### 规则 3: 数据源标识
+
+**Live Data 有多个数据源**:
+- **BC** (Betradar Collect): 自动采集
+- **DC** (Data Centre): 人工采集
+- **iScout**: 移动采集
+
+**消息中的标识**:
+```xml
+<event source="BC" ...>
 ```
 
-**API 使用**:
-```bash
-# 订阅比赛
-curl -X POST -H "Content-Type: application/json" \
-  -d '{"match_id": "sr:match:12345678"}' \
-  http://your-server:8080/api/ld/subscribe
+**质量排序**: DC > iScout > BC
 
-# 取消订阅
-curl -X POST -H "Content-Type: application/json" \
-  -d '{"match_id": "sr:match:12345678"}' \
-  http://your-server:8080/api/ld/unsubscribe
+### 规则 4: 与 UOF 的关联
+
+**关键字段**: `match_id`
+
+- UOF: `event_id="sr:match:12345678"`
+- Live Data: `matchid="944423"` (不带前缀)
+
+**关联方法**:
 ```
+UOF event_id: sr:match:12345678
+提取数字部分: 12345678
+Live Data matchid: 需要去掉 "sr:match:" 前缀
 
-### 第四步: 消息处理
-
-**消息类型**:
-1. **Match Info** - 比赛基本信息
-2. **Event** - 比赛事件
-3. **Lineup** - 阵容信息
-4. **Score** - 比分更新
-
-**处理流程**:
-```go
-// services/ld_event_handler.go
-func (leh *LDEventHandler) HandleEvent(event *LDEvent) error {
-    // 1. 存储原始 XML
-    // 2. 解析事件数据
-    // 3. 检查序列号连续性
-    // 4. 存储到数据库
-    // 5. 发送通知
-}
-```
-
-### 第五步: 序列号管理
-
-**为什么重要?**
-- 检测消息丢失
-- 保证数据完整性
-- 触发数据恢复
-
-**检查逻辑**:
-```go
-func checkSequenceContinuity(matchID string, currentSeq int64) error {
-    lastSeq := getLastSequence(matchID)
-    
-    if currentSeq != lastSeq + 1 {
-        gap := currentSeq - lastSeq - 1
-        log.Printf("Sequence gap detected: %d messages missing", gap)
-        // 触发告警或恢复
-    }
-}
+或者通过 API 查询比赛信息获取对应关系
 ```
 
 ---
 
-## 数据关联
+## 常见陷阱
 
-### UOF 与 Live Data 的关联
+### 陷阱 1: 忘记做首次恢复
 
-**关键字段**: `event_id` (UOF) ↔ `match_id` (Live Data)
+**现象**: 连接成功,但收不到任何消息
 
-**数据库设计**:
-```sql
--- UOF 数据
-CREATE TABLE odds_changes (
-    id SERIAL PRIMARY KEY,
-    event_id VARCHAR(50) NOT NULL,  -- sr:match:12345678
-    market_id INTEGER,
-    odds JSONB,
-    timestamp TIMESTAMPTZ
-);
+**原因**: 队列是空的,没有触发恢复
 
--- Live Data 数据
-CREATE TABLE livedata_events (
-    id SERIAL PRIMARY KEY,
-    match_id VARCHAR(50) NOT NULL,  -- sr:match:12345678
-    event_type VARCHAR(50),
-    event_data JSONB,
-    timestamp TIMESTAMPTZ
-);
+**解决**: 连接后立即调用 Recovery API
 
--- 关联视图
-CREATE VIEW v_match_complete_data AS
-SELECT 
-    te.event_id,
-    COUNT(DISTINCT oc.id) as odds_change_count,
-    COUNT(DISTINCT le.id) as livedata_event_count,
-    MAX(oc.timestamp) as last_odds_update,
-    MAX(le.timestamp) as last_event_update
-FROM tracked_events te
-LEFT JOIN odds_changes oc ON te.event_id = oc.event_id
-LEFT JOIN livedata_events le ON te.event_id = le.match_id
-GROUP BY te.event_id;
-```
+### 陷阱 2: 没有订阅比赛
 
-### 数据同步策略
+**现象**: 连接正常,恢复完成,但没有 odds_change
 
-1. **UOF 订阅** → 自动订阅 Live Data
-2. **Live Data 事件** → 检查 UOF 订阅状态
-3. **定期对账** → 确保数据一致性
+**原因**: 没有订阅任何比赛
 
----
+**解决**: 调用 Booking API 订阅比赛
 
-## 监控与告警
+### 陷阱 3: 错误处理 handed_over
 
-### 飞书通知集成
+**现象**: 比赛开始后赔率停止更新
 
-**通知类型**:
-- ✅ 服务启动
-- ✅ 连接状态变化
-- ✅ 数据恢复完成
-- ✅ 错误告警
-- ✅ 消息统计报告
-- ✅ 比赛订阅报告
+**原因**: 收到 handed_over 后暂停了市场,但 LIVE 消息已经先到了
 
-**配置**:
-```bash
-LARK_WEBHOOK_URL=https://open.larksuite.com/open-apis/bot/v2/hook/your-webhook-id
-```
+**解决**: 检查是否已经收到 LIVE 消息,如果是则忽略 handed_over
 
-### 监控指标
+### 陷阱 4: 忽略序列号检查
 
-1. **UOF 监控**
-   - Producer 状态
-   - 消息处理延迟
-   - 订阅比赛数量
-   - 恢复请求次数
+**现象**: 数据看起来正常,但偶尔丢失关键事件
 
-2. **Live Data 监控**
-   - 连接状态
-   - 序列号间隙
-   - 订阅比赛数量
-   - 消息接收速率
+**原因**: 没有检查序列号连续性,丢失了消息但不知道
 
-### API 端点
+**解决**: 实现序列号连续性检查和告警
 
-```bash
-# 健康检查
-GET /api/health
+### 陷阱 5: 混淆环境
 
-# UOF 状态
-GET /api/uof/status
+**现象**: 连接失败或收到错误数据
 
-# Live Data 状态
-GET /api/ld/status
+**原因**: 使用了错误环境的凭证或服务器地址
 
-# 触发监控报告
-POST /api/monitor/trigger
+**解决**: 
+- Integration 凭证 → stgmq.betradar.com
+- Production 凭证 → mq.betradar.com
+- Live Data 只有一个环境
 
-# 查看订阅的比赛
-GET /api/ld/matches
+### 陷阱 6: 期望 Recovery 返回历史数据
 
-# 查看接收到的事件
-GET /api/ld/events?match_id=sr:match:12345678
-```
+**现象**: 恢复后发现只有当前赔率,没有历史变化
 
----
+**原因**: Recovery API 只返回最新状态
 
-## 常见问题
-
-### Q1: 为什么收不到赔率数据?
-
-**A**: 检查以下几点:
-1. ✅ AMQP 连接是否正常
-2. ✅ 是否订阅了比赛 (使用 Booking API)
-3. ✅ 比赛是否正在进行 (只有 live 比赛才有实时赔率)
-4. ✅ Producer 状态是否正常
-
-**解决方案**:
-```bash
-# 1. 检查连接状态
-curl http://your-server:8080/api/health
-
-# 2. 自动订阅所有 live 比赛
-curl -X POST http://your-server:8080/api/booking/auto
-
-# 3. 触发监控报告
-curl -X POST http://your-server:8080/api/monitor/trigger
-```
-
-### Q2: Live Data 连接失败?
-
-**A**: 可能原因:
-1. ❌ IP 地址未加入白名单
-2. ❌ 用户名或密码错误
-3. ❌ 网络防火墙阻止 2017 端口
-
-**解决方案**:
-1. 联系 SportRadar 技术支持确认 IP 白名单
-2. 验证凭证是否正确
-3. 检查防火墙规则
-
-### Q3: 如何处理序列号间隙?
-
-**A**: 系统会自动检测并记录序列号间隙。
-
-**处理流程**:
-1. 检测到间隙 → 记录日志
-2. 发送飞书告警
-3. 继续处理后续消息 (不阻塞)
-4. 定期检查间隙统计
-
-**查询间隙统计**:
-```sql
-SELECT match_id, gap_count, last_gap_detected
-FROM livedata_sequence_tracker
-WHERE gap_count > 0
-ORDER BY last_gap_detected DESC;
-```
-
-### Q4: 如何进行数据恢复?
-
-**A**: 使用 Recovery API
-
-**全量恢复**:
-```bash
-# 恢复最近 3 小时的数据
-POST /v1/liveodds/recovery/initiate_request?after=<timestamp>&request_id=1
-```
-
-**事件恢复**:
-```bash
-# 恢复特定比赛的数据
-POST /v1/liveodds/odds/events/sr:match:12345678/initiate_request
-```
-
-**本项目 API**:
-```bash
-# 触发全量恢复
-curl -X POST http://your-server:8080/api/recovery/full
-
-# 触发事件恢复
-curl -X POST http://your-server:8080/api/recovery/event/sr:match:12345678
-```
-
-### Q5: 如何优化性能?
-
-**A**: 性能优化建议:
-
-1. **数据库优化**
-   - 添加索引 (event_id, timestamp)
-   - 定期归档历史数据
-   - 使用连接池
-
-2. **消息处理优化**
-   - 批量写入数据库
-   - 异步处理非关键任务
-   - 使用缓存减少数据库查询
-
-3. **网络优化**
-   - 使用持久连接
-   - 启用消息压缩 (如支持)
-   - 监控网络延迟
+**解决**: 历史数据从 Ctrl 后台下载
 
 ---
 
@@ -572,58 +459,51 @@ curl -X POST http://your-server:8080/api/recovery/event/sr:match:12345678
 
 ### UOF 接入
 
-- [ ] 获取 UOF 凭证
-- [ ] 配置 AMQP 连接
-- [ ] 测试连接和消息接收
-- [ ] 实现消息处理逻辑
-- [ ] 配置数据恢复
-- [ ] 实现比赛订阅
+- [ ] 获取凭证并确认 Producer 权限
+- [ ] 配置 AMQP 连接 (正确的环境)
+- [ ] 实现首次连接自动恢复
+- [ ] 实现 snapshot_complete 处理
+- [ ] 实现比赛订阅 (Booking API)
+- [ ] 实现 Producer 交接逻辑
+- [ ] 处理 handed_over 时序问题
+- [ ] 实现市场状态管理
 - [ ] 配置监控和告警
-- [ ] 压力测试
 
 ### Live Data 接入
 
-- [ ] 获取 Live Data 凭证
+- [ ] 获取凭证
 - [ ] 配置服务器 IP 白名单
-- [ ] 配置 Socket 连接
-- [ ] 测试连接和消息接收
-- [ ] 实现消息处理逻辑
-- [ ] 实现序列号检查
+- [ ] 实现 Socket 连接
+- [ ] 实现登录流程
 - [ ] 实现比赛订阅
+- [ ] 实现序列号连续性检查
+- [ ] 实现数据源识别
+- [ ] 实现与 UOF 的数据关联
 - [ ] 配置监控和告警
-- [ ] 压力测试
 
-### 数据关联
+### 数据管理
 
-- [ ] 设计数据库关联结构
-- [ ] 实现 UOF ↔ LD 数据关联
-- [ ] 实现数据同步策略
-- [ ] 测试数据一致性
-
-### 监控与运维
-
-- [ ] 配置飞书通知
-- [ ] 实现健康检查
-- [ ] 实现监控指标
-- [ ] 配置日志收集
-- [ ] 制定应急预案
+- [ ] 设计数据库表结构
+- [ ] 实现 UOF ↔ LD 关联
+- [ ] 实现历史数据归档策略
+- [ ] 配置 Ctrl 后台访问
+- [ ] 制定数据备份策略
 
 ---
 
 ## 技术支持
 
-**SportRadar 技术支持**:
-- 邮箱: support@sportradar.com
+**SportRadar**:
+- 技术支持: support@sportradar.com
 - 文档: https://docs.sportradar.com
+- Ctrl 后台: https://ctrl.betradar.com
 
-**本项目文档**:
-- [README.md](../README.md) - 项目概述
-- [FEISHU-INTEGRATION.md](./FEISHU-INTEGRATION.md) - 飞书集成
-- [LIVE-DATA-INTEGRATION.md](./LIVE-DATA-INTEGRATION.md) - Live Data 详细文档
+**本项目**:
+- GitHub: https://github.com/extra-time-zone/betradar-uof-service
+- 版本: 1.0.x
 
 ---
 
-**版本**: 1.0.x  
 **最后更新**: 2025-10-22  
 **维护者**: 项目开发团队
 
