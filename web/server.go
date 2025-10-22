@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -82,6 +84,9 @@ func (s *Server) Start() error {
 	
 	// 监控API
 	api.HandleFunc("/monitor/trigger", s.handleTriggerMonitor).Methods("POST")
+	
+	// IP 查询API
+	api.HandleFunc("/ip", s.handleGetIP).Methods("GET")
 	
 	// Live Data API
 	api.HandleFunc("/ld/connect", s.handleLDConnect).Methods("POST")
@@ -495,6 +500,34 @@ func (s *Server) handleTriggerMonitor(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":  "triggered",
 		"message": "Monitor check triggered. Results will be sent to Feishu webhook.",
+		"time":    time.Now().Unix(),
+	})
+}
+
+
+
+// handleGetIP 获取服务器出口 IP 地址
+func (s *Server) handleGetIP(w http.ResponseWriter, r *http.Request) {
+	// 查询外部 IP 服务
+	resp, err := http.Get("https://api.ipify.org?format=text")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get IP: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+	
+	ipBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to read IP: %v", err), http.StatusInternalServerError)
+		return
+	}
+	
+	ip := string(ipBytes)
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"ip":      ip,
+		"message": "This is your Railway service's public IP address. Use this for Sportradar Live Data whitelist.",
 		"time":    time.Now().Unix(),
 	})
 }
