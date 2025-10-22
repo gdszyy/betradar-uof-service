@@ -86,6 +86,19 @@ func main() {
 
 	// 启动Web服务器
 	server := web.NewServer(cfg, db, wsHub, larkNotifier)
+	
+	// 创建 LD 客户端(稍后启动)
+	ldClient := services.NewLDClient(cfg)
+	ldEventHandler := services.NewLDEventHandler(db, larkNotifier)
+	
+	// 设置事件处理器
+	ldClient.SetEventHandler(ldEventHandler.HandleEvent)
+	ldClient.SetMatchInfoHandler(ldEventHandler.HandleMatchInfo)
+	ldClient.SetLineupHandler(ldEventHandler.HandleLineup)
+	
+	// 设置到 Server
+	server.SetLDClient(ldClient)
+	
 	go func() {
 		if err := server.Start(); err != nil {
 			log.Fatalf("Web server error: %v", err)
@@ -113,27 +126,21 @@ func main() {
 	
 	log.Println("Match monitor started (hourly)")
 	
-	// 启动 Live Data 客户端
-	ldClient := services.NewLDClient(cfg)
-	ldEventHandler := services.NewLDEventHandler(db, larkNotifier)
+	// 启动 Live Data 客户端 (暂时禁用,需要先配置 IP 白名单)
+	// TODO: 联系 Betradar 将 Railway IP 添加到白名单后启用
+	// go func() {
+	// 	if err := ldClient.Connect(); err != nil {
+	// 		log.Printf("[LD] ❌ Failed to connect: %v", err)
+	// 		larkNotifier.NotifyError("Live Data Client", err.Error())
+	// 	} else {
+	// 		log.Println("[LD] ✅ Live Data client started")
+	// 		
+	// 		// 发送通知
+	// 		larkNotifier.SendText("🟢 Live Data 客户端已启动")
+	// 	}
+	// }()
 	
-	// 设置事件处理器
-	ldClient.SetEventHandler(ldEventHandler.HandleEvent)
-	ldClient.SetMatchInfoHandler(ldEventHandler.HandleMatchInfo)
-	ldClient.SetLineupHandler(ldEventHandler.HandleLineup)
-	
-	// 连接到 LD 服务器
-	go func() {
-		if err := ldClient.Connect(); err != nil {
-			log.Printf("[LD] ❌ Failed to connect: %v", err)
-			larkNotifier.NotifyError("Live Data Client", err.Error())
-		} else {
-			log.Println("[LD] ✅ Live Data client started")
-			
-			// 发送通知
-			larkNotifier.SendText("🟢 Live Data 客户端已启动")
-		}
-	}()
+	log.Println("[LD] ⚠️  Live Data client created but not started (IP whitelist required)")
 
 	log.Println("Service is running. Press Ctrl+C to stop.")
 

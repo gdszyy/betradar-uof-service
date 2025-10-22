@@ -25,6 +25,7 @@ type Server struct {
 	recoveryManager *services.RecoveryManager
 	replayClient    *services.ReplayClient
 	larkNotifier    *services.LarkNotifier
+	ldClient        *services.LDClient
 	httpServer      *http.Server
 	upgrader        websocket.Upgrader
 }
@@ -81,6 +82,15 @@ func (s *Server) Start() error {
 	
 	// 监控API
 	api.HandleFunc("/monitor/trigger", s.handleTriggerMonitor).Methods("POST")
+	
+	// Live Data API
+	api.HandleFunc("/ld/connect", s.handleLDConnect).Methods("POST")
+	api.HandleFunc("/ld/disconnect", s.handleLDDisconnect).Methods("POST")
+	api.HandleFunc("/ld/status", s.handleLDStatus).Methods("GET")
+	api.HandleFunc("/ld/subscribe", s.handleLDSubscribeMatch).Methods("POST")
+	api.HandleFunc("/ld/unsubscribe", s.handleLDUnsubscribeMatch).Methods("POST")
+	api.HandleFunc("/ld/matches", s.handleLDGetMatches).Methods("GET")
+	api.HandleFunc("/ld/events", s.handleLDGetEvents).Methods("GET")
 
 	// WebSocket路由
 	router.HandleFunc("/ws", s.handleWebSocket)
@@ -116,6 +126,11 @@ func (s *Server) Stop() {
 	if err := s.httpServer.Shutdown(ctx); err != nil {
 		log.Printf("Server shutdown error: %v", err)
 	}
+}
+
+// SetLDClient 设置 LD 客户端
+func (s *Server) SetLDClient(client *services.LDClient) {
+	s.ldClient = client
 }
 
 // handleHealth 健康检查
