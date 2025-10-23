@@ -13,9 +13,10 @@ import (
 
 // AutoBookingService 自动订阅服务
 type AutoBookingService struct {
-	config       *config.Config
-	client       *http.Client
-	larkNotifier *LarkNotifier
+	config              *config.Config
+	client              *http.Client
+	larkNotifier        *LarkNotifier
+	subscriptionTracker *UOFSubscriptionTracker
 }
 
 // NewAutoBookingService 创建自动订阅服务
@@ -26,6 +27,8 @@ func NewAutoBookingService(cfg *config.Config, notifier *LarkNotifier) *AutoBook
 		larkNotifier: notifier,
 	}
 }
+
+// SetSubscriptionManager removed - no longer using subscription manager
 
 // BookMatch 订阅单个比赛
 func (s *AutoBookingService) BookMatch(matchID string) error {
@@ -63,7 +66,9 @@ func (s *AutoBookingService) BookMatch(matchID string) error {
 
 // BookAllBookableMatches 查询并自动订阅所有可订阅的比赛
 func (s *AutoBookingService) BookAllBookableMatches() (int, int, error) {
-	log.Println("[AutoBooking] 🔍 Querying live schedule for bookable matches...")
+		log.Println("[AutoBooking] 🔍 Querying live schedule for bookable matches...")
+	
+	// Subscription manager removed - cleanup handled elsewhere
 	
 	// 查询当前直播赛程
 	url := fmt.Sprintf("%s/sports/en/schedules/live/schedule.xml", s.config.APIBaseURL)
@@ -171,4 +176,6 @@ func (s *AutoBookingService) sendBookingReport(bookable, success, failed int) {
 	
 	s.larkNotifier.SendText(buffer.String())
 }
+
+// cleanupEndedMatches and sendCleanupReport removed - subscription manager no longer used
 

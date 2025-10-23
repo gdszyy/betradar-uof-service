@@ -27,10 +27,7 @@ type Server struct {
 	recoveryManager     *services.RecoveryManager
 	replayClient        *services.ReplayClient
 	larkNotifier        *services.LarkNotifier
-	ldClient            *services.LDClient
-	theSportsClient     *services.TheSportsClient
 	autoBooking         *services.AutoBookingService
-	subscriptionManager *services.MatchSubscriptionManager
 	httpServer          *http.Server
 	upgrader            websocket.Upgrader
 }
@@ -96,34 +93,9 @@ func (s *Server) Start() error {
 	// IP 查询API
 	api.HandleFunc("/ip", s.handleGetIP).Methods("GET")
 	
-	// Live Data API
-	api.HandleFunc("/ld/connect", s.handleLDConnect).Methods("POST")
-	api.HandleFunc("/ld/disconnect", s.handleLDDisconnect).Methods("POST")
-	api.HandleFunc("/ld/status", s.handleLDStatus).Methods("GET")
-	api.HandleFunc("/ld/subscribe", s.handleLDSubscribeMatch).Methods("POST")
-	api.HandleFunc("/ld/unsubscribe", s.handleLDUnsubscribeMatch).Methods("POST")
-	api.HandleFunc("/ld/matches", s.handleLDGetMatches).Methods("GET")
-	api.HandleFunc("/ld/events", s.handleLDGetEvents).Methods("GET")
+	// LD and TheSports APIs removed - using UOF only
 	
-	// The Sports API - 足球
-	api.HandleFunc("/thesports/connect", s.handleTheSportsConnect).Methods("POST")
-	api.HandleFunc("/thesports/disconnect", s.handleTheSportsDisconnect).Methods("POST")
-	api.HandleFunc("/thesports/status", s.handleTheSportsStatus).Methods("GET")
-	api.HandleFunc("/thesports/subscribe", s.handleTheSportsSubscribeMatch).Methods("POST")
-	api.HandleFunc("/thesports/unsubscribe", s.handleTheSportsUnsubscribeMatch).Methods("POST")
-	api.HandleFunc("/thesports/today", s.handleTheSportsGetTodayMatches).Methods("GET")
-	api.HandleFunc("/thesports/live", s.handleTheSportsGetLiveMatches).Methods("GET")
-	
-	// The Sports API - 篮球
-	api.HandleFunc("/thesports/basketball/today", s.handleTheSportsGetBasketballToday).Methods("GET")
-	api.HandleFunc("/thesports/basketball/live", s.handleTheSportsGetBasketballLive).Methods("GET")
-	
-	// 订阅管理 API
-	api.HandleFunc("/subscriptions", s.handleGetSubscriptions).Methods("GET")
-	api.HandleFunc("/subscriptions/stats", s.handleGetSubscriptionStats).Methods("GET")
-	api.HandleFunc("/subscriptions/unsubscribe", s.handleUnsubscribeMatch).Methods("POST")
-	api.HandleFunc("/subscriptions/unsubscribe/batch", s.handleUnsubscribeMatches).Methods("POST")
-	api.HandleFunc("/subscriptions/cleanup", s.handleCleanupEndedMatches).Methods("POST")
+	// Subscription management API removed - no longer using subscription manager
 
 	// WebSocket路由
 	router.HandleFunc("/ws", s.handleWebSocket)
@@ -161,20 +133,9 @@ func (s *Server) Stop() {
 	}
 }
 
-// SetLDClient 设置 LD 客户端
-func (s *Server) SetLDClient(client *services.LDClient) {
-	s.ldClient = client
-}
+// LD and TheSports client setters removed - using UOF only
 
-// SetTheSportsClient 设置 The Sports 客户端
-func (s *Server) SetTheSportsClient(client *services.TheSportsClient) {
-	s.theSportsClient = client
-}
-
-// SetSubscriptionManager 设置订阅管理器
-func (s *Server) SetSubscriptionManager(manager *services.MatchSubscriptionManager) {
-	s.subscriptionManager = manager
-}
+// SetSubscriptionManager removed - no longer using subscription manager
 
 // handleHealth 健康检查
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {

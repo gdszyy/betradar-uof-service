@@ -122,59 +122,36 @@ func (p *FixtureParser) storeFixtureData(
 	scheduleTime *time.Time,
 	homeTeamID, homeTeamName, awayTeamID, awayTeamName, status string,
 ) error {
-	// 先尝试更新 tracked_events
-	updateQuery := `
-		UPDATE tracked_events 
-		SET 
-			srn_id = COALESCE(NULLIF($1, ''), srn_id),
-			updated_at = $2
-		WHERE event_id = $3
-	`
-	result, err := p.db.Exec(updateQuery, srnID, time.Now(), eventID)
-	if err != nil {
-		return fmt.Errorf("failed to update tracked_events: %w", err)
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		// 如果没有更新任何行,插入新记录
-		insertQuery := `
-			INSERT INTO tracked_events (event_id, srn_id, subscribed, created_at, updated_at)
-			VALUES ($1, $2, true, $3, $4)
-			ON CONFLICT (event_id) DO UPDATE SET
-				srn_id = COALESCE(NULLIF(EXCLUDED.srn_id, ''), tracked_events.srn_id),
-				updated_at = EXCLUDED.updated_at
-		`
-		if _, err := p.db.Exec(insertQuery, eventID, srnID, time.Now(), time.Now()); err != nil {
-			return fmt.Errorf("failed to insert tracked_events: %w", err)
-		}
-	}
-
-	// 更新或插入 ld_matches
-	matchQuery := `
-		INSERT INTO ld_matches (
-			match_id, srn_id, schedule_time, 
-			home_team_id, away_team_id, t1_name, t2_name,
-			match_status, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		ON CONFLICT (match_id) DO UPDATE SET
-			srn_id = COALESCE(NULLIF(EXCLUDED.srn_id, ''), ld_matches.srn_id),
-			schedule_time = COALESCE(EXCLUDED.schedule_time, ld_matches.schedule_time),
-			home_team_id = COALESCE(NULLIF(EXCLUDED.home_team_id, ''), ld_matches.home_team_id),
-			away_team_id = COALESCE(NULLIF(EXCLUDED.away_team_id, ''), ld_matches.away_team_id),
-			t1_name = COALESCE(NULLIF(EXCLUDED.t1_name, ''), ld_matches.t1_name),
-			t2_name = COALESCE(NULLIF(EXCLUDED.t2_name, ''), ld_matches.t2_name),
-			match_status = COALESCE(NULLIF(EXCLUDED.match_status, ''), ld_matches.match_status),
+	// 使用 UPSERT 更新或插入 tracked_events
+	query := `
+		INSERT INTO tracked_events (
+			event_id, srn_id, schedule_time,
+			home_team_id, home_team_name,
+			away_team_id, away_team_name,
+			match_status, subscribed,
+			created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9, $10)
+		ON CONFLICT (event_id) DO UPDATE SET
+			srn_id = COALESCE(NULLIF(EXCLUDED.srn_id, ''), tracked_events.srn_id),
+			schedule_time = COALESCE(EXCLUDED.schedule_time, tracked_events.schedule_time),
+			home_team_id = COALESCE(NULLIF(EXCLUDED.home_team_id, ''), tracked_events.home_team_id),
+			home_team_name = COALESCE(NULLIF(EXCLUDED.home_team_name, ''), tracked_events.home_team_name),
+			away_team_id = COALESCE(NULLIF(EXCLUDED.away_team_id, ''), tracked_events.away_team_id),
+			away_team_name = COALESCE(NULLIF(EXCLUDED.away_team_name, ''), tracked_events.away_team_name),
+			match_status = COALESCE(NULLIF(EXCLUDED.match_status, ''), tracked_events.match_status),
 			updated_at = EXCLUDED.updated_at
 	`
-	_, err = p.db.Exec(
-		matchQuery,
+
+	_, err := p.db.Exec(
+		query,
 		eventID, srnID, scheduleTime,
-		homeTeamID, awayTeamID, homeTeamName, awayTeamName,
-		status, time.Now(), time.Now(),
+		homeTeamID, homeTeamName,
+		awayTeamID, awayTeamName,
+		status,
+		time.Now(), time.Now(),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to upsert ld_matches: %w", err)
+		return fmt.Errorf("failed to upsert tracked_events: %w", err)
 	}
 
 	return nil
@@ -199,9 +176,9 @@ func (p *FixtureParser) ParseFixtureChange(eventID string, xmlContent string) er
 	if fixtureChange.StartTime > 0 {
 		scheduleTime := time.UnixMilli(fixtureChange.StartTime)
 		query := `
-			UPDATE ld_matches 
+			UPDATE tracked_events 
 			SET schedule_time = $1, updated_at = $2
-			WHERE match_id = $3
+			WHERE event_id = $3
 		`
 		if _, err := p.db.Exec(query, scheduleTime, time.Now(), eventID); err != nil {
 			return fmt.Errorf("failed to update schedule_time: %w", err)

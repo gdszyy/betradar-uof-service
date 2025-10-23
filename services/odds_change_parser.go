@@ -15,42 +15,41 @@ type OddsChangeParser struct {
 }
 
 // OddsChangeMessage Odds Change 消息结构
+// 根据官方文档: sport_event_status 是 odds_change 的直接子元素
 type OddsChangeMessage struct {
-	XMLName    xml.Name        `xml:"odds_change"`
-	EventID    string          `xml:"event_id,attr"`
-	ProductID  int             `xml:"product,attr"`
-	Timestamp  int64           `xml:"timestamp,attr"`
-	SportEvent SportEventInfo  `xml:"sport_event"`
-	Odds       OddsInfo        `xml:"odds"`
+	XMLName          xml.Name          `xml:"odds_change"`
+	EventID          string            `xml:"event_id,attr"`
+	ProductID        int               `xml:"product,attr"`
+	Timestamp        int64             `xml:"timestamp,attr"`
+	SportEvent       SportEventInfo    `xml:"sport_event"`
+	SportEventStatus *SportEventStatus `xml:"sport_event_status"`
+	Odds             OddsInfo          `xml:"odds"`
 }
 
-// SportEventInfo 赛事信息
+// SportEventInfo 赛事基本信息
 type SportEventInfo struct {
-	ID              string          `xml:"id,attr"`
-	Scheduled       int64           `xml:"scheduled,attr"`
-	StartTime       int64           `xml:"start_time,attr"`
-	Status          string          `xml:"status,attr"`
-	MatchStatus     string          `xml:"match_status,attr"`
-	HomeScore       *int            `xml:"home_score,attr"`
-	AwayScore       *int            `xml:"away_score,attr"`
-	Competitors     []OddsCompetitor    `xml:"competitors>competitor"`
-	SportEventStatus *SportEventStatus `xml:"sport_event_status"`
+	ID          string           `xml:"id,attr"`
+	Scheduled   int64            `xml:"scheduled,attr"`
+	StartTime   int64            `xml:"start_time,attr"`
+	Competitors []OddsCompetitor `xml:"competitors>competitor"`
 }
 
 // SportEventStatus 赛事状态(包含比分信息)
+// 这是 odds_change 的直接子元素,不是嵌套在 sport_event 下
 type SportEventStatus struct {
-	Status          string      `xml:"status,attr"`
-	MatchStatus     string      `xml:"match_status,attr"`
-	HomeScore       *int        `xml:"home_score,attr"`
-	AwayScore       *int        `xml:"away_score,attr"`
-	Clock           *ClockInfo  `xml:"clock"`
-	PeriodScores    []PeriodScore `xml:"period_scores>period_score"`
+	Status       string        `xml:"status,attr"`
+	MatchStatus  string        `xml:"match_status,attr"`
+	HomeScore    *int          `xml:"home_score,attr"`
+	AwayScore    *int          `xml:"away_score,attr"`
+	Clock        *ClockInfo    `xml:"clock"`
+	PeriodScores []PeriodScore `xml:"period_scores>period_score"`
+	Statistics   *Statistics   `xml:"statistics"`
 }
 
 // ClockInfo 比赛时钟信息
 type ClockInfo struct {
-	MatchTime       string `xml:"match_time,attr"`
-	StoppageTime    string `xml:"stoppage_time,attr"`
+	MatchTime             string `xml:"match_time,attr"`
+	StoppageTime          string `xml:"stoppage_time,attr"`
 	StoppageTimeAnnounced string `xml:"stoppage_time_announced,attr"`
 }
 
@@ -60,6 +59,20 @@ type PeriodScore struct {
 	AwayScore int    `xml:"away_score,attr"`
 	Type      string `xml:"type,attr"` // regular_period, overtime, penalties
 	Number    int    `xml:"number,attr"`
+}
+
+// Statistics 比赛统计信息
+type Statistics struct {
+	YellowCards    *TeamStats `xml:"yellow_cards"`
+	RedCards       *TeamStats `xml:"red_cards"`
+	YellowRedCards *TeamStats `xml:"yellow_red_cards"`
+	Corners        *TeamStats `xml:"corners"`
+}
+
+// TeamStats 双方统计数据
+type TeamStats struct {
+	Home int `xml:"home,attr"`
+	Away int `xml:"away,attr"`
 }
 
 // OddsInfo 赔率信息
@@ -98,14 +111,14 @@ func (p *OddsChangeParser) ParseAndStore(xmlContent string) error {
 
 	p.logger.Printf("Parsing odds_change for event: %s", oddsChange.EventID)
 
-	// 提取比分信息
+	// 提取比分和状态信息
 	var homeScore, awayScore *int
 	var matchStatus, status string
 	var matchTime string
 
-	// 优先从 sport_event_status 获取比分
-	if oddsChange.SportEvent.SportEventStatus != nil {
-		ses := oddsChange.SportEvent.SportEventStatus
+	// 从 sport_event_status 获取比分和状态
+	if oddsChange.SportEventStatus != nil {
+		ses := oddsChange.SportEventStatus
 		homeScore = ses.HomeScore
 		awayScore = ses.AwayScore
 		matchStatus = ses.MatchStatus
@@ -114,20 +127,9 @@ func (p *OddsChangeParser) ParseAndStore(xmlContent string) error {
 		if ses.Clock != nil {
 			matchTime = ses.Clock.MatchTime
 		}
-	}
 
-	// 如果 sport_event_status 没有比分,从 sport_event 获取
-	if homeScore == nil && oddsChange.SportEvent.HomeScore != nil {
-		homeScore = oddsChange.SportEvent.HomeScore
-	}
-	if awayScore == nil && oddsChange.SportEvent.AwayScore != nil {
-		awayScore = oddsChange.SportEvent.AwayScore
-	}
-	if matchStatus == "" {
-		matchStatus = oddsChange.SportEvent.MatchStatus
-	}
-	if status == "" {
-		status = oddsChange.SportEvent.Status
+		p.logger.Printf("Extracted from sport_event_status: score=%v-%v, status=%s, match_status=%s, time=%s",
+			formatScore(homeScore), formatScore(awayScore), status, matchStatus, matchTime)
 	}
 
 	// 提取主客队信息
@@ -159,9 +161,9 @@ func (p *OddsChangeParser) ParseAndStore(xmlContent string) error {
 	}
 
 	p.logger.Printf("Stored odds_change data for event %s: %v-%v, status=%s, time=%s",
-		oddsChange.EventID, 
-		formatScore(homeScore), 
-		formatScore(awayScore), 
+		oddsChange.EventID,
+		formatScore(homeScore),
+		formatScore(awayScore),
 		matchStatus,
 		matchTime)
 
@@ -175,23 +177,23 @@ func (p *OddsChangeParser) storeOddsChangeData(
 	matchStatus, status, matchTime string,
 	homeTeamID, homeTeamName, awayTeamID, awayTeamName string,
 ) error {
-	// 更新 ld_matches 表
+	// 更新 tracked_events 表 (不再使用 ld_matches)
 	query := `
-		INSERT INTO ld_matches (
-			match_id, t1_score, t2_score, match_status, match_time,
-			home_team_id, away_team_id, t1_name, t2_name,
-			last_event_at, created_at, updated_at
+		INSERT INTO tracked_events (
+			event_id, home_score, away_score, match_status, match_time,
+			home_team_id, away_team_id, home_team_name, away_team_name,
+			last_update, created_at, updated_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-		ON CONFLICT (match_id) DO UPDATE SET
-			t1_score = COALESCE(EXCLUDED.t1_score, ld_matches.t1_score),
-			t2_score = COALESCE(EXCLUDED.t2_score, ld_matches.t2_score),
-			match_status = COALESCE(NULLIF(EXCLUDED.match_status, ''), ld_matches.match_status),
-			match_time = COALESCE(NULLIF(EXCLUDED.match_time, ''), ld_matches.match_time),
-			home_team_id = COALESCE(NULLIF(EXCLUDED.home_team_id, ''), ld_matches.home_team_id),
-			away_team_id = COALESCE(NULLIF(EXCLUDED.away_team_id, ''), ld_matches.away_team_id),
-			t1_name = COALESCE(NULLIF(EXCLUDED.t1_name, ''), ld_matches.t1_name),
-			t2_name = COALESCE(NULLIF(EXCLUDED.t2_name, ''), ld_matches.t2_name),
-			last_event_at = EXCLUDED.last_event_at,
+		ON CONFLICT (event_id) DO UPDATE SET
+			home_score = COALESCE(EXCLUDED.home_score, tracked_events.home_score),
+			away_score = COALESCE(EXCLUDED.away_score, tracked_events.away_score),
+			match_status = COALESCE(NULLIF(EXCLUDED.match_status, ''), tracked_events.match_status),
+			match_time = COALESCE(NULLIF(EXCLUDED.match_time, ''), tracked_events.match_time),
+			home_team_id = COALESCE(NULLIF(EXCLUDED.home_team_id, ''), tracked_events.home_team_id),
+			away_team_id = COALESCE(NULLIF(EXCLUDED.away_team_id, ''), tracked_events.away_team_id),
+			home_team_name = COALESCE(NULLIF(EXCLUDED.home_team_name, ''), tracked_events.home_team_name),
+			away_team_name = COALESCE(NULLIF(EXCLUDED.away_team_name, ''), tracked_events.away_team_name),
+			last_update = EXCLUDED.last_update,
 			updated_at = EXCLUDED.updated_at
 	`
 
@@ -217,7 +219,7 @@ func (p *OddsChangeParser) storeOddsChangeData(
 		now, now, now,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to upsert ld_matches: %w", err)
+		return fmt.Errorf("failed to upsert tracked_events: %w", err)
 	}
 
 	return nil

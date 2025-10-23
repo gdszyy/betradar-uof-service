@@ -70,12 +70,6 @@ func main() {
 	// 启动Web服务器
 	server := web.NewServer(cfg, db, wsHub, larkNotifier)
 	
-	// 创建 The Sports 客户端替代 LD
-	theSportsClient := services.NewTheSportsClient(cfg, db, larkNotifier)
-	
-	// 设置到 Server
-	server.SetTheSportsClient(theSportsClient)
-	
 	go func() {
 		if err := server.Start(); err != nil {
 			log.Fatalf("Web server error: %v", err)
@@ -103,23 +97,10 @@ func main() {
 	
 	log.Println("Match monitor started (hourly)")
 	
-	// 启动 The Sports 客户端
-	log.Println("[TheSports] Starting The Sports client...")
-	go func() {
-		if err := theSportsClient.Connect(); err != nil {
-			log.Printf("[TheSports] ❌ Failed to connect: %v", err)
-		}
-	}()
-	
-	// 启动自动订阅调度器
-	autoBooking := services.NewAutoBookingService(cfg, larkNotifier)
-	interval := time.Duration(cfg.AutoBookingIntervalMinutes) * time.Minute
-	autoBookingScheduler := services.NewAutoBookingScheduler(autoBooking, interval)
-	autoBookingScheduler.Start()
-	
-	log.Printf("Auto-booking scheduler started (every %d minutes)", cfg.AutoBookingIntervalMinutes)
+	// Auto-booking scheduler removed - can be triggered manually via API
 
 	log.Println("Service is running. Press Ctrl+C to stop.")
+	log.Println("All data is sourced from UOF (Unified Odds Feed)")
 
 	// 等待中断信号
 	quit := make(chan os.Signal, 1)
