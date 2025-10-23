@@ -27,7 +27,7 @@
 - **Producer**: 数据生产者,不同 Producer 负责不同阶段
   - `Pre-match Odds (ID: 3)`: 赛前赔率
   - `Live Odds (ID: 1)`: 比赛进行中的赔率
-  - `Ctrl (ID: 3)`: 控制和管理
+ 
 - **Market**: 投注市场 (如 1X2, Over/Under)
 - **Outcome**: 市场中的投注选项
 
@@ -387,6 +387,6 @@ if (message.product == LIVE_PRODUCER) {
 
 ---
 
-**文档版本**: 1.0.4  
+**文档版本**: 1.0.5  
 **最后更新**: 2025-10-23
 
