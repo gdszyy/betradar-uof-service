@@ -70,17 +70,11 @@ func main() {
 	// 启动Web服务器
 	server := web.NewServer(cfg, db, wsHub, larkNotifier)
 	
-	// 创建 LD 客户端(稍后启动)
-	ldClient := services.NewLDClient(cfg)
-	ldEventHandler := services.NewLDEventHandler(db, larkNotifier)
-	
-	// 设置事件处理器
-	ldClient.SetEventHandler(ldEventHandler.HandleEvent)
-	ldClient.SetMatchInfoHandler(ldEventHandler.HandleMatchInfo)
-	ldClient.SetLineupHandler(ldEventHandler.HandleLineup)
+	// 创建 The Sports 客户端替代 LD
+	theSportsClient := services.NewTheSportsClient(cfg, db, larkNotifier)
 	
 	// 设置到 Server
-	server.SetLDClient(ldClient)
+	server.SetTheSportsClient(theSportsClient)
 	
 	go func() {
 		if err := server.Start(); err != nil {
@@ -109,15 +103,20 @@ func main() {
 	
 	log.Println("Match monitor started (hourly)")
 	
-	// 启动 Live Data 客户端
-	log.Println("[LD] Starting Live Data client...")
-	ldClient.SetLarkNotifier(larkNotifier)
+	// 启动 The Sports 客户端
+	log.Println("[TheSports] Starting The Sports client...")
 	go func() {
-		if err := ldClient.Connect(); err != nil {
-			log.Printf("[LD] ❌ Failed to connect: %v", err)
-			// 错误通知已在 Connect 方法中处理
+		if err := theSportsClient.Connect(); err != nil {
+			log.Printf("[TheSports] ❌ Failed to connect: %v", err)
 		}
 	}()
+	
+	// 启动自动订阅调度器 (每30分钟查询一次)
+	autoBooking := services.NewAutoBookingService(cfg, larkNotifier)
+	autoBookingScheduler := services.NewAutoBookingScheduler(autoBooking, 30*time.Minute)
+	autoBookingScheduler.Start()
+	
+	log.Println("Auto-booking scheduler started (every 30 minutes)")
 
 	log.Println("Service is running. Press Ctrl+C to stop.")
 

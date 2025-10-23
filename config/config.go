@@ -34,6 +34,11 @@ type Config struct {
 	
 	// 通知配置
 	LarkWebhook string // 飞书机器人Webhook URL
+	
+	// The Sports 配置
+	TheSportsAPIToken  string // The Sports API Token
+	TheSportsUsername  string // The Sports MQTT Username
+	TheSportsSecret    string // The Sports MQTT Secret
 }
 
 func Load() *Config {
@@ -88,9 +93,14 @@ func Load() *Config {
 		RecoveryAfterHours: getEnvInt("RECOVERY_AFTER_HOURS", 10),  // Betradar最多允许10小时
 		RecoveryProducts:   getRecoveryProducts(),
 		
-		// 通知配置
-		LarkWebhook: larkWebhook,
-	}
+			// 通知配置
+			LarkWebhook: larkWebhook,
+			
+			// The Sports 配置
+			TheSportsAPIToken: getEnv("THESPORTS_API_TOKEN", ""),
+			TheSportsUsername: getEnv("THESPORTS_USERNAME", ""),
+			TheSportsSecret:   getEnv("THESPORTS_SECRET", ""),
+		}
 }
 
 func getEnv(key, defaultValue string) string {

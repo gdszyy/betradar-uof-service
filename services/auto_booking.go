@@ -61,7 +61,7 @@ func (s *AutoBookingService) BookMatch(matchID string) error {
 	return nil
 }
 
-// BookAllBookableMatches 订阅所有可订阅的比赛
+// BookAllBookableMatches 查询并自动订阅所有可订阅的比赛
 func (s *AutoBookingService) BookAllBookableMatches() (int, int, error) {
 	log.Println("[AutoBooking] 🔍 Querying live schedule for bookable matches...")
 	
@@ -128,6 +128,8 @@ func (s *AutoBookingService) BookAllBookableMatches() (int, int, error) {
 		log.Println("[AutoBooking] ℹ️  No bookable matches found")
 		return 0, 0, nil
 	}
+	
+	log.Printf("[AutoBooking] 🚀 Auto-booking enabled: will subscribe all %d bookable matches", bookableCount)
 	
 	// 订阅所有 bookable 比赛
 	for _, matchID := range bookableMatches {
