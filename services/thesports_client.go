@@ -65,18 +65,29 @@ func (c *TheSportsClient) Connect() error {
 	c.mqttClient.OnMessage("*", c.handleMessage)
 	
 	// 订阅所有足球实时数据
+	log.Println("[TheSports] 📡 Subscribing to football/live/#...")
 	if err := c.mqttClient.SubscribeFootball("football/live/#"); err != nil {
+		log.Printf("[TheSports] ❌ Failed to subscribe to football: %v", err)
 		return fmt.Errorf("failed to subscribe to live football: %w", err)
 	}
+	log.Println("[TheSports] ✅ Successfully subscribed to football/live/#")
 	
 	// 订阅所有篮球实时数据
+	log.Println("[TheSports] 📡 Subscribing to basketball/live/#...")
 	if err := c.mqttClient.SubscribeBasketball("basketball/live/#"); err != nil {
-		log.Printf("[TheSports] ⚠️  Failed to subscribe to basketball: %v", err)
+		log.Printf("[TheSports] ❌ Failed to subscribe to basketball: %v", err)
+		log.Println("[TheSports] ℹ️  Basketball MQTT may not be available, continuing...")
+	} else {
+		log.Println("[TheSports] ✅ Successfully subscribed to basketball/live/#")
 	}
 	
-	// 订阅所有电竞实时数据
+	// 订阅所有电竞实时数据 (实验性)
+	log.Println("[TheSports] 📡 Subscribing to esports/live/# (experimental)...")
 	if err := c.mqttClient.SubscribeEsports("esports/live/#"); err != nil {
-		log.Printf("[TheSports] ⚠️  Failed to subscribe to esports: %v", err)
+		log.Printf("[TheSports] ❌ Failed to subscribe to esports: %v", err)
+		log.Println("[TheSports] ℹ️  Esports MQTT may not be available, will use REST API only")
+	} else {
+		log.Println("[TheSports] ✅ Successfully subscribed to esports/live/#")
 	}
 	
 	c.connected = true
@@ -178,6 +189,22 @@ func (c *TheSportsClient) UnsubscribeMatch(matchID string) error {
 // handleMessage 处理 MQTT 消息
 func (c *TheSportsClient) handleMessage(topic string, payload []byte) {
 	log.Printf("[TheSports] 📨 Received message on topic: %s (%d bytes)", topic, len(payload))
+	
+	// 记录消息类型统计
+	if len(topic) > 0 {
+		var sportType string
+		if len(topic) >= 8 && topic[:8] == "football" {
+			sportType = "football"
+		} else if len(topic) >= 10 && topic[:10] == "basketball" {
+			sportType = "basketball"
+		} else if len(topic) >= 7 && topic[:7] == "esports" {
+			sportType = "esports"
+			log.Printf("[TheSports] 🎮 ESPORTS MESSAGE RECEIVED! Topic: %s", topic)
+		} else {
+			sportType = "unknown"
+		}
+		log.Printf("[TheSports] 🏆 Sport type: %s", sportType)
+	}
 	
 	// 解析消息
 	var msg map[string]interface{}
