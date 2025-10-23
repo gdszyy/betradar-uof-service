@@ -10,6 +10,7 @@ import (
 type Config struct {
 	// Betradar配置
 	AccessToken   string
+	UOFAPIToken   string // UOF API Token (for REST API calls)
 	Username      string
 	Password      string
 	BookmakerID   string
@@ -73,6 +74,7 @@ func Load() *Config {
 		return &Config{
 		// Betradar配置
 		AccessToken:   getEnv("BETRADAR_ACCESS_TOKEN", ""),
+		UOFAPIToken:   getEnv("UOF_API_TOKEN", getEnv("BETRADAR_ACCESS_TOKEN", "")), // 默认使用 AccessToken
 		Username:      username,
 		Password:      password,
 		BookmakerID:   getEnv("BOOKMAKER_ID", username),

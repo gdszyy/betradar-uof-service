@@ -21,30 +21,46 @@ type MessageBroadcaster interface {
 }
 
 type AMQPConsumer struct {
-	config          *config.Config
-	messageStore    *MessageStore
-	broadcaster     MessageBroadcaster
-	recoveryManager *RecoveryManager
-	notifier        *LarkNotifier
-	statsTracker    *MessageStatsTracker
-	matchMonitor    *MatchMonitor
-	conn            *amqp.Connection
-	channel         *amqp.Channel
-	done            chan bool
+	config            *config.Config
+	messageStore      *MessageStore
+	broadcaster       MessageBroadcaster
+	recoveryManager   *RecoveryManager
+	notifier          *LarkNotifier
+	statsTracker      *MessageStatsTracker
+	matchMonitor      *MatchMonitor
+	fixtureParser     *FixtureParser
+	oddsChangeParser  *OddsChangeParser
+	srnMappingService *SRNMappingService
+	conn              *amqp.Connection
+	channel           *amqp.Channel
+	done              chan bool
 }
 
 func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster MessageBroadcaster) *AMQPConsumer {
 	notifier := NewLarkNotifier(cfg.LarkWebhook)
 	statsTracker := NewMessageStatsTracker(notifier, 5*time.Minute)
 	
+	// 初始化解析器
+	srnMappingService := NewSRNMappingService(cfg.UOFAPIToken, store.db)
+	fixtureParser := NewFixtureParser(store.db, srnMappingService)
+	oddsChangeParser := NewOddsChangeParser(store.db)
+	
+	// 从数据库加载 SRN mapping 缓存
+	if err := srnMappingService.LoadCacheFromDB(); err != nil {
+		log.Printf("Warning: failed to load SRN mapping cache: %v", err)
+	}
+	
 	return &AMQPConsumer{
-		config:          cfg,
-		messageStore:    store,
-		broadcaster:     broadcaster,
-		recoveryManager: NewRecoveryManager(cfg, store),
-		notifier:        notifier,
-		statsTracker:    statsTracker,
-		done:            make(chan bool),
+		config:            cfg,
+		messageStore:      store,
+		broadcaster:       broadcaster,
+		recoveryManager:   NewRecoveryManager(cfg, store),
+		notifier:          notifier,
+		statsTracker:      statsTracker,
+		fixtureParser:     fixtureParser,
+		oddsChangeParser:  oddsChangeParser,
+		srnMappingService: srnMappingService,
+		done:              make(chan bool),
 	}
 }
 
@@ -245,6 +261,8 @@ func (c *AMQPConsumer) processMessage(msg amqp.Delivery) {
 		c.handleBetSettlement(eventID, productID, xmlContent, timestamp)
 	case "bet_cancel":
 		c.handleBetCancel(eventID, productID, xmlContent, timestamp)
+	case "fixture":
+		c.handleFixture(eventID, productID, xmlContent, timestamp)
 	case "fixture_change":
 		c.handleFixtureChange(eventID, productID, xmlContent, timestamp)
 	case "rollback_bet_settlement":
@@ -358,6 +376,11 @@ func (c *AMQPConsumer) handleOddsChange(eventID string, productID *int, xmlConte
 
 	// 更新跟踪的赛事
 	c.messageStore.UpdateTrackedEvent(eventID)
+	
+	// 使用 OddsChangeParser 解析比分和比赛信息
+	if err := c.oddsChangeParser.ParseAndStore(xmlContent); err != nil {
+		log.Printf("Failed to parse odds_change data: %v", err)
+	}
 }
 
 func (c *AMQPConsumer) handleBetStop(eventID string, productID *int, xmlContent string, timestamp int64) {
@@ -515,6 +538,22 @@ func (c *AMQPConsumer) handleBetCancel(eventID string, productID *int, xmlConten
 	c.messageStore.UpdateTrackedEvent(eventID)
 }
 
+// handleFixture 处理 fixture 消息
+func (c *AMQPConsumer) handleFixture(eventID string, productID *int, xmlContent string, timestamp int64) {
+	if eventID == "" {
+		return
+	}
+	
+	log.Printf("Processing fixture for event: %s", eventID)
+	
+	// 使用 FixtureParser 解析完整的 fixture 消息
+	if err := c.fixtureParser.ParseAndStore(xmlContent); err != nil {
+		log.Printf("Failed to parse fixture data: %v", err)
+	}
+	
+	c.messageStore.UpdateTrackedEvent(eventID)
+}
+
 // handleFixtureChange 处理赛程变化消息
 func (c *AMQPConsumer) handleFixtureChange(eventID string, productID *int, xmlContent string, timestamp int64) {
 	if eventID == "" {
@@ -540,6 +579,11 @@ func (c *AMQPConsumer) handleFixtureChange(eventID string, productID *int, xmlCo
 	}
 
 	c.messageStore.UpdateTrackedEvent(eventID)
+	
+	// 使用 FixtureParser 解析赛程变化
+	if err := c.fixtureParser.ParseFixtureChange(eventID, xmlContent); err != nil {
+		log.Printf("Failed to parse fixture_change data: %v", err)
+	}
 }
 
 // handleRollbackBetSettlement 处理撤销投注结算消息
