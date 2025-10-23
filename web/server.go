@@ -20,18 +20,19 @@ import (
 )
 
 type Server struct {
-	config          *config.Config
-	db              *sql.DB
-	wsHub           *Hub
-	messageStore    *services.MessageStore
-	recoveryManager *services.RecoveryManager
-	replayClient    *services.ReplayClient
-	larkNotifier    *services.LarkNotifier
-	ldClient        *services.LDClient
-	theSportsClient *services.TheSportsClient
-	autoBooking     *services.AutoBookingService
-	httpServer      *http.Server
-	upgrader        websocket.Upgrader
+	config              *config.Config
+	db                  *sql.DB
+	wsHub               *Hub
+	messageStore        *services.MessageStore
+	recoveryManager     *services.RecoveryManager
+	replayClient        *services.ReplayClient
+	larkNotifier        *services.LarkNotifier
+	ldClient            *services.LDClient
+	theSportsClient     *services.TheSportsClient
+	autoBooking         *services.AutoBookingService
+	subscriptionManager *services.MatchSubscriptionManager
+	httpServer          *http.Server
+	upgrader            websocket.Upgrader
 }
 
 func NewServer(cfg *config.Config, db *sql.DB, hub *Hub, larkNotifier *services.LarkNotifier) *Server {
@@ -116,6 +117,13 @@ func (s *Server) Start() error {
 	// The Sports API - 篮球
 	api.HandleFunc("/thesports/basketball/today", s.handleTheSportsGetBasketballToday).Methods("GET")
 	api.HandleFunc("/thesports/basketball/live", s.handleTheSportsGetBasketballLive).Methods("GET")
+	
+	// 订阅管理 API
+	api.HandleFunc("/subscriptions", s.handleGetSubscriptions).Methods("GET")
+	api.HandleFunc("/subscriptions/stats", s.handleGetSubscriptionStats).Methods("GET")
+	api.HandleFunc("/subscriptions/unsubscribe", s.handleUnsubscribeMatch).Methods("POST")
+	api.HandleFunc("/subscriptions/unsubscribe/batch", s.handleUnsubscribeMatches).Methods("POST")
+	api.HandleFunc("/subscriptions/cleanup", s.handleCleanupEndedMatches).Methods("POST")
 
 	// WebSocket路由
 	router.HandleFunc("/ws", s.handleWebSocket)
@@ -161,6 +169,11 @@ func (s *Server) SetLDClient(client *services.LDClient) {
 // SetTheSportsClient 设置 The Sports 客户端
 func (s *Server) SetTheSportsClient(client *services.TheSportsClient) {
 	s.theSportsClient = client
+}
+
+// SetSubscriptionManager 设置订阅管理器
+func (s *Server) SetSubscriptionManager(manager *services.MatchSubscriptionManager) {
+	s.subscriptionManager = manager
 }
 
 // handleHealth 健康检查

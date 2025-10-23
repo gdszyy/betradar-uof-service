@@ -9,8 +9,9 @@ import (
 
 // LDEventHandler LD 事件处理器
 type LDEventHandler struct {
-	db           *sql.DB
-	larkNotifier *LarkNotifier
+	db                   *sql.DB
+	larkNotifier         *LarkNotifier
+	subscriptionManager  *MatchSubscriptionManager
 }
 
 // NewLDEventHandler 创建事件处理器
@@ -19,6 +20,11 @@ func NewLDEventHandler(db *sql.DB, notifier *LarkNotifier) *LDEventHandler {
 		db:           db,
 		larkNotifier: notifier,
 	}
+}
+
+// SetSubscriptionManager 设置订阅管理器
+func (h *LDEventHandler) SetSubscriptionManager(manager *MatchSubscriptionManager) {
+	h.subscriptionManager = manager
 }
 
 // HandleEvent 处理事件
@@ -51,6 +57,16 @@ func (h *LDEventHandler) HandleEvent(event *LDEvent) {
 	}
 	
 	log.Printf("[LD] ✅ Event saved: %s (%s)", typeName, event.UUID)
+	
+	// 记录事件到订阅管理器
+	if h.subscriptionManager != nil && event.MatchID != "" {
+		h.subscriptionManager.RecordEvent(event.MatchID)
+		
+		// 如果是比赛结束事件，更新状态
+		if event.MatchStatus == "ended" || event.MatchStatus == "closed" {
+			h.subscriptionManager.UpdateMatchStatus(event.MatchID, event.MatchStatus)
+		}
+	}
 	
 	// 发送重要事件通知
 	if isImportant && h.larkNotifier != nil {
@@ -119,6 +135,11 @@ func (h *LDEventHandler) HandleMatchInfo(matchInfo *LDMatchInfo) {
 	} else {
 		log.Printf("[LD] ✅ Match info updated: %s vs %s (%d-%d)",
 			matchInfo.T1Name, matchInfo.T2Name, matchInfo.T1Score, matchInfo.T2Score)
+	}
+	
+	// 更新订阅管理器中的比赛状态
+	if h.subscriptionManager != nil && matchInfo.MatchID != "" {
+		h.subscriptionManager.UpdateMatchStatus(matchInfo.MatchID, matchInfo.MatchStatus)
 	}
 }
 
