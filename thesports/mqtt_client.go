@@ -157,6 +157,11 @@ func (c *MQTTClient) SubscribeTennis(topic string) error {
 	return c.Subscribe(topic, QoSAtLeastOnce)
 }
 
+// SubscribeEsports subscribes to esports topic
+func (c *MQTTClient) SubscribeEsports(topic string) error {
+	return c.Subscribe(topic, QoSAtLeastOnce)
+}
+
 // OnMessage registers a handler for messages on a specific topic
 func (c *MQTTClient) OnMessage(topic string, handler MQTTMessageHandler) {
 	c.mu.Lock()

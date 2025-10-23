@@ -187,3 +187,47 @@ func (s *Server) handleTheSportsGetLiveMatches(w http.ResponseWriter, r *http.Re
 	})
 }
 
+// handleTheSportsGetBasketballToday 获取今日篮球比赛
+func (s *Server) handleTheSportsGetBasketballToday(w http.ResponseWriter, r *http.Request) {
+	if s.theSportsClient == nil {
+		http.Error(w, "The Sports client not initialized", http.StatusServiceUnavailable)
+		return
+	}
+	
+	matches, err := s.theSportsClient.GetBasketballTodayMatches()
+	if err != nil {
+		log.Printf("[API] Failed to get basketball today matches: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "success",
+		"count":   len(matches),
+		"matches": matches,
+	})
+}
+
+// handleTheSportsGetBasketballLive 获取直播篮球比赛
+func (s *Server) handleTheSportsGetBasketballLive(w http.ResponseWriter, r *http.Request) {
+	if s.theSportsClient == nil {
+		http.Error(w, "The Sports client not initialized", http.StatusServiceUnavailable)
+		return
+	}
+	
+	matches, err := s.theSportsClient.GetBasketballLiveMatches()
+	if err != nil {
+		log.Printf("[API] Failed to get basketball live matches: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "success",
+		"count":   len(matches),
+		"matches": matches,
+	})
+}
+

@@ -69,13 +69,23 @@ func (c *TheSportsClient) Connect() error {
 		return fmt.Errorf("failed to subscribe to live football: %w", err)
 	}
 	
+	// 订阅所有篮球实时数据
+	if err := c.mqttClient.SubscribeBasketball("basketball/live/#"); err != nil {
+		log.Printf("[TheSports] ⚠️  Failed to subscribe to basketball: %v", err)
+	}
+	
+	// 订阅所有电竞实时数据
+	if err := c.mqttClient.SubscribeEsports("esports/live/#"); err != nil {
+		log.Printf("[TheSports] ⚠️  Failed to subscribe to esports: %v", err)
+	}
+	
 	c.connected = true
 	
 	log.Println("[TheSports] ✅ Connected to The Sports MQTT successfully")
 	
 	// 发送飞书通知
 	if c.larkNotifier != nil {
-		c.larkNotifier.SendText("✅ **The Sports 连接成功**\n\n已连接到 The Sports MQTT 服务器\n订阅: football/live/#")
+		c.larkNotifier.SendText("✅ **The Sports 连接成功**\n\n已连接到 The Sports MQTT 服务器\n订阅: \n- football/live/#\n- basketball/live/#\n- esports/live/#")
 	}
 	
 	return nil
@@ -305,5 +315,23 @@ func (c *TheSportsClient) GetLiveMatches() ([]thesports.Match, error) {
 	}
 	
 	return c.restClient.GetLiveMatches()
+}
+
+// GetBasketballTodayMatches 获取今日篮球比赛
+func (c *TheSportsClient) GetBasketballTodayMatches() ([]thesports.BasketballMatch, error) {
+	if c.restClient == nil {
+		return nil, fmt.Errorf("REST client not initialized")
+	}
+	
+	return c.restClient.GetBasketballTodayMatches()
+}
+
+// GetBasketballLiveMatches 获取直播篮球比赛
+func (c *TheSportsClient) GetBasketballLiveMatches() ([]thesports.BasketballMatch, error) {
+	if c.restClient == nil {
+		return nil, fmt.Errorf("REST client not initialized")
+	}
+	
+	return c.restClient.GetBasketballLiveMatches()
 }
 

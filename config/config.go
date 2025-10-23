@@ -39,6 +39,9 @@ type Config struct {
 	TheSportsAPIToken  string // The Sports API Token
 	TheSportsUsername  string // The Sports MQTT Username
 	TheSportsSecret    string // The Sports MQTT Secret
+	
+	// 自动订阅配置
+	AutoBookingIntervalMinutes int // 自动订阅间隔(分钟)
 }
 
 func Load() *Config {
@@ -100,6 +103,9 @@ func Load() *Config {
 			TheSportsAPIToken: getEnv("THESPORTS_API_TOKEN", ""),
 			TheSportsUsername: getEnv("THESPORTS_USERNAME", ""),
 			TheSportsSecret:   getEnv("THESPORTS_SECRET", ""),
+			
+			// 自动订阅配置
+			AutoBookingIntervalMinutes: getEnvInt("AUTO_BOOKING_INTERVAL_MINUTES", 30),
 		}
 }
 

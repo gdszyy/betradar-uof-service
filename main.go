@@ -111,12 +111,13 @@ func main() {
 		}
 	}()
 	
-	// 启动自动订阅调度器 (每30分钟查询一次)
+	// 启动自动订阅调度器
 	autoBooking := services.NewAutoBookingService(cfg, larkNotifier)
-	autoBookingScheduler := services.NewAutoBookingScheduler(autoBooking, 30*time.Minute)
+	interval := time.Duration(cfg.AutoBookingIntervalMinutes) * time.Minute
+	autoBookingScheduler := services.NewAutoBookingScheduler(autoBooking, interval)
 	autoBookingScheduler.Start()
 	
-	log.Println("Auto-booking scheduler started (every 30 minutes)")
+	log.Printf("Auto-booking scheduler started (every %d minutes)", cfg.AutoBookingIntervalMinutes)
 
 	log.Println("Service is running. Press Ctrl+C to stop.")
 

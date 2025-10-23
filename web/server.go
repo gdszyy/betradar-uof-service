@@ -104,7 +104,7 @@ func (s *Server) Start() error {
 	api.HandleFunc("/ld/matches", s.handleLDGetMatches).Methods("GET")
 	api.HandleFunc("/ld/events", s.handleLDGetEvents).Methods("GET")
 	
-	// The Sports API
+	// The Sports API - 足球
 	api.HandleFunc("/thesports/connect", s.handleTheSportsConnect).Methods("POST")
 	api.HandleFunc("/thesports/disconnect", s.handleTheSportsDisconnect).Methods("POST")
 	api.HandleFunc("/thesports/status", s.handleTheSportsStatus).Methods("GET")
@@ -112,6 +112,10 @@ func (s *Server) Start() error {
 	api.HandleFunc("/thesports/unsubscribe", s.handleTheSportsUnsubscribeMatch).Methods("POST")
 	api.HandleFunc("/thesports/today", s.handleTheSportsGetTodayMatches).Methods("GET")
 	api.HandleFunc("/thesports/live", s.handleTheSportsGetLiveMatches).Methods("GET")
+	
+	// The Sports API - 篮球
+	api.HandleFunc("/thesports/basketball/today", s.handleTheSportsGetBasketballToday).Methods("GET")
+	api.HandleFunc("/thesports/basketball/live", s.handleTheSportsGetBasketballLive).Methods("GET")
 
 	// WebSocket路由
 	router.HandleFunc("/ws", s.handleWebSocket)
