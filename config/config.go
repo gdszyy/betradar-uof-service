@@ -36,9 +36,8 @@ type Config struct {
 	LarkWebhook string // 飞书机器人Webhook URL
 	
 	// The Sports 配置
-	TheSportsAPIToken  string // The Sports API Token
-	TheSportsUsername  string // The Sports MQTT Username
-	TheSportsSecret    string // The Sports MQTT Secret
+	TheSportsUsername  string // The Sports Username (for both HTTP API and MQTT)
+	TheSportsSecret    string // The Sports Secret (for both HTTP API and MQTT)
 	
 	// 自动订阅配置
 	AutoBookingIntervalMinutes int // 自动订阅间隔(分钟)
@@ -100,7 +99,6 @@ func Load() *Config {
 			LarkWebhook: larkWebhook,
 			
 			// The Sports 配置
-			TheSportsAPIToken: getEnv("THESPORTS_API_TOKEN", ""),
 			TheSportsUsername: getEnv("THESPORTS_USERNAME", ""),
 			TheSportsSecret:   getEnv("THESPORTS_SECRET", ""),
 			

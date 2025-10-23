@@ -20,22 +20,27 @@ const (
 // Client represents The Sports API client
 type Client struct {
 	baseURL    string
-	apiToken   string
+	username   string
+	secret     string
 	httpClient *http.Client
 }
 
 // Config holds the configuration for the API client
 type Config struct {
 	BaseURL  string
-	APIToken string
+	Username string
+	Secret   string
 	Timeout  time.Duration
 }
 
 // NewClient creates a new The Sports API client
-func NewClient(apiToken string) *Client {
+// username: your API username
+// secret: your API secret key
+func NewClient(username, secret string) *Client {
 	return NewClientWithConfig(Config{
 		BaseURL:  DefaultBaseURL,
-		APIToken: apiToken,
+		Username: username,
+		Secret:   secret,
 		Timeout:  DefaultTimeout,
 	})
 }
@@ -51,7 +56,8 @@ func NewClientWithConfig(config Config) *Client {
 
 	return &Client{
 		baseURL:  config.BaseURL,
-		apiToken: config.APIToken,
+		username: config.Username,
+		secret:   config.Secret,
 		httpClient: &http.Client{
 			Timeout: config.Timeout,
 		},
@@ -66,10 +72,17 @@ func (c *Client) doRequest(method, endpoint string, params url.Values) ([]byte, 
 		return nil, fmt.Errorf("failed to parse URL: %w", err)
 	}
 
-	// Add query parameters
-	if params != nil {
-		u.RawQuery = params.Encode()
+	// Initialize params if nil
+	if params == nil {
+		params = url.Values{}
 	}
+	
+	// Add authentication parameters (required by The Sports API)
+	params.Set("user", c.username)
+	params.Set("secret", c.secret)
+	
+	// Add query parameters
+	u.RawQuery = params.Encode()
 
 	// Create request
 	req, err := http.NewRequest(method, u.String(), nil)
@@ -78,7 +91,6 @@ func (c *Client) doRequest(method, endpoint string, params url.Values) ([]byte, 
 	}
 
 	// Add headers
-	req.Header.Set("Authorization", "Bearer "+c.apiToken)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 

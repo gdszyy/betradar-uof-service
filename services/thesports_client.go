@@ -48,7 +48,7 @@ func (c *TheSportsClient) Connect() error {
 	log.Println("[TheSports] 🔌 Connecting to The Sports MQTT...")
 	
 	// 创建 REST 客户端
-	c.restClient = thesports.NewClient(c.config.TheSportsAPIToken)
+	c.restClient = thesports.NewClient(c.config.TheSportsUsername, c.config.TheSportsSecret)
 	
 	// 创建 MQTT 客户端
 	c.mqttClient = thesports.NewMQTTClient(
