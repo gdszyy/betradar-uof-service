@@ -100,6 +100,7 @@ func (p *FixtureParser) ParseAndStore(xmlContent string) error {
 	if err := p.storeFixtureData(
 		fixture.EventID,
 		srnID,
+		fixture.Sport.ID,
 		scheduleTime,
 		homeTeamID,
 		homeTeamName,
@@ -118,21 +119,22 @@ func (p *FixtureParser) ParseAndStore(xmlContent string) error {
 
 // storeFixtureData 存储 Fixture 数据到数据库
 func (p *FixtureParser) storeFixtureData(
-	eventID, srnID string,
+	eventID, srnID, sportID string,
 	scheduleTime *time.Time,
 	homeTeamID, homeTeamName, awayTeamID, awayTeamName, status string,
 ) error {
 	// 使用 UPSERT 更新或插入 tracked_events
 	query := `
 		INSERT INTO tracked_events (
-			event_id, srn_id, schedule_time,
+			event_id, srn_id, sport_id, schedule_time,
 			home_team_id, home_team_name,
 			away_team_id, away_team_name,
 			match_status, subscribed,
 			created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9, $10)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, $10, $11)
 		ON CONFLICT (event_id) DO UPDATE SET
 			srn_id = COALESCE(NULLIF(EXCLUDED.srn_id, ''), tracked_events.srn_id),
+			sport_id = COALESCE(NULLIF(EXCLUDED.sport_id, ''), tracked_events.sport_id),
 			schedule_time = COALESCE(EXCLUDED.schedule_time, tracked_events.schedule_time),
 			home_team_id = COALESCE(NULLIF(EXCLUDED.home_team_id, ''), tracked_events.home_team_id),
 			home_team_name = COALESCE(NULLIF(EXCLUDED.home_team_name, ''), tracked_events.home_team_name),
@@ -144,7 +146,7 @@ func (p *FixtureParser) storeFixtureData(
 
 	_, err := p.db.Exec(
 		query,
-		eventID, srnID, scheduleTime,
+		eventID, srnID, sportID, scheduleTime,
 		homeTeamID, homeTeamName,
 		awayTeamID, awayTeamName,
 		status,
