@@ -87,10 +87,13 @@ func (s *Server) handleGetMatchDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
+	// 使用 SR 映射器转换数据
+	enhancedMatch := MapMatchDetail(match, s.srMapper)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
-		"match":   match,
+		"match":   enhancedMatch,
 	})
 }
 
@@ -152,11 +155,14 @@ func (s *Server) handleGetLiveMatches(w http.ResponseWriter, r *http.Request) {
 		matches = []MatchDetail{}
 	}
 	
+	// 使用 SR 映射器转换数据
+	enhancedMatches := MapMatchList(matches, s.srMapper)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
-		"count":   len(matches),
-		"matches": matches,
+		"count":   len(enhancedMatches),
+		"matches": enhancedMatches,
 	})
 }
 
@@ -228,12 +234,15 @@ func (s *Server) handleGetUpcomingMatches(w http.ResponseWriter, r *http.Request
 		matches = []MatchDetail{}
 	}
 	
+	// 使用 SR 映射器转换数据
+	enhancedMatches := MapMatchList(matches, s.srMapper)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
-		"count":   len(matches),
+		"count":   len(enhancedMatches),
 		"hours":   hours,
-		"matches": matches,
+		"matches": enhancedMatches,
 	})
 }
 
@@ -299,12 +308,15 @@ func (s *Server) handleGetMatchesByStatus(w http.ResponseWriter, r *http.Request
 		matches = []MatchDetail{}
 	}
 	
+	// 使用 SR 映射器转换数据
+	enhancedMatches := MapMatchList(matches, s.srMapper)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"status":  status,
-		"count":   len(matches),
-		"matches": matches,
+		"count":   len(enhancedMatches),
+		"matches": enhancedMatches,
 	})
 }
 
@@ -374,12 +386,15 @@ func (s *Server) handleSearchMatches(w http.ResponseWriter, r *http.Request) {
 		matches = []MatchDetail{}
 	}
 	
+	// 使用 SR 映射器转换数据
+	enhancedMatches := MapMatchList(matches, s.srMapper)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"keyword": keyword,
-		"count":   len(matches),
-		"matches": matches,
+		"count":   len(enhancedMatches),
+		"matches": enhancedMatches,
 	})
 }
 

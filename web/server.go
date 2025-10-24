@@ -28,6 +28,7 @@ type Server struct {
 	replayClient        *services.ReplayClient
 	larkNotifier        *services.LarkNotifier
 	autoBooking         *services.AutoBookingService
+	srMapper            *services.SRMapper
 	httpServer          *http.Server
 	upgrader            websocket.Upgrader
 }
@@ -48,6 +49,7 @@ func NewServer(cfg *config.Config, db *sql.DB, hub *Hub, larkNotifier *services.
 		wsHub:           hub,
 		messageStore:    services.NewMessageStore(db),
 		recoveryManager: services.NewRecoveryManager(cfg, services.NewMessageStore(db)),
+		srMapper:        services.NewSRMapper(),
 		replayClient:    replayClient,
 		larkNotifier:    larkNotifier,
 		autoBooking:     services.NewAutoBookingService(cfg, larkNotifier),
