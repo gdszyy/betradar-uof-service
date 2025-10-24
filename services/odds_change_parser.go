@@ -182,7 +182,7 @@ func (p *OddsChangeParser) storeOddsChangeData(
 		INSERT INTO tracked_events (
 			event_id, home_score, away_score, match_status, match_time,
 			home_team_id, away_team_id, home_team_name, away_team_name,
-			last_update, created_at, updated_at
+			last_message_at, created_at, updated_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		ON CONFLICT (event_id) DO UPDATE SET
 			home_score = COALESCE(EXCLUDED.home_score, tracked_events.home_score),
@@ -193,7 +193,7 @@ func (p *OddsChangeParser) storeOddsChangeData(
 			away_team_id = COALESCE(NULLIF(EXCLUDED.away_team_id, ''), tracked_events.away_team_id),
 			home_team_name = COALESCE(NULLIF(EXCLUDED.home_team_name, ''), tracked_events.home_team_name),
 			away_team_name = COALESCE(NULLIF(EXCLUDED.away_team_name, ''), tracked_events.away_team_name),
-			last_update = EXCLUDED.last_update,
+			last_message_at = EXCLUDED.last_message_at,
 			updated_at = EXCLUDED.updated_at
 	`
 
