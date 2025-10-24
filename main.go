@@ -97,7 +97,19 @@ func main() {
 	
 	log.Println("Match monitor started (hourly)")
 	
-	// Auto-booking scheduler removed - can be triggered manually via API
+	// 启动时自动订阅
+	startupBooking := services.NewStartupBookingService(cfg, db, larkNotifier)
+	go func() {
+		// 等待 AMQP 连接建立
+		time.Sleep(5 * time.Second)
+		
+		if result, err := startupBooking.ExecuteStartupBooking(); err != nil {
+			log.Printf("[StartupBooking] ❌ Failed to execute startup booking: %v", err)
+			larkNotifier.NotifyError("Startup Booking", err.Error())
+		} else {
+			log.Printf("[StartupBooking] ✅ Startup booking completed: %d/%d successful", result.Success, result.Bookable)
+		}
+	}()
 
 	log.Println("Service is running. Press Ctrl+C to stop.")
 	log.Println("All data is sourced from UOF (Unified Odds Feed)")

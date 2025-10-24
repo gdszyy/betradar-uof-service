@@ -89,6 +89,18 @@ func (s *Server) Start() error {
 	// 自动订阅API
 	api.HandleFunc("/booking/auto", s.handleAutoBooking).Methods("POST")
 	api.HandleFunc("/booking/match/{match_id}", s.handleBookMatch).Methods("POST")
+	api.HandleFunc("/booking/trigger", s.handleTriggerAutoBooking).Methods("POST")
+	
+	// 订阅查询API
+	api.HandleFunc("/booking/booked", s.handleGetBookedMatches).Methods("GET")
+	api.HandleFunc("/booking/bookable", s.handleGetBookableMatches).Methods("GET")
+	
+	// 前端API - 比赛查询
+	api.HandleFunc("/matches/live", s.handleGetLiveMatches).Methods("GET")
+	api.HandleFunc("/matches/upcoming", s.handleGetUpcomingMatches).Methods("GET")
+	api.HandleFunc("/matches/status", s.handleGetMatchesByStatus).Methods("GET")
+	api.HandleFunc("/matches/search", s.handleSearchMatches).Methods("GET")
+	api.HandleFunc("/matches/{event_id}", s.handleGetMatchDetail).Methods("GET")
 	
 	// IP 查询API
 	api.HandleFunc("/ip", s.handleGetIP).Methods("GET")
