@@ -97,12 +97,40 @@ func main() {
 	
 	log.Println("Match monitor started (hourly)")
 	
+	// 启动订阅清理服务 (每小时执行一次)
+	subscriptionCleanup := services.NewSubscriptionCleanupService(cfg, db, larkNotifier)
+	
+	// 定期执行清理
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		
+		for range ticker.C {
+			if result, err := subscriptionCleanup.ExecuteCleanup(); err != nil {
+				log.Printf("[SubscriptionCleanup] ❌ Failed: %v", err)
+			} else {
+				log.Printf("[SubscriptionCleanup] ✅ Completed: %d unbooked out of %d ended", result.Unbooked, result.EndedMatches)
+			}
+		}
+	}()
+	
+	log.Println("Subscription cleanup started (hourly)")
+	
 	// 启动时自动订阅
 	startupBooking := services.NewStartupBookingService(cfg, db, larkNotifier)
 	go func() {
 		// 等待 AMQP 连接建立
 		time.Sleep(5 * time.Second)
 		
+		// 1. 先执行清理,取消已结束比赛的订阅
+		log.Println("[StartupBooking] 🧹 Cleaning up ended matches before booking...")
+		if cleanupResult, err := subscriptionCleanup.ExecuteCleanup(); err != nil {
+			log.Printf("[StartupBooking] ⚠️  Cleanup failed: %v", err)
+		} else {
+			log.Printf("[StartupBooking] ✅ Cleanup completed: %d unbooked", cleanupResult.Unbooked)
+		}
+		
+		// 2. 执行自动订阅
 		if result, err := startupBooking.ExecuteStartupBooking(); err != nil {
 			log.Printf("[StartupBooking] ❌ Failed to execute startup booking: %v", err)
 			larkNotifier.NotifyError("Startup Booking", err.Error())

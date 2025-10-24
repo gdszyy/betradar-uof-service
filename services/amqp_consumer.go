@@ -30,6 +30,7 @@ type AMQPConsumer struct {
 	matchMonitor      *MatchMonitor
 	fixtureParser     *FixtureParser
 	oddsChangeParser  *OddsChangeParser
+	oddsParser        *OddsParser
 	srnMappingService *SRNMappingService
 	conn              *amqp.Connection
 	channel           *amqp.Channel
@@ -44,24 +45,26 @@ func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster Messag
 	srnMappingService := NewSRNMappingService(cfg.UOFAPIToken, store.db)
 	fixtureParser := NewFixtureParser(store.db, srnMappingService)
 	oddsChangeParser := NewOddsChangeParser(store.db)
+	oddsParser := NewOddsParser(store.db)
 	
 	// 从数据库加载 SRN mapping 缓存
 	if err := srnMappingService.LoadCacheFromDB(); err != nil {
 		log.Printf("Warning: failed to load SRN mapping cache: %v", err)
 	}
 	
-	return &AMQPConsumer{
-		config:            cfg,
-		messageStore:      store,
-		broadcaster:       broadcaster,
-		recoveryManager:   NewRecoveryManager(cfg, store),
-		notifier:          notifier,
-		statsTracker:      statsTracker,
-		fixtureParser:     fixtureParser,
-		oddsChangeParser:  oddsChangeParser,
-		srnMappingService: srnMappingService,
-		done:              make(chan bool),
-	}
+		return &AMQPConsumer{
+			config:            cfg,
+			messageStore:      store,
+			broadcaster:       broadcaster,
+			recoveryManager:   NewRecoveryManager(cfg, store),
+			notifier:          notifier,
+			statsTracker:      statsTracker,
+			fixtureParser:     fixtureParser,
+			oddsChangeParser:  oddsChangeParser,
+			oddsParser:        oddsParser,
+			srnMappingService: srnMappingService,
+			done:              make(chan bool),
+		}
 }
 
 func (c *AMQPConsumer) Start() error {
@@ -380,6 +383,11 @@ func (c *AMQPConsumer) handleOddsChange(eventID string, productID *int, xmlConte
 	// 使用 OddsChangeParser 解析比分和比赛信息
 	if err := c.oddsChangeParser.ParseAndStore(xmlContent); err != nil {
 		log.Printf("Failed to parse odds_change data: %v", err)
+	}
+	
+	// 使用 OddsParser 解析和存储赔率数据
+	if err := c.oddsParser.ParseAndStoreOdds([]byte(xmlContent)); err != nil {
+		log.Printf("Failed to parse and store odds: %v", err)
 	}
 }
 
