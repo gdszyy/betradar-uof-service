@@ -70,7 +70,10 @@ func (s *Server) Start() error {
 	api := router.PathPrefix("/api").Subrouter()
 	api.HandleFunc("/health", s.handleHealth).Methods("GET")
 	api.HandleFunc("/messages", s.handleGetMessages).Methods("GET")
-	api.HandleFunc("/events", s.handleGetTrackedEvents).Methods("GET")
+	// 增强版 events API - 包含完整信息和盘口
+	api.HandleFunc("/events", s.handleGetEnhancedEvents).Methods("GET")
+	// 旧版 API 保留为 /events/simple
+	api.HandleFunc("/events/simple", s.handleGetTrackedEvents).Methods("GET")
 	api.HandleFunc("/events/{event_id}/messages", s.handleGetEventMessages).Methods("GET")
 	api.HandleFunc("/stats", s.handleGetStats).Methods("GET")
 	
