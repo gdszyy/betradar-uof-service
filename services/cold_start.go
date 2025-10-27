@@ -230,14 +230,14 @@ func (c *ColdStart) storeMatches(matches []MatchInfo) int {
 			away_team_id, away_team_name,
 			status, created_at, updated_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled', $8, $9)
-		ON CONFLICT (event_id) DO UPDATE SET
-			sport_id = COALESCE(NULLIF(EXCLUDED.sport_id, ''), tracked_events.sport_id),
-			schedule_time = COALESCE(EXCLUDED.schedule_time, tracked_events.schedule_time),
-			home_team_id = COALESCE(NULLIF(EXCLUDED.home_team_id, ''), tracked_events.home_team_id),
-			home_team_name = COALESCE(NULLIF(EXCLUDED.home_team_name, ''), tracked_events.home_team_name),
-			away_team_id = COALESCE(NULLIF(EXCLUDED.away_team_id, ''), tracked_events.away_team_id),
-			away_team_name = COALESCE(NULLIF(EXCLUDED.away_team_name, ''), tracked_events.away_team_name),
-			updated_at = EXCLUDED.updated_at
+			ON CONFLICT (event_id) DO UPDATE SET
+				sport_id = EXCLUDED.sport_id,
+				schedule_time = EXCLUDED.schedule_time,
+				home_team_id = EXCLUDED.home_team_id,
+				home_team_name = EXCLUDED.home_team_name,
+				away_team_id = EXCLUDED.away_team_id,
+				away_team_name = EXCLUDED.away_team_name,
+				updated_at = EXCLUDED.updated_at
 	`
 	
 	stored := 0

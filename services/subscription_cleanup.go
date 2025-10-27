@@ -2,7 +2,6 @@ package services
 
 import (
 	"database/sql"
-	"encoding/xml"
 	"fmt"
 	"io"
 	"log"
@@ -104,40 +103,48 @@ func (s *SubscriptionCleanupService) ExecuteCleanup() (*CleanupResult, error) {
 
 // queryBookedMatches 查询已订阅的比赛
 func (s *SubscriptionCleanupService) queryBookedMatches() ([]BookedMatch, error) {
-	url := fmt.Sprintf("%s/liveodds/booking-calendar/events/booked.xml", s.config.APIBaseURL)
+	// 从数据库查询已订阅的比赛
+	// Betradar API 没有提供查询已订阅列表的端点
+	query := `
+		SELECT event_id, schedule_time, status
+		FROM tracked_events
+		WHERE subscribed = true
+		ORDER BY schedule_time DESC
+	`
 	
-	req, err := http.NewRequest("GET", url, nil)
+	rows, err := s.db.Query(query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to query database: %w", err)
+	}
+	defer rows.Close()
+	
+	var matches []BookedMatch
+	for rows.Next() {
+		var match BookedMatch
+		var scheduleTime sql.NullTime
+		var status sql.NullString
+		
+		if err := rows.Scan(&match.ID, &scheduleTime, &status); err != nil {
+			log.Printf("[SubscriptionCleanup] ⚠️  Failed to scan row: %v", err)
+			continue
+		}
+		
+		if scheduleTime.Valid {
+			match.Scheduled = scheduleTime.Time.Format(time.RFC3339)
+		}
+		
+		if status.Valid {
+			match.Status = status.String
+		}
+		
+		matches = append(matches, match)
 	}
 	
-	req.Header.Set("x-access-token", s.config.AccessToken)
-	
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-	
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %w", err)
 	}
 	
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
-	}
-	
-	type BookingCalendar struct {
-		SportEvents []BookedMatch `xml:"sport_event"`
-	}
-	
-	var calendar BookingCalendar
-	if err := xml.Unmarshal(body, &calendar); err != nil {
-		return nil, fmt.Errorf("failed to parse XML: %w", err)
-	}
-	
-	return calendar.SportEvents, nil
+	return matches, nil
 }
 
 // BookedMatch 已订阅的比赛
