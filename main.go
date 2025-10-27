@@ -131,7 +131,7 @@ func main() {
 		}
 	}()
 	
-	// 启动时自动订阅
+	// 启动时自动订阅 (Live)
 	startupBooking := services.NewStartupBookingService(cfg, db, larkNotifier)
 	go func() {
 		// 等待 AMQP 连接建立和冷启动完成
@@ -145,12 +145,34 @@ func main() {
 			log.Printf("[StartupBooking] ✅ Cleanup completed: %d unbooked", cleanupResult.Unbooked)
 		}
 		
-		// 2. 执行自动订阅
+		// 2. 执行自动订阅 (Live)
 		if result, err := startupBooking.ExecuteStartupBooking(); err != nil {
 			log.Printf("[StartupBooking] ❌ Failed to execute startup booking: %v", err)
 			larkNotifier.NotifyError("Startup Booking", err.Error())
 		} else {
 			log.Printf("[StartupBooking] ✅ Startup booking completed: %d/%d successful", result.Success, result.Bookable)
+		}
+	}()
+	
+	// 启动时自动订阅 (Pre-match)
+	prematchService := services.NewPrematchService(cfg, db)
+	go func() {
+		// 等待 AMQP 连接建立和冷启动完成
+		time.Sleep(15 * time.Second)
+		
+		log.Println("[PrematchService] 🚀 Starting pre-match event booking...")
+		
+		if result, err := prematchService.ExecutePrematchBooking(); err != nil {
+			log.Printf("[PrematchService] ❌ Failed: %v", err)
+			larkNotifier.NotifyError("Pre-match Booking", err.Error())
+		} else {
+			log.Printf("[PrematchService] ✅ Completed: %d total events, %d bookable, %d already booked, %d success, %d failed",
+				result.TotalEvents, result.Bookable, result.AlreadyBooked, result.Success, result.Failed)
+			
+			// 发送通知
+			if result.Success > 0 {
+				larkNotifier.NotifyPrematchBooking(result.TotalEvents, result.Bookable, result.Success, result.Failed)
+			}
 		}
 	}()
 

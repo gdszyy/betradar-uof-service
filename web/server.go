@@ -103,6 +103,11 @@ func (s *Server) Start() error {
 	// 订阅同步API
 	api.HandleFunc("/booking/sync", s.SyncSubscriptionsHandler).Methods("POST")
 	
+	// Pre-match API
+	api.HandleFunc("/prematch/trigger", s.handleTriggerPrematchBooking).Methods("POST")
+	api.HandleFunc("/prematch/events", s.handleGetPrematchEvents).Methods("GET")
+	api.HandleFunc("/prematch/stats", s.handleGetPrematchStats).Methods("GET")
+	
 	// 前端API - 比赛查询
 	api.HandleFunc("/matches/live", s.handleGetLiveMatches).Methods("GET")
 	api.HandleFunc("/matches/upcoming", s.handleGetUpcomingMatches).Methods("GET")

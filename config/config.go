@@ -118,8 +118,24 @@ func getEnv(key, defaultValue string) string {
 }
 
 func getRoutingKeys() []string {
-	keys := getEnv("ROUTING_KEYS", "#")
-	return strings.Split(keys, ",")
+	keys := getEnv("ROUTING_KEYS", "")
+	if keys != "" {
+		return strings.Split(keys, ",")
+	}
+	
+	// 默认订阅 live 和 pre-match 的所有消息
+	return []string{
+		"liveodds.-.odds_change.#",
+		"liveodds.-.bet_stop.#",
+		"liveodds.-.bet_settlement.#",
+		"liveodds.-.bet_cancel.#",
+		"liveodds.-.fixture_change.#",
+		"pre.-.odds_change.#",        // Pre-match odds changes
+		"pre.-.bet_stop.#",            // Pre-match bet stops
+		"pre.-.bet_settlement.#",      // Pre-match bet settlements
+		"pre.-.bet_cancel.#",          // Pre-match bet cancels
+		"pre.-.fixture_change.#",      // Pre-match fixture changes
+	}
 }
 
 func getEnvInt(key string, defaultValue int) int {

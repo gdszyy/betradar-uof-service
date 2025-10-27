@@ -278,3 +278,33 @@ func (n *LarkNotifier) NotifyError(component, message string) error {
 	return n.SendRichText("Error Alert", content)
 }
 
+// NotifyPrematchBooking 发送 Pre-match 订阅通知
+func (n *LarkNotifier) NotifyPrematchBooking(totalEvents, bookable, success, failed int) error {
+	if !n.enabled {
+		return nil
+	}
+	
+	content := [][]LarkElement{
+		{
+			{Tag: "text", Text: "🚀 Pre-match 订阅完成\n"},
+		},
+		{
+			{Tag: "text", Text: fmt.Sprintf("总赛事数: %d\n", totalEvents)},
+		},
+		{
+			{Tag: "text", Text: fmt.Sprintf("可订阅: %d\n", bookable)},
+		},
+		{
+			{Tag: "text", Text: fmt.Sprintf("✅ 成功: %d\n", success)},
+		},
+		{
+			{Tag: "text", Text: fmt.Sprintf("❌ 失败: %d\n", failed)},
+		},
+		{
+			{Tag: "text", Text: fmt.Sprintf("时间: %s", time.Now().Format("2006-01-02 15:04:05"))},
+		},
+	}
+	
+	return n.SendRichText("Pre-match Booking", content)
+}
+
