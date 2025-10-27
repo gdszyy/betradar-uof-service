@@ -52,7 +52,7 @@ func NewServer(cfg *config.Config, db *sql.DB, hub *Hub, larkNotifier *services.
 		srMapper:        services.NewSRMapper(),
 		replayClient:    replayClient,
 		larkNotifier:    larkNotifier,
-		autoBooking:     services.NewAutoBookingService(cfg, larkNotifier),
+		autoBooking:     services.NewAutoBookingService(cfg, db, larkNotifier),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,

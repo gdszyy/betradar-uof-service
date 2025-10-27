@@ -2,6 +2,7 @@ package services
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -15,15 +16,17 @@ import (
 type AutoBookingService struct {
 	config              *config.Config
 	client              *http.Client
+	db                  *sql.DB
 	larkNotifier        *LarkNotifier
 	subscriptionTracker *UOFSubscriptionTracker
 }
 
 // NewAutoBookingService 创建自动订阅服务
-func NewAutoBookingService(cfg *config.Config, notifier *LarkNotifier) *AutoBookingService {
+func NewAutoBookingService(cfg *config.Config, db *sql.DB, notifier *LarkNotifier) *AutoBookingService {
 	return &AutoBookingService{
 		config:       cfg,
 		client:       &http.Client{Timeout: 30 * time.Second},
+		db:           db,
 		larkNotifier: notifier,
 	}
 }
@@ -60,6 +63,17 @@ func (s *AutoBookingService) BookMatch(matchID string) error {
 	
 	log.Printf("[AutoBooking] ✅ Match booked successfully: %s", matchID)
 	log.Printf("[AutoBooking] Response: %s", string(body))
+	
+	// 更新数据库中的订阅状态
+	if s.db != nil {
+		_, err = s.db.Exec(
+			"UPDATE tracked_events SET subscribed = true WHERE event_id = $1",
+			matchID,
+		)
+		if err != nil {
+			log.Printf("[AutoBooking] ⚠️  Failed to update subscribed status: %v", err)
+		}
+	}
 	
 	return nil
 }
