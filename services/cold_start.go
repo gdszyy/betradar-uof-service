@@ -238,6 +238,7 @@ func (c *ColdStart) deduplicate(matches []MatchInfo) []MatchInfo {
 
 // storeMatches 存储比赛
 func (c *ColdStart) storeMatches(matches []MatchInfo) int {
+	failed := 0
 	query := `
 		INSERT INTO tracked_events (
 			event_id, sport_id, schedule_time,
@@ -271,9 +272,21 @@ func (c *ColdStart) storeMatches(matches []MatchInfo) int {
 		
 		if err != nil {
 			c.logger.Printf("⚠️  Failed to store %s: %v", match.EventID, err)
+			failed++
 			continue
 		}
 		stored++
+	}
+	
+	// 验证存储结果
+	var dbCount int
+	c.db.QueryRow("SELECT COUNT(*) FROM tracked_events").Scan(&dbCount)
+	
+	c.logger.Printf("📊 Storage completed: %d succeeded, %d failed out of %d total", stored, failed, len(matches))
+	c.logger.Printf("📊 Database verification: %d records in tracked_events", dbCount)
+	
+	if stored != len(matches) {
+		c.logger.Printf("⚠️  Storage incomplete! Expected %d, stored %d, failed %d", len(matches), stored, failed)
 	}
 	
 	return stored
