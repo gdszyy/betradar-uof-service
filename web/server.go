@@ -100,6 +100,9 @@ func (s *Server) Start() error {
 	api.HandleFunc("/booking/booked", s.handleGetBookedMatches).Methods("GET")
 	api.HandleFunc("/booking/bookable", s.handleGetBookableMatches).Methods("GET")
 	
+	// 订阅同步API
+	api.HandleFunc("/booking/sync", s.SyncSubscriptionsHandler).Methods("POST")
+	
 	// 前端API - 比赛查询
 	api.HandleFunc("/matches/live", s.handleGetLiveMatches).Methods("GET")
 	api.HandleFunc("/matches/upcoming", s.handleGetUpcomingMatches).Methods("GET")

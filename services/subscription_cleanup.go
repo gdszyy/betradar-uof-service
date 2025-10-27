@@ -226,6 +226,16 @@ func (s *SubscriptionCleanupService) unbookMatch(matchID string) error {
 		return fmt.Errorf("status %d: %s", resp.StatusCode, string(body))
 	}
 	
+	// 更新数据库订阅状态
+	_, err = s.db.Exec(
+		"UPDATE tracked_events SET subscribed = false, updated_at = $1 WHERE event_id = $2",
+		time.Now(), matchID,
+	)
+	if err != nil {
+		log.Printf("[SubscriptionCleanup] ⚠️  Failed to update database for %s: %v", matchID, err)
+		// 不返回错误，因为 API 取消订阅已经成功
+	}
+	
 	return nil
 }
 

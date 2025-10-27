@@ -187,18 +187,46 @@ func (s *StartupBookingService) bookMatch(matchID string) error {
 		return fmt.Errorf("status %d: %s", resp.StatusCode, string(body))
 	}
 	
+	// 更新数据库订阅状态
+	_, err = s.db.Exec(
+		"UPDATE tracked_events SET subscribed = true, updated_at = $1 WHERE event_id = $2",
+		time.Now(), matchID,
+	)
+	if err != nil {
+		log.Printf("[StartupBooking] ⚠️  Failed to update database for %s: %v", matchID, err)
+		// 不返回错误，因为 API 订阅已经成功
+	}
+	
 	return nil
 }
 
 // verifySubscriptions 验证订阅状态
 func (s *StartupBookingService) verifySubscriptions(matchIDs []string) int {
 	// 查询已订阅的比赛
-	url := fmt.Sprintf("%s/liveodds/booking-calendar/events/booked.xml", s.config.APIBaseURL)
+	// 尝试多个可能的 API 路径
+	urls := []string{
+		fmt.Sprintf("%s/liveodds/booking-calendar/events/booked.xml", s.config.APIBaseURL),
+		fmt.Sprintf("%s/liveodds/booking-calendar/booked.xml", s.config.APIBaseURL),
+	}
+	
+	for _, url := range urls {
+		verified := s.verifySubscriptionsFromURL(url, matchIDs)
+		if verified >= 0 {
+			return verified
+		}
+	}
+	
+	log.Println("[StartupBooking] ⚠️  All verification API endpoints failed")
+	return 0
+}
+
+// verifySubscriptionsFromURL 从指定 URL 验证订阅状态
+func (s *StartupBookingService) verifySubscriptionsFromURL(url string, matchIDs []string) int {
 	
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		log.Printf("[StartupBooking] ⚠️  Failed to create verification request: %v", err)
-		return 0
+		return -1
 	}
 	
 	req.Header.Set("x-access-token", s.config.AccessToken)
@@ -206,19 +234,19 @@ func (s *StartupBookingService) verifySubscriptions(matchIDs []string) int {
 	resp, err := s.client.Do(req)
 	if err != nil {
 		log.Printf("[StartupBooking] ⚠️  Failed to verify subscriptions: %v", err)
-		return 0
+		return -1
 	}
 	defer resp.Body.Close()
 	
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Printf("[StartupBooking] ⚠️  Failed to read verification response: %v", err)
-		return 0
+		return -1
 	}
 	
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("[StartupBooking] ⚠️  Verification API returned status %d", resp.StatusCode)
-		return 0
+		log.Printf("[StartupBooking] ⚠️  Verification API %s returned status %d", url, resp.StatusCode)
+		return -1
 	}
 	
 	type BookingCalendar struct {
@@ -227,9 +255,11 @@ func (s *StartupBookingService) verifySubscriptions(matchIDs []string) int {
 	
 	var calendar BookingCalendar
 	if err := xml.Unmarshal(body, &calendar); err != nil {
-		log.Printf("[StartupBooking] ⚠️  Failed to parse verification response: %v", err)
-		return 0
+		log.Printf("[StartupBooking] ⚠️  Failed to parse verification response from %s: %v", url, err)
+		return -1
 	}
+	
+	log.Printf("[StartupBooking] ✅ Successfully queried %s, found %d booked matches", url, len(calendar.SportEvents))
 	
 	// 统计匹配的订阅
 	bookedMap := make(map[string]bool)
