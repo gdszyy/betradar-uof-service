@@ -116,11 +116,26 @@ func main() {
 	
 	log.Println("Subscription cleanup started (hourly)")
 	
+	// 冷启动初始化 - 获取所有比赛信息
+	coldStart := services.NewColdStart(cfg, db, larkNotifier)
+	go func() {
+		// 等待 2 秒后执行
+		time.Sleep(2 * time.Second)
+		
+		log.Println("[ColdStart] 🚀 Starting cold start initialization...")
+		if err := coldStart.Run(); err != nil {
+			log.Printf("[ColdStart] ❌ Failed: %v", err)
+			larkNotifier.NotifyError("Cold Start", err.Error())
+		} else {
+			log.Println("[ColdStart] ✅ Cold start completed successfully")
+		}
+	}()
+	
 	// 启动时自动订阅
 	startupBooking := services.NewStartupBookingService(cfg, db, larkNotifier)
 	go func() {
-		// 等待 AMQP 连接建立
-		time.Sleep(5 * time.Second)
+		// 等待 AMQP 连接建立和冷启动完成
+		time.Sleep(10 * time.Second)
 		
 		// 1. 先执行清理,取消已结束比赛的订阅
 		log.Println("[StartupBooking] 🧹 Cleaning up ended matches before booking...")
