@@ -160,7 +160,10 @@ func (s *SubscriptionCleanupService) findEndedMatches(matches []BookedMatch) []B
 	var endedMatches []BookedMatch
 	
 	for _, match := range matches {
-		// 从数据库查询比赛状态
+		isEnded := false
+		reason := ""
+		
+		// 方法1: 检查数据库中的 match_status (来自 odds_change 消息)
 		var matchStatus sql.NullString
 		query := `SELECT match_status FROM tracked_events WHERE event_id = $1`
 		err := s.db.QueryRow(query, match.ID).Scan(&matchStatus)
@@ -168,10 +171,31 @@ func (s *SubscriptionCleanupService) findEndedMatches(matches []BookedMatch) []B
 		if err == nil && matchStatus.Valid {
 			// 使用映射器判断是否已结束
 			if s.mapper.IsMatchEnded(matchStatus.String) {
-				log.Printf("[SubscriptionCleanup] 🔍 Found ended match: %s (status: %s)", 
-					match.ID, matchStatus.String)
-				endedMatches = append(endedMatches, match)
+				isEnded = true
+				reason = fmt.Sprintf("match_status=%s", matchStatus.String)
 			}
+		}
+		
+		// 方法2: 检查 tracked_events.status (来自 Betradar API)
+		// 如果 match_status 为空,使用这个作为备用判断
+		if !isEnded && match.Status != "" {
+			// Betradar API 的 status 值:
+			// - "ended" = 已结束
+			// - "closed" = 已关闭
+			// - "cancelled" = 已取消
+			// - "postponed" = 已推迟
+			// - "abandoned" = 已放弃
+			if match.Status == "ended" || match.Status == "closed" || 
+			   match.Status == "cancelled" || match.Status == "abandoned" {
+				isEnded = true
+				reason = fmt.Sprintf("api_status=%s", match.Status)
+			}
+		}
+		
+		if isEnded {
+			log.Printf("[SubscriptionCleanup] 🔍 Found ended match: %s (%s)", 
+				match.ID, reason)
+			endedMatches = append(endedMatches, match)
 		}
 	}
 	
