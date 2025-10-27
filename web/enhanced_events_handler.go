@@ -227,8 +227,8 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 func (s *Server) getEventMarkets(eventID string) ([]MarketInfo, error) {
 	query := `
 		SELECT DISTINCT ON (market_id, specifiers)
-			market_id, specifiers, status, updated_at
-		FROM odds_markets
+			id, market_id, specifiers, status, updated_at
+		FROM markets
 		WHERE event_id = $1
 		ORDER BY market_id, specifiers, updated_at DESC
 	`
@@ -243,9 +243,10 @@ func (s *Server) getEventMarkets(eventID string) ([]MarketInfo, error) {
 	
 	for rows.Next() {
 		var market MarketInfo
+		var marketPK int
 		var specifiers sql.NullString
 		
-		err := rows.Scan(&market.MarketID, &specifiers, &market.Status, &market.UpdatedAt)
+		err := rows.Scan(&marketPK, &market.MarketID, &specifiers, &market.Status, &market.UpdatedAt)
 		if err != nil {
 			log.Printf("[API] Failed to scan market: %v", err)
 			continue
@@ -258,8 +259,8 @@ func (s *Server) getEventMarkets(eventID string) ([]MarketInfo, error) {
 		// 获取市场名称 (简化版,可以后续从 market descriptions 获取)
 		market.MarketName = s.getMarketName(market.MarketID)
 		
-		// 获取该盘口的赔率
-		outcomes, err := s.getMarketOutcomes(eventID, market.MarketID, market.Specifiers)
+		// 获取该盘口的赔率 (使用 marketPK)
+		outcomes, err := s.getMarketOutcomes(marketPK)
 		if err != nil {
 			log.Printf("[API] Failed to get outcomes for market %s: %v", market.MarketID, err)
 			market.Outcomes = []OutcomeInfo{}
@@ -274,25 +275,15 @@ func (s *Server) getEventMarkets(eventID string) ([]MarketInfo, error) {
 }
 
 // getMarketOutcomes 获取盘口的赔率
-func (s *Server) getMarketOutcomes(eventID, marketID, specifiers string) ([]OutcomeInfo, error) {
+func (s *Server) getMarketOutcomes(marketPK int) ([]OutcomeInfo, error) {
 	query := `
-		SELECT outcome_id, odds, active, updated_at
+		SELECT outcome_id, odds_value, active, updated_at
 		FROM odds
-		WHERE event_id = $1 AND market_id = $2
+		WHERE market_id = $1
+		ORDER BY outcome_id
 	`
 	
-	args := []interface{}{eventID, marketID}
-	
-	if specifiers != "" {
-		query += " AND specifiers = $3"
-		args = append(args, specifiers)
-	} else {
-		query += " AND (specifiers IS NULL OR specifiers = '')"
-	}
-	
-	query += " ORDER BY outcome_id"
-	
-	rows, err := s.db.Query(query, args...)
+	rows, err := s.db.Query(query, marketPK)
 	if err != nil {
 		return nil, err
 	}

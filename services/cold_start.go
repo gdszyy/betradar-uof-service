@@ -191,6 +191,11 @@ func (c *ColdStart) parseEvent(event ColdStartEvent) MatchInfo {
 		SportID: event.Sport.ID,
 	}
 	
+	// 如果 sport_id 为空，从 event_id 推断
+	if match.SportID == "" {
+		match.SportID = c.inferSportID(event.ID)
+	}
+	
 	// 解析时间
 	if event.Scheduled != "" {
 		if t, err := time.Parse(time.RFC3339, event.Scheduled); err == nil {
@@ -321,6 +326,29 @@ func (c *ColdStart) validateData(matches []MatchInfo) ValidationReport {
 	}
 	
 	return report
+}
+
+// inferSportID 从 event_id推断sport_id
+func (c *ColdStart) inferSportID(eventID string) string {
+	// 根据 event_id 的格式推断 sport_id
+	// sr:match:xxx -> 足球 (sr:sport:1)
+	// sr:stage:xxx -> 足球 (sr:sport:1)
+	// sr:simple_tournament:xxx -> 网球等其他运动
+	
+	if strings.HasPrefix(eventID, "sr:match:") {
+		// 大多数 match 是足球
+		return "sr:sport:1"
+	} else if strings.HasPrefix(eventID, "sr:stage:") {
+		// stage 通常也是足球
+		return "sr:sport:1"
+	} else if strings.HasPrefix(eventID, "sr:simple_tournament:") {
+		// 网球等其他运动
+		// 默认也设为足球，需要时可以调整
+		return "sr:sport:1"
+	}
+	
+	// 默认返回足球
+	return "sr:sport:1"
 }
 
 // printReport 打印报告
