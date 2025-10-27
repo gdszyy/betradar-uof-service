@@ -17,6 +17,7 @@ import (
 type ColdStart struct {
 	config       *config.Config
 	db           *sql.DB
+	client       *http.Client
 	larkNotifier *LarkNotifier
 	logger       *log.Logger
 }
@@ -78,6 +79,7 @@ func NewColdStart(cfg *config.Config, db *sql.DB, larkNotifier *LarkNotifier) *C
 	return &ColdStart{
 		config:       cfg,
 		db:           db,
+		client:       &http.Client{Timeout: 30 * time.Second},
 		larkNotifier: larkNotifier,
 		logger:       log.New(log.Writer(), "[ColdStart] ", log.LstdFlags),
 	}
@@ -141,17 +143,25 @@ func (c *ColdStart) fetchMatches() ([]MatchInfo, error) {
 
 // fetchSchedule 获取日程
 func (c *ColdStart) fetchSchedule(date string) ([]MatchInfo, error) {
-	url := fmt.Sprintf("https://api.betradar.com/v1/sports/en/schedules/%s/schedule.xml?api_key=%s",
-		date, c.config.UOFAPIToken)
+	url := fmt.Sprintf("%s/sports/en/schedules/%s/schedule.xml", c.config.APIBaseURL, date)
 	
-	resp, err := http.Get(url)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	
+	// 使用 HTTP Header 认证
+	req.Header.Set("x-access-token", c.config.AccessToken)
+	
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 	
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 	
 	body, err := io.ReadAll(resp.Body)
