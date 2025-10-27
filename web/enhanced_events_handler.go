@@ -3,6 +3,7 @@ package web
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 )
@@ -74,6 +75,9 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 	
 	// 查询参数
 	status := r.URL.Query().Get("status")
+	subscribed := r.URL.Query().Get("subscribed")
+	sportID := r.URL.Query().Get("sport_id")
+	search := r.URL.Query().Get("search")
 	limit := r.URL.Query().Get("limit")
 	
 	if limit == "" {
@@ -92,16 +96,45 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 	`
 	
 	args := []interface{}{}
+	whereClauses := []string{}
 	
+	// 添加 status 过滤
 	if status != "" {
-		query += " WHERE status = $1"
+		whereClauses = append(whereClauses, "status = $"+fmt.Sprintf("%d", len(args)+1))
 		args = append(args, status)
-		query += " ORDER BY last_message_at DESC LIMIT $2"
-		args = append(args, limit)
-	} else {
-		query += " ORDER BY last_message_at DESC LIMIT $1"
-		args = append(args, limit)
 	}
+	
+	// 添加 subscribed 过滤
+	if subscribed != "" {
+		subscribedBool := subscribed == "true"
+		whereClauses = append(whereClauses, "subscribed = $"+fmt.Sprintf("%d", len(args)+1))
+		args = append(args, subscribedBool)
+	}
+	
+	// 添加 sport_id 过滤
+	if sportID != "" {
+		whereClauses = append(whereClauses, "sport_id = $"+fmt.Sprintf("%d", len(args)+1))
+		args = append(args, sportID)
+	}
+	
+	// 添加 search 过滤 (队伍名称)
+	if search != "" {
+		searchPattern := "%" + search + "%"
+		whereClauses = append(whereClauses, "(home_team_name ILIKE $"+fmt.Sprintf("%d", len(args)+1)+" OR away_team_name ILIKE $"+fmt.Sprintf("%d", len(args)+2)+")")
+		args = append(args, searchPattern, searchPattern)
+	}
+	
+	// 组合 WHERE 子句
+	if len(whereClauses) > 0 {
+		query += " WHERE " + whereClauses[0]
+		for i := 1; i < len(whereClauses); i++ {
+			query += " AND " + whereClauses[i]
+		}
+	}
+	
+	// 添加排序和限制
+	query += " ORDER BY last_message_at DESC LIMIT $" + fmt.Sprintf("%d", len(args)+1)
+	args = append(args, limit)
 	
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
