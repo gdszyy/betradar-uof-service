@@ -26,8 +26,12 @@ func NewProducerMonitor(db *sql.DB, notifier *LarkNotifier) *ProducerMonitor {
 
 // Start 启动监控
 func (pm *ProducerMonitor) Start() {
-	pm.ticker = time.NewTicker(5 * time.Second)
+	log.Println("⏳ Producer monitor will start in 30 seconds (waiting for alive messages)...")
 	
+	// 延迟 30 秒启动，等待 AMQP 连接并接收 alive 消息
+	time.Sleep(30 * time.Second)
+	
+	pm.ticker = time.NewTicker(5 * time.Second)
 	log.Println("✅ Producer monitor started (checking every 5 seconds)")
 	
 	go func() {

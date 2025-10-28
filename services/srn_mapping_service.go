@@ -13,11 +13,12 @@ import (
 
 // SRNMappingService SRN ID 映射服务
 type SRNMappingService struct {
-	apiToken string
-	db       *sql.DB
-	cache    map[string]string // event_id -> srn_id
-	mu       sync.RWMutex
-	logger   *log.Logger
+	apiToken   string
+	apiBaseURL string
+	db         *sql.DB
+	cache      map[string]string // event_id -> srn_id
+	mu         sync.RWMutex
+	logger     *log.Logger
 }
 
 // SRNMappingResponse API 响应结构
@@ -33,12 +34,16 @@ type SRNMappingResponse struct {
 }
 
 // NewSRNMappingService 创建 SRN 映射服务
-func NewSRNMappingService(apiToken string, db *sql.DB) *SRNMappingService {
+func NewSRNMappingService(apiToken, apiBaseURL string, db *sql.DB) *SRNMappingService {
+	if apiBaseURL == "" {
+		apiBaseURL = "https://stgapi.betradar.com/v1"
+	}
 	return &SRNMappingService{
-		apiToken: apiToken,
-		db:       db,
-		cache:    make(map[string]string),
-		logger:   log.New(log.Writer(), "[SRNMapping] ", log.LstdFlags),
+		apiToken:   apiToken,
+		apiBaseURL: apiBaseURL,
+		db:         db,
+		cache:      make(map[string]string),
+		logger:     log.New(log.Writer(), "[SRNMapping] ", log.LstdFlags),
 	}
 }
 
@@ -74,8 +79,8 @@ func (s *SRNMappingService) GetSRNID(eventID string) (string, error) {
 // fetchSRNIDFromAPI 从 API 获取 SRN ID
 func (s *SRNMappingService) fetchSRNIDFromAPI(eventID string) (string, error) {
 	// UOF API endpoint for event mappings
-	url := fmt.Sprintf("https://api.betradar.com/v1/sports/en/sport_events/sr:match:%s/mappings.json?api_token=%s",
-		eventID, s.apiToken)
+	url := fmt.Sprintf("%s/sports/en/sport_events/sr:match:%s/mappings.json?api_token=%s",
+		s.apiBaseURL, eventID, s.apiToken)
 
 	s.logger.Printf("Fetching SRN mapping for event: %s", eventID)
 

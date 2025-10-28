@@ -31,10 +31,13 @@ type FixtureChangesResponse struct {
 }
 
 // NewFixtureChangesService 创建 FixtureChangesService 实例
-func NewFixtureChangesService(apiToken string) *FixtureChangesService {
+func NewFixtureChangesService(apiToken, apiBaseURL string) *FixtureChangesService {
+	if apiBaseURL == "" {
+		apiBaseURL = "https://stgapi.betradar.com/v1"
+	}
 	return &FixtureChangesService{
 		apiToken: apiToken,
-		baseURL:  "https://api.betradar.com/v1",
+		baseURL:  apiBaseURL,
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},

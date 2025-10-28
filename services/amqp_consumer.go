@@ -43,11 +43,11 @@ func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster Messag
 	statsTracker := NewMessageStatsTracker(notifier, 5*time.Minute)
 	
 	// 初始化解析器
-	srnMappingService := NewSRNMappingService(cfg.UOFAPIToken, store.db)
+	srnMappingService := NewSRNMappingService(cfg.UOFAPIToken, cfg.APIBaseURL, store.db)
 	fixtureParser := NewFixtureParser(store.db, srnMappingService)
 	oddsChangeParser := NewOddsChangeParser(store.db)
 	oddsParser := NewOddsParser(store.db)
-	fixtureService := NewFixtureService(cfg.UOFAPIToken)
+	fixtureService := NewFixtureService(cfg.UOFAPIToken, cfg.APIBaseURL)
 	
 	// 从数据库加载 SRN mapping 缓存
 	if err := srnMappingService.LoadCacheFromDB(); err != nil {

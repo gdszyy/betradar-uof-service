@@ -38,7 +38,7 @@ func NewServer(cfg *config.Config, db *sql.DB, hub *Hub, larkNotifier *services.
 	// 创建Replay客户端(如果access token可用)
 	var replayClient *services.ReplayClient
 	if cfg.AccessToken != "" {
-		replayClient = services.NewReplayClient(cfg.AccessToken)
+		replayClient = services.NewReplayClient(cfg.AccessToken, cfg.APIBaseURL)
 		log.Println("[Server] Replay client initialized with access token")
 	} else {
 		log.Println("[Server] ⚠️  Replay client not initialized - BETRADAR_ACCESS_TOKEN not set")

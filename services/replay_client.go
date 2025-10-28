@@ -25,7 +25,8 @@ type ReplayStatus struct {
 
 // NewReplayClient 创建重放客户端
 // accessToken: Betradar access token (from BETRADAR_ACCESS_TOKEN)
-func NewReplayClient(accessToken string) *ReplayClient {
+// apiBaseURL: API base URL (from BETRADAR_API_BASE_URL)
+func NewReplayClient(accessToken, apiBaseURL string) *ReplayClient {
 	log.Println("[ReplayClient] Initializing Replay API client...")
 	
 	if accessToken != "" {
@@ -34,8 +35,14 @@ func NewReplayClient(accessToken string) *ReplayClient {
 		log.Println("[ReplayClient] ⚠️  Access token is empty")
 	}
 	
+	// 默认使用 staging API
+	if apiBaseURL == "" {
+		apiBaseURL = "https://stgapi.betradar.com/v1"
+	}
+	log.Printf("[ReplayClient] Using API: %s", apiBaseURL)
+	
 	return &ReplayClient{
-		baseURL:     "https://api.betradar.com/v1",
+		baseURL:     apiBaseURL,
 		accessToken: accessToken,
 		client: &http.Client{
 			Timeout: 30 * time.Second,

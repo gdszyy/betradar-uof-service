@@ -17,10 +17,13 @@ type FixtureService struct {
 }
 
 // NewFixtureService 创建 Fixture 服务
-func NewFixtureService(apiToken string) *FixtureService {
+func NewFixtureService(apiToken, apiBaseURL string) *FixtureService {
+	if apiBaseURL == "" {
+		apiBaseURL = "https://stgapi.betradar.com/v1"
+	}
 	return &FixtureService{
 		apiToken: apiToken,
-		baseURL:  "https://stgapi.betradar.com/v1",
+		baseURL:  apiBaseURL,
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
