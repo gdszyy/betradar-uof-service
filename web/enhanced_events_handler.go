@@ -53,20 +53,23 @@ type EnhancedEvent struct {
 
 // MarketInfo 盘口信息
 type MarketInfo struct {
-	MarketID    string        `json:"market_id"`
-	MarketName  string        `json:"market_name"`
-	Specifiers  string        `json:"specifiers"`
-	Status      string        `json:"status"`
-	Outcomes    []OutcomeInfo `json:"outcomes"`
-	UpdatedAt   string        `json:"updated_at"`
+	MarketID       string        `json:"market_id"`
+	MarketName     string        `json:"market_name"`
+	Specifiers     string        `json:"specifiers,omitempty"`
+	Status         string        `json:"status"`
+	ProducerID     int           `json:"producer_id"`
+	Outcomes       []OutcomeInfo `json:"outcomes"`
+	OutcomesCount  int           `json:"outcomes_count"`
+	UpdatedAt      string        `json:"updated_at"`
 }
 
 // OutcomeInfo 结果信息
 type OutcomeInfo struct {
-	OutcomeID string  `json:"outcome_id"`
-	Name      string  `json:"name"`
-	Odds      float64 `json:"odds"`
-	Active    bool    `json:"active"`
+	OutcomeID   string  `json:"outcome_id"`
+	Name        string  `json:"name"`
+	Odds        float64 `json:"odds"`
+	Probability float64 `json:"probability"`
+	Active      bool    `json:"active"`
 }
 
 // handleGetEnhancedEvents 获取增强的赛事信息
@@ -260,7 +263,7 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 func (s *Server) getEventMarkets(eventID string) ([]MarketInfo, error) {
 	query := `
 		SELECT DISTINCT ON (market_id, specifiers)
-			id, market_id, specifiers, status, updated_at
+			id, market_id, specifiers, status, producer_id, updated_at
 		FROM markets
 		WHERE event_id = $1
 		ORDER BY market_id, specifiers, updated_at DESC
@@ -279,7 +282,9 @@ func (s *Server) getEventMarkets(eventID string) ([]MarketInfo, error) {
 		var marketPK int
 		var specifiers sql.NullString
 		
-		err := rows.Scan(&marketPK, &market.MarketID, &specifiers, &market.Status, &market.UpdatedAt)
+		var producerID sql.NullInt64
+		
+		err := rows.Scan(&marketPK, &market.MarketID, &specifiers, &market.Status, &producerID, &market.UpdatedAt)
 		if err != nil {
 			log.Printf("[API] Failed to scan market: %v", err)
 			continue
@@ -287,6 +292,10 @@ func (s *Server) getEventMarkets(eventID string) ([]MarketInfo, error) {
 		
 		if specifiers.Valid {
 			market.Specifiers = specifiers.String
+		}
+		
+		if producerID.Valid {
+			market.ProducerID = int(producerID.Int64)
 		}
 		
 		// 获取市场名称 (简化版,可以后续从 market descriptions 获取)
@@ -299,6 +308,7 @@ func (s *Server) getEventMarkets(eventID string) ([]MarketInfo, error) {
 			market.Outcomes = []OutcomeInfo{}
 		} else {
 			market.Outcomes = outcomes
+			market.OutcomesCount = len(outcomes)
 		}
 		
 		markets = append(markets, market)
@@ -310,7 +320,7 @@ func (s *Server) getEventMarkets(eventID string) ([]MarketInfo, error) {
 // getMarketOutcomes 获取盘口的赔率
 func (s *Server) getMarketOutcomes(marketPK int) ([]OutcomeInfo, error) {
 	query := `
-		SELECT outcome_id, odds_value, active, updated_at
+		SELECT outcome_id, odds_value, probability, active, updated_at
 		FROM odds
 		WHERE market_id = $1
 		ORDER BY outcome_id
@@ -328,7 +338,11 @@ func (s *Server) getMarketOutcomes(marketPK int) ([]OutcomeInfo, error) {
 		var outcome OutcomeInfo
 		var updatedAt string
 		
-		err := rows.Scan(&outcome.OutcomeID, &outcome.Odds, &outcome.Active, &updatedAt)
+		var probability sql.NullFloat64
+		err := rows.Scan(&outcome.OutcomeID, &outcome.Odds, &probability, &outcome.Active, &updatedAt)
+		if probability.Valid {
+			outcome.Probability = probability.Float64
+		}
 		if err != nil {
 			log.Printf("[API] Failed to scan outcome: %v", err)
 			continue
@@ -343,17 +357,27 @@ func (s *Server) getMarketOutcomes(marketPK int) ([]OutcomeInfo, error) {
 	return outcomes, nil
 }
 
-// getMarketName 获取市场名称 (简化版)
+// getMarketName 获取市场名称
 func (s *Server) getMarketName(marketID string) string {
 	// 常见市场的映射
 	marketNames := map[string]string{
 		"1":   "1X2",
+		"10":  "Double Chance",
 		"18":  "Total Goals",
+		"29":  "Both Teams to Score",
 		"52":  "Asian Handicap",
 		"60":  "Correct Score",
-		"10":  "Double Chance",
-		"29":  "Both Teams to Score",
 		"186": "Next Goal",
+		"219": "Total Goals (1st Half)",
+		"26":  "Odd/Even",
+		"14":  "1st Half 1X2",
+		"16":  "Draw No Bet",
+		"47":  "Total Goals (2nd Half)",
+		"45":  "1st Half Asian Handicap",
+		"68":  "1st Half Double Chance",
+		"74":  "1st Half Draw No Bet",
+		"223": "Total Corners",
+		"237": "Total Cards",
 	}
 	
 	if name, ok := marketNames[marketID]; ok {
