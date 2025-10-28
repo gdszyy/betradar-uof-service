@@ -87,45 +87,53 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 		limit = "100"
 	}
 	
-	// 构建查询
-	query := `
-		SELECT 
-			event_id, srn_id, sport_id, status, schedule_time,
-			home_team_id, home_team_name, away_team_id, away_team_name,
-			home_score, away_score, match_status, match_time,
-			message_count, last_message_at, subscribed,
-			created_at, updated_at
-		FROM tracked_events
-	`
+	// 构		// 使用 LEFT JOIN 从 markets 表获取有数据的比赛
+		// 或者从 tracked_events 表获取所有比赛
+		query := `
+			SELECT DISTINCT ON (te.event_id)
+				te.event_id, te.srn_id, te.sport_id, te.status, te.schedule_time,
+				te.home_team_id, te.home_team_name, te.away_team_id, te.away_team_name,
+				te.home_score, te.away_score, te.match_status, te.match_time,
+				te.message_count, te.last_message_at, te.subscribed,
+				te.created_at, te.updated_at,
+				COALESCE(MAX(m.updated_at), te.last_message_at) as last_update
+			FROM tracked_events te
+			LEFT JOIN markets m ON te.event_id = m.event_id
+			GROUP BY te.event_id, te.srn_id, te.sport_id, te.status, te.schedule_time,
+				te.home_team_id, te.home_team_name, te.away_team_id, te.away_team_name,
+				te.home_score, te.away_score, te.match_status, te.match_time,
+				te.message_count, te.last_message_at, te.subscribed,
+				te.created_at, te.updated_at
+		`
 	
 	args := []interface{}{}
 	whereClauses := []string{}
 	
-	// 添加 status 过滤
-	if status != "" {
-		whereClauses = append(whereClauses, "status = $"+fmt.Sprintf("%d", len(args)+1))
-		args = append(args, status)
-	}
-	
-	// 添加 subscribed 过滤
-	if subscribed != "" {
-		subscribedBool := subscribed == "true"
-		whereClauses = append(whereClauses, "subscribed = $"+fmt.Sprintf("%d", len(args)+1))
-		args = append(args, subscribedBool)
-	}
-	
-	// 添加 sport_id 过滤
-	if sportID != "" {
-		whereClauses = append(whereClauses, "sport_id = $"+fmt.Sprintf("%d", len(args)+1))
-		args = append(args, sportID)
-	}
-	
-	// 添加 search 过滤 (队伍名称)
-	if search != "" {
-		searchPattern := "%" + search + "%"
-		whereClauses = append(whereClauses, "(home_team_name ILIKE $"+fmt.Sprintf("%d", len(args)+1)+" OR away_team_name ILIKE $"+fmt.Sprintf("%d", len(args)+2)+")")
-		args = append(args, searchPattern, searchPattern)
-	}
+		// 添加 status 过滤
+		if status != "" {
+			whereClauses = append(whereClauses, "te.status = $"+fmt.Sprintf("%d", len(args)+1))
+			args = append(args, status)
+		}
+		
+		// 添加 subscribed 过滤
+		if subscribed != "" {
+			subscribedBool := subscribed == "true"
+			whereClauses = append(whereClauses, "te.subscribed = $"+fmt.Sprintf("%d", len(args)+1))
+			args = append(args, subscribedBool)
+		}
+		
+		// 添加 sport_id 过滤
+		if sportID != "" {
+			whereClauses = append(whereClauses, "te.sport_id = $"+fmt.Sprintf("%d", len(args)+1))
+			args = append(args, sportID)
+		}
+		
+		// 添加 search 过滤 (队伍名称)
+		if search != "" {
+			searchPattern := "%" + search + "%"
+			whereClauses = append(whereClauses, "(te.home_team_name ILIKE $"+fmt.Sprintf("%d", len(args)+1)+" OR te.away_team_name ILIKE $"+fmt.Sprintf("%d", len(args)+2)+")")
+			args = append(args, searchPattern, searchPattern)
+		}
 	
 	// 组合 WHERE 子句
 	if len(whereClauses) > 0 {
@@ -135,9 +143,9 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	
-	// 添加排序和限制
-	query += " ORDER BY last_message_at DESC LIMIT $" + fmt.Sprintf("%d", len(args)+1)
-	args = append(args, limit)
+		// 添加排序和限制
+		query += " ORDER BY last_update DESC NULLS LAST, te.event_id LIMIT $" + fmt.Sprintf("%d", len(args)+1)
+		args = append(args, limit)
 	
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
@@ -156,12 +164,14 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 		var homeScore, awayScore sql.NullInt64
 		var matchStatus, matchTime sql.NullString
 		
+		var lastUpdate sql.NullTime
 		err := rows.Scan(
 			&event.EventID, &srnID, &event.SportID, &event.Status, &scheduleTime,
 			&homeTeamID, &homeTeamName, &awayTeamID, &awayTeamName,
 			&homeScore, &awayScore, &matchStatus, &matchTime,
 			&event.MessageCount, &lastMessageAt, &event.Subscribed,
 			&event.CreatedAt, &event.UpdatedAt,
+			&lastUpdate, // last_update 字段
 		)
 		
 		if err != nil {
