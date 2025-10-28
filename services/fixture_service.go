@@ -20,7 +20,7 @@ type FixtureService struct {
 func NewFixtureService(apiToken string) *FixtureService {
 	return &FixtureService{
 		apiToken: apiToken,
-		baseURL:  "https://api.betradar.com/v1",
+		baseURL:  "https://stgapi.betradar.com/v1",
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
