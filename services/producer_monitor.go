@@ -54,9 +54,9 @@ func (pm *ProducerMonitor) Stop() {
 // checkProducers 检查所有 Producer 的健康状态
 func (pm *ProducerMonitor) checkProducers() {
 	query := `
-		SELECT producer_id, last_alive_at, subscribed
+		SELECT product_id, last_alive, subscribed
 		FROM producer_status
-		WHERE last_alive_at IS NOT NULL
+		WHERE last_alive IS NOT NULL
 	`
 	
 	rows, err := pm.db.Query(query)
@@ -69,13 +69,16 @@ func (pm *ProducerMonitor) checkProducers() {
 	now := time.Now()
 	for rows.Next() {
 		var producerID int
-		var lastAliveAt time.Time
-		var subscribed bool
+		var lastAlive int64  // Unix timestamp in milliseconds
+		var subscribed int
 		
-		if err := rows.Scan(&producerID, &lastAliveAt, &subscribed); err != nil {
+		if err := rows.Scan(&producerID, &lastAlive, &subscribed); err != nil {
 			log.Printf("[ProducerMonitor] Failed to scan producer status: %v", err)
 			continue
 		}
+		
+		// 转换为 time.Time (毫秒转秒)
+		lastAliveAt := time.Unix(lastAlive/1000, (lastAlive%1000)*1000000)
 		
 		// 检查是否超过 20 秒没有收到 alive 消息
 		timeSinceLastAlive := now.Sub(lastAliveAt)
@@ -105,10 +108,10 @@ func (pm *ProducerMonitor) sendProducerDownAlert(producerID int, downTime time.D
 // GetProducerStatus 获取所有 Producer 的健康状态
 func (pm *ProducerMonitor) GetProducerStatus() ([]ProducerStatus, error) {
 	query := `
-		SELECT producer_id, last_alive_at, subscribed
+		SELECT product_id, last_alive, subscribed
 		FROM producer_status
-		WHERE last_alive_at IS NOT NULL
-		ORDER BY producer_id
+		WHERE last_alive IS NOT NULL
+		ORDER BY product_id
 	`
 	
 	rows, err := pm.db.Query(query)
@@ -122,11 +125,14 @@ func (pm *ProducerMonitor) GetProducerStatus() ([]ProducerStatus, error) {
 	
 	for rows.Next() {
 		var status ProducerStatus
-		var lastAliveAt time.Time
+		var lastAlive int64  // Unix timestamp in milliseconds
 		
-		if err := rows.Scan(&status.ProducerID, &lastAliveAt, &status.Subscribed); err != nil {
+		if err := rows.Scan(&status.ProducerID, &lastAlive, &status.Subscribed); err != nil {
 			continue
 		}
+		
+		// 转换为 time.Time (毫秒转秒)
+		lastAliveAt := time.Unix(lastAlive/1000, (lastAlive%1000)*1000000)
 		
 		status.LastAliveAt = lastAliveAt.Format(time.RFC3339)
 		status.SecondsSinceLastAlive = int(now.Sub(lastAliveAt).Seconds())
