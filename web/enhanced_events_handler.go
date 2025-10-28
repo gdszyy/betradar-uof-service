@@ -237,7 +237,12 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 			log.Printf("[API] Failed to get markets for %s: %v", event.EventID, err)
 			event.Markets = []MarketInfo{} // 空数组而不是 null
 		} else {
-			event.Markets = markets
+			// 确保不为 nil，即使没有 markets 也返回空数组
+			if markets == nil {
+				event.Markets = []MarketInfo{}
+			} else {
+				event.Markets = markets
+			}
 		}
 		
 		events = append(events, event)
@@ -275,7 +280,8 @@ func (s *Server) getEventMarkets(eventID string) ([]MarketInfo, error) {
 	}
 	defer rows.Close()
 	
-	var markets []MarketInfo
+	// 初始化为空数组，而不是 nil
+	markets := make([]MarketInfo, 0)
 	
 	for rows.Next() {
 		var market MarketInfo
@@ -332,7 +338,8 @@ func (s *Server) getMarketOutcomes(marketPK int) ([]OutcomeInfo, error) {
 	}
 	defer rows.Close()
 	
-	var outcomes []OutcomeInfo
+	// 初始化为空数组，而不是 nil
+	outcomes := make([]OutcomeInfo, 0)
 	
 	for rows.Next() {
 		var outcome OutcomeInfo
