@@ -14,6 +14,10 @@ import (
 )
 
 func main() {
+	// 配置日志输出到 stdout (显示为 [info])
+	log.SetOutput(os.Stdout)
+	log.SetFlags(log.LstdFlags)
+	
 	log.Println("Starting Betradar UOF Service...")
 
 	// 加载配置
