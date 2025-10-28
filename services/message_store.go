@@ -98,8 +98,8 @@ func (s *MessageStore) UpdateTrackedEvent(eventID string) error {
 // UpdateEventTeamInfo 更新赛事的队伍信息
 func (s *MessageStore) UpdateEventTeamInfo(eventID, homeTeamID, homeTeamName, awayTeamID, awayTeamName, sportID, sportName string) error {
 	query := `
-		INSERT INTO tracked_events (event_id, home_team_id, home_team_name, away_team_id, away_team_name, sport_id, sport, message_count, last_message_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, 0, NOW(), NOW())
+		INSERT INTO tracked_events (event_id, home_team_id, home_team_name, away_team_id, away_team_name, sport_id, message_count, last_message_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, 0, NOW(), NOW())
 		ON CONFLICT (event_id)
 		DO UPDATE SET
 			home_team_id = COALESCE(NULLIF($2, ''), tracked_events.home_team_id),
@@ -107,11 +107,10 @@ func (s *MessageStore) UpdateEventTeamInfo(eventID, homeTeamID, homeTeamName, aw
 			away_team_id = COALESCE(NULLIF($4, ''), tracked_events.away_team_id),
 			away_team_name = COALESCE(NULLIF($5, ''), tracked_events.away_team_name),
 			sport_id = COALESCE(NULLIF($6, ''), tracked_events.sport_id),
-			sport = COALESCE(NULLIF($7, ''), tracked_events.sport),
 			updated_at = NOW()
 	`
 
-	_, err := s.db.Exec(query, eventID, homeTeamID, homeTeamName, awayTeamID, awayTeamName, sportID, sportName)
+	_, err := s.db.Exec(query, eventID, homeTeamID, homeTeamName, awayTeamID, awayTeamName, sportID)
 	return err
 }
 
