@@ -29,6 +29,7 @@ type Server struct {
 	larkNotifier        *services.LarkNotifier
 	autoBooking         *services.AutoBookingService
 	srMapper            *services.SRMapper
+	producerMonitor     *services.ProducerMonitor
 	httpServer          *http.Server
 	upgrader            websocket.Upgrader
 }
@@ -53,6 +54,7 @@ func NewServer(cfg *config.Config, db *sql.DB, hub *Hub, larkNotifier *services.
 		replayClient:    replayClient,
 		larkNotifier:    larkNotifier,
 		autoBooking:     services.NewAutoBookingService(cfg, db, larkNotifier),
+		producerMonitor: services.NewProducerMonitor(db, larkNotifier),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -123,6 +125,10 @@ func (s *Server) Start() error {
 	
 	// IP 查询API
 	api.HandleFunc("/ip", s.handleGetIP).Methods("GET")
+	
+	// Producer 监控API
+	api.HandleFunc("/producer/status", s.handleGetProducerStatus).Methods("GET")
+	api.HandleFunc("/producer/bet-acceptance", s.handleGetBetAcceptance).Methods("GET")
 	
 	// LD and TheSports APIs removed - using UOF only
 	
@@ -611,6 +617,34 @@ func (s *Server) handleBookMatch(w http.ResponseWriter, r *http.Request) {
 		"message":  fmt.Sprintf("Booking request sent for match %s", matchID),
 		"match_id": matchID,
 		"time":     time.Now().Unix(),
+	})
+}
+
+
+
+// handleGetProducerStatus 获取所有 Producer 的健康状态
+func (s *Server) handleGetProducerStatus(w http.ResponseWriter, r *http.Request) {
+	statuses, err := s.producerMonitor.GetProducerStatus()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":   true,
+		"producers": statuses,
+	})
+}
+
+// handleGetBetAcceptance 检查是否可以接受投注
+func (s *Server) handleGetBetAcceptance(w http.ResponseWriter, r *http.Request) {
+	canAccept, reason := s.producerMonitor.CanAcceptBets()
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"can_accept_bets": canAccept,
+		"reason":          reason,
 	})
 }
 

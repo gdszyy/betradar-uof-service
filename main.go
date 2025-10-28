@@ -43,6 +43,10 @@ func main() {
 
 	// 创建消息存储服务
 	messageStore := services.NewMessageStore(db)
+	
+	// 创建 Producer 监控服务
+	producerMonitor := services.NewProducerMonitor(db, larkNotifier)
+	go producerMonitor.Start()
 
 	// 创建WebSocket Hub
 	wsHub := web.NewHub()

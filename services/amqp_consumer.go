@@ -335,6 +335,20 @@ func (c *AMQPConsumer) handleAlive(xmlContent string) {
 	if err := c.messageStore.UpdateProducerStatus(alive.ProductID, alive.Timestamp, alive.Subscribed); err != nil {
 		log.Printf("Failed to update producer status: %v", err)
 	}
+	
+	// 检测订阅取消 (subscribed=0)
+	if alive.Subscribed == 0 {
+		log.Printf("[AliveMessage] ⚠️  Producer %d subscription cancelled! All markets should be suspended.", alive.ProductID)
+		
+		// 发送告警通知
+		if c.notifier != nil {
+			message := fmt.Sprintf("🚨 UOF Subscription Cancelled\n\n"+
+				"Producer %d subscription has been cancelled.\n"+
+				"All markets from this producer should be suspended.",
+				alive.ProductID)
+			c.notifier.SendMessage(message)
+		}
+	}
 }
 
 func (c *AMQPConsumer) handleOddsChange(eventID string, productID *int, xmlContent string, timestamp int64) {
@@ -386,7 +400,7 @@ func (c *AMQPConsumer) handleOddsChange(eventID string, productID *int, xmlConte
 	}
 	
 	// 使用 OddsParser 解析和存储赔率数据
-	if err := c.oddsParser.ParseAndStoreOdds([]byte(xmlContent)); err != nil {
+	if err := c.oddsParser.ParseAndStoreOdds([]byte(xmlContent), *productID); err != nil {
 		log.Printf("Failed to parse and store odds: %v", err)
 	}
 }

@@ -41,14 +41,14 @@ type OutcomeData struct {
 }
 
 // ParseAndStoreOdds 解析并存储赔率数据
-func (p *OddsParser) ParseAndStoreOdds(xmlData []byte) error {
+func (p *OddsParser) ParseAndStoreOdds(xmlData []byte, productID int) error {
 	var oddsChange OddsChangeData
 	if err := xml.Unmarshal(xmlData, &oddsChange); err != nil {
 		return fmt.Errorf("failed to parse odds_change XML: %w", err)
 	}
 	
-	log.Printf("[OddsParser] Parsing odds_change for event: %s, markets: %d", 
-		oddsChange.EventID, len(oddsChange.Markets))
+	log.Printf("[OddsParser] Parsing odds_change for event: %s, markets: %d, producer: %d", 
+		oddsChange.EventID, len(oddsChange.Markets), productID)
 	
 	// 开始事务
 	tx, err := p.db.Begin()
@@ -59,7 +59,7 @@ func (p *OddsParser) ParseAndStoreOdds(xmlData []byte) error {
 	
 	// 存储每个盘口
 	for _, market := range oddsChange.Markets {
-		if err := p.storeMarket(tx, oddsChange.EventID, market, oddsChange.Timestamp); err != nil {
+		if err := p.storeMarket(tx, oddsChange.EventID, market, oddsChange.Timestamp, productID); err != nil {
 			log.Printf("[OddsParser] Failed to store market %s: %v", market.ID, err)
 			continue
 		}
@@ -75,13 +75,13 @@ func (p *OddsParser) ParseAndStoreOdds(xmlData []byte) error {
 }
 
 // storeMarket 存储盘口数据
-func (p *OddsParser) storeMarket(tx *sql.Tx, eventID string, market MarketData, timestamp int64) error {
+func (p *OddsParser) storeMarket(tx *sql.Tx, eventID string, market MarketData, timestamp int64, productID int) error {
 	// 1. 插入或更新盘口
 	marketQuery := `
-		INSERT INTO markets (event_id, market_id, market_type, specifiers, status, updated_at)
-		VALUES ($1, $2, $3, $4, $5, NOW())
+		INSERT INTO markets (event_id, market_id, market_type, specifiers, status, producer_id, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, NOW())
 		ON CONFLICT (event_id, market_id, specifiers) DO UPDATE
-		SET status = EXCLUDED.status, updated_at = NOW()
+		SET status = EXCLUDED.status, producer_id = EXCLUDED.producer_id, updated_at = NOW()
 		RETURNING id
 	`
 	
@@ -92,6 +92,7 @@ func (p *OddsParser) storeMarket(tx *sql.Tx, eventID string, market MarketData, 
 		p.getMarketType(market.ID),
 		market.Specifiers,
 		market.Status,
+		productID,
 	).Scan(&marketPK)
 	
 	if err != nil {
