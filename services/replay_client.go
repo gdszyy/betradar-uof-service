@@ -35,9 +35,9 @@ func NewReplayClient(accessToken, apiBaseURL string) *ReplayClient {
 		log.Println("[ReplayClient] ⚠️  Access token is empty")
 	}
 	
-	// 默认使用 staging API
+	// 默认使用 global API
 	if apiBaseURL == "" {
-		apiBaseURL = "https://stgapi.betradar.com/v1"
+		apiBaseURL = "https://global.api.betradar.com/v1"
 	}
 	log.Printf("[ReplayClient] Using API: %s", apiBaseURL)
 	

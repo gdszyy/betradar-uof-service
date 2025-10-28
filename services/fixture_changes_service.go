@@ -33,7 +33,7 @@ type FixtureChangesResponse struct {
 // NewFixtureChangesService 创建 FixtureChangesService 实例
 func NewFixtureChangesService(apiToken, apiBaseURL string) *FixtureChangesService {
 	if apiBaseURL == "" {
-		apiBaseURL = "https://stgapi.betradar.com/v1"
+		apiBaseURL = "https://global.api.betradar.com/v1"
 	}
 	return &FixtureChangesService{
 		apiToken: apiToken,

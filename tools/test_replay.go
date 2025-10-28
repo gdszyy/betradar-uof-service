@@ -44,7 +44,7 @@ func main() {
 	// 创建重放客户端
 	apiBaseURL := os.Getenv("BETRADAR_API_BASE_URL")
 	if apiBaseURL == "" {
-		apiBaseURL = "https://stgapi.betradar.com/v1"
+		apiBaseURL = "https://global.api.betradar.com/v1"
 	}
 	client := services.NewReplayClient(accessToken, apiBaseURL)
 

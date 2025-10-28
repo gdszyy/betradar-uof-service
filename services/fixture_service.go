@@ -1,7 +1,7 @@
 package services
 
 import (
-	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"log"
@@ -18,9 +18,11 @@ type FixtureService struct {
 
 // NewFixtureService 创建 Fixture 服务
 func NewFixtureService(apiToken, apiBaseURL string) *FixtureService {
+	// UOF Fixture API 使用全球 API 端点
 	if apiBaseURL == "" {
-		apiBaseURL = "https://stgapi.betradar.com/v1"
+		apiBaseURL = "https://global.api.betradar.com/v1"
 	}
+	log.Printf("[FixtureService] Using API: %s", apiBaseURL)
 	return &FixtureService{
 		apiToken: apiToken,
 		baseURL:  apiBaseURL,
@@ -30,49 +32,65 @@ func NewFixtureService(apiToken, apiBaseURL string) *FixtureService {
 	}
 }
 
-// FixtureData Fixture 数据结构
+// FixtureData Fixture XML 数据结构
 type FixtureData struct {
+	XMLName    xml.Name `xml:"fixture"`
 	SportEvent struct {
-		ID        string `json:"id"`
-		StartTime string `json:"start_time"`
+		ID        string `xml:"id,attr"`
+		StartTime string `xml:"start_time,attr"`
 		Sport     struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-		} `json:"sport"`
+			ID   string `xml:"id,attr"`
+			Name string `xml:"name,attr"`
+		} `xml:"sport"`
 		Tournament struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-		} `json:"tournament"`
-		Competitors []struct {
-			ID         string `json:"id"`
-			Name       string `json:"name"`
-			Qualifier  string `json:"qualifier"` // "home" or "away"
-			Abbreviation string `json:"abbreviation"`
-		} `json:"competitors"`
-	} `json:"sport_event"`
+			ID   string `xml:"id,attr"`
+			Name string `xml:"name,attr"`
+		} `xml:"tournament"`
+		Competitors struct {
+			Competitor []struct {
+				ID           string `xml:"id,attr"`
+				Name         string `xml:"name,attr"`
+				Qualifier    string `xml:"qualifier,attr"` // "home" or "away"
+				Abbreviation string `xml:"abbreviation,attr"`
+			} `xml:"competitor"`
+		} `xml:"competitors"`
+	} `xml:"sport_event"`
 }
 
 // FetchFixture 获取赛事 Fixture 信息
 func (s *FixtureService) FetchFixture(eventID string) (*FixtureData, error) {
-	url := fmt.Sprintf("%s/sports/en/sport_events/%s/fixture.json?api_token=%s",
-		s.baseURL, eventID, s.apiToken)
+	// UOF Fixture API 端点：使用 .xml 格式，不使用 api_token 查询参数
+	url := fmt.Sprintf("%s/sports/en/sport_events/%s/fixture.xml",
+		s.baseURL, eventID)
 	
 	log.Printf("[FixtureService] Fetching fixture for event: %s", eventID)
 	
-	resp, err := s.client.Get(url)
+	// 创建请求
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	
+	// UOF API 要求使用 x-access-token 请求头
+	req.Header.Set("x-access-token", s.apiToken)
+	
+	// 发送请求
+	resp, err := s.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch fixture: %w", err)
 	}
 	defer resp.Body.Close()
 	
+	// 检查响应状态
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("fixture API returned status %d: %s", resp.StatusCode, string(body))
 	}
 	
+	// 解析 XML 响应
 	var fixture FixtureData
-	if err := json.NewDecoder(resp.Body).Decode(&fixture); err != nil {
-		return nil, fmt.Errorf("failed to decode fixture response: %w", err)
+	if err := xml.NewDecoder(resp.Body).Decode(&fixture); err != nil {
+		return nil, fmt.Errorf("failed to decode fixture XML response: %w", err)
 	}
 	
 	log.Printf("[FixtureService] ✅ Fetched fixture for %s: %s", 
@@ -83,7 +101,7 @@ func (s *FixtureService) FetchFixture(eventID string) (*FixtureData, error) {
 
 // GetTeamInfo 从 Fixture 中提取队伍信息
 func (f *FixtureData) GetTeamInfo() (homeID, homeName, awayID, awayName, sportID, sportName string) {
-	for _, competitor := range f.SportEvent.Competitors {
+	for _, competitor := range f.SportEvent.Competitors.Competitor {
 		if competitor.Qualifier == "home" {
 			homeID = competitor.ID
 			homeName = competitor.Name
