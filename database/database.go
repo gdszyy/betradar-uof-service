@@ -196,6 +196,25 @@ func Migrate(db *sql.DB) error {
 		}
 	}
 
+	// 添加缺失的列（如果不存在）
+	alterTableMigrations := []string{
+		`ALTER TABLE tracked_events ADD COLUMN IF NOT EXISTS sport VARCHAR(100)`,
+		`ALTER TABLE tracked_events ADD COLUMN IF NOT EXISTS sport_name VARCHAR(100)`,
+		`ALTER TABLE tracked_events ADD COLUMN IF NOT EXISTS home_team_id VARCHAR(100)`,
+		`ALTER TABLE tracked_events ADD COLUMN IF NOT EXISTS home_team_name VARCHAR(255)`,
+		`ALTER TABLE tracked_events ADD COLUMN IF NOT EXISTS away_team_id VARCHAR(100)`,
+		`ALTER TABLE tracked_events ADD COLUMN IF NOT EXISTS away_team_name VARCHAR(255)`,
+		`CREATE INDEX IF NOT EXISTS idx_tracked_events_sport_id ON tracked_events(sport_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_tracked_events_home_team_id ON tracked_events(home_team_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_tracked_events_away_team_id ON tracked_events(away_team_id)`,
+	}
+
+	for _, migration := range alterTableMigrations {
+		if _, err := db.Exec(migration); err != nil {
+			return fmt.Errorf("alter table migration failed: %w", err)
+		}
+	}
+
 	return nil
 }
 

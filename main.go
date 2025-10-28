@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -9,16 +8,13 @@ import (
 
 	"uof-service/config"
 	"uof-service/database"
+	"uof-service/logger"
 	"uof-service/services"
 	"uof-service/web"
 )
 
 func main() {
-	// 配置日志输出到 stdout (显示为 [info])
-	log.SetOutput(os.Stdout)
-	log.SetFlags(log.LstdFlags)
-	
-	log.Println("Starting Betradar UOF Service...")
+	logger.Println("Starting Betradar UOF Service...")
 
 	// 加载配置
 	cfg := config.Load()
@@ -26,23 +22,23 @@ func main() {
 	// 连接数据库
 	db, err := database.Connect(cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		logger.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer db.Close()
 
 	// 运行数据库迁移
 	if err := database.Migrate(db); err != nil {
-		log.Fatalf("Failed to migrate database: %v", err)
+		logger.Fatalf("Failed to migrate database: %v", err)
 	}
 
-	log.Println("Database connected and migrated")
+	logger.Println("Database connected and migrated")
 
 	// 创建 Feishu 通知器
 	larkNotifier := services.NewLarkNotifier(cfg.LarkWebhook)
 	
 	// 发送服务启动通知
 	if err := larkNotifier.NotifyServiceStart(cfg.BookmakerID, cfg.Products); err != nil {
-		log.Printf("Failed to send startup notification: %v", err)
+		logger.Errorf("Failed to send startup notification: %v", err)
 	}
 
 	// 创建消息存储服务
@@ -68,24 +64,24 @@ func main() {
 	
 	go func() {
 		if err := amqpConsumer.Start(); err != nil {
-			log.Fatalf("AMQP consumer error: %v", err)
+			logger.Fatalf("AMQP consumer error: %v", err)
 			larkNotifier.NotifyError("AMQP Consumer", err.Error())
 		}
 	}()
 
-	log.Println("AMQP consumer started")
+	logger.Println("AMQP consumer started")
 
 	// 启动Web服务器
 	server := web.NewServer(cfg, db, wsHub, larkNotifier)
 	
 	go func() {
 		if err := server.Start(); err != nil {
-			log.Fatalf("Web server error: %v", err)
+			logger.Fatalf("Web server error: %v", err)
 			larkNotifier.NotifyError("Web Server", err.Error())
 		}
 	}()
 
-	log.Printf("Web server started on port %s", cfg.Port)
+	logger.Printf("Web server started on port %s", cfg.Port)
 
 	// 启动比赛监控 (每小时执行一次)
 	matchMonitor := services.NewMatchMonitor(cfg, nil)
@@ -103,7 +99,7 @@ func main() {
 		}
 	}()
 	
-	log.Println("Match monitor started (hourly)")
+	logger.Println("Match monitor started (hourly)")
 	
 	// 启动订阅清理服务 (每小时执行一次)
 	subscriptionCleanup := services.NewSubscriptionCleanupService(cfg, db, larkNotifier)
@@ -115,14 +111,14 @@ func main() {
 		
 		for range ticker.C {
 			if result, err := subscriptionCleanup.ExecuteCleanup(); err != nil {
-				log.Printf("[SubscriptionCleanup] ❌ Failed: %v", err)
+				logger.Errorf("[SubscriptionCleanup] ❌ Failed: %v", err)
 			} else {
-				log.Printf("[SubscriptionCleanup] ✅ Completed: %d unbooked out of %d ended", result.Unbooked, result.EndedMatches)
+				logger.Printf("[SubscriptionCleanup] ✅ Completed: %d unbooked out of %d ended", result.Unbooked, result.EndedMatches)
 			}
 		}
 	}()
 	
-	log.Println("Subscription cleanup started (hourly)")
+	logger.Println("Subscription cleanup started (hourly)")
 	
 	// 冷启动初始化 - 获取所有比赛信息
 	coldStart := services.NewColdStart(cfg, db, larkNotifier)
@@ -130,12 +126,12 @@ func main() {
 		// 等待 2 秒后执行
 		time.Sleep(2 * time.Second)
 		
-		log.Println("[ColdStart] 🚀 Starting cold start initialization...")
+		logger.Println("[ColdStart] 🚀 Starting cold start initialization...")
 		if err := coldStart.Run(); err != nil {
-			log.Printf("[ColdStart] ❌ Failed: %v", err)
+			logger.Errorf("[ColdStart] ❌ Failed: %v", err)
 			larkNotifier.NotifyError("Cold Start", err.Error())
 		} else {
-			log.Println("[ColdStart] ✅ Cold start completed successfully")
+			logger.Println("[ColdStart] ✅ Cold start completed successfully")
 		}
 	}()
 	
@@ -146,19 +142,19 @@ func main() {
 		time.Sleep(10 * time.Second)
 		
 		// 1. 先执行清理,取消已结束比赛的订阅
-		log.Println("[StartupBooking] 🧹 Cleaning up ended matches before booking...")
+		logger.Println("[StartupBooking] 🧹 Cleaning up ended matches before booking...")
 		if cleanupResult, err := subscriptionCleanup.ExecuteCleanup(); err != nil {
-			log.Printf("[StartupBooking] ⚠️  Cleanup failed: %v", err)
+			logger.Errorf("[StartupBooking] ⚠️  Cleanup failed: %v", err)
 		} else {
-			log.Printf("[StartupBooking] ✅ Cleanup completed: %d unbooked", cleanupResult.Unbooked)
+			logger.Printf("[StartupBooking] ✅ Cleanup completed: %d unbooked", cleanupResult.Unbooked)
 		}
 		
 		// 2. 执行自动订阅 (Live)
 		if result, err := startupBooking.ExecuteStartupBooking(); err != nil {
-			log.Printf("[StartupBooking] ❌ Failed to execute startup booking: %v", err)
+			logger.Errorf("[StartupBooking] ❌ Failed to execute startup booking: %v", err)
 			larkNotifier.NotifyError("Startup Booking", err.Error())
 		} else {
-			log.Printf("[StartupBooking] ✅ Startup booking completed: %d/%d successful", result.Success, result.Bookable)
+			logger.Printf("[StartupBooking] ✅ Startup booking completed: %d/%d successful", result.Success, result.Bookable)
 		}
 	}()
 	
@@ -168,13 +164,13 @@ func main() {
 		// 等待 AMQP 连接建立和冷启动完成
 		time.Sleep(15 * time.Second)
 		
-		log.Println("[PrematchService] 🚀 Starting pre-match event booking...")
+		logger.Println("[PrematchService] 🚀 Starting pre-match event booking...")
 		
 		if result, err := prematchService.ExecutePrematchBooking(); err != nil {
-			log.Printf("[PrematchService] ❌ Failed: %v", err)
+			logger.Errorf("[PrematchService] ❌ Failed: %v", err)
 			larkNotifier.NotifyError("Pre-match Booking", err.Error())
 		} else {
-			log.Printf("[PrematchService] ✅ Completed: %d total events, %d bookable, %d already booked, %d success, %d failed",
+			logger.Printf("[PrematchService] ✅ Completed: %d total events, %d bookable, %d already booked, %d success, %d failed",
 				result.TotalEvents, result.Bookable, result.AlreadyBooked, result.Success, result.Failed)
 			
 			// 发送通知
@@ -184,20 +180,20 @@ func main() {
 		}
 	}()
 
-	log.Println("Service is running. Press Ctrl+C to stop.")
-	log.Println("All data is sourced from UOF (Unified Odds Feed)")
+	logger.Println("Service is running. Press Ctrl+C to stop.")
+	logger.Println("All data is sourced from UOF (Unified Odds Feed)")
 
 	// 等待中断信号
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down service...")
+	logger.Println("Shutting down service...")
 
 	// 清理资源
 	amqpConsumer.Stop()
 	server.Stop()
 
-	log.Println("Service stopped")
+	logger.Println("Service stopped")
 }
 
