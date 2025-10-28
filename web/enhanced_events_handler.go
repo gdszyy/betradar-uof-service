@@ -87,28 +87,10 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 		limit = "100"
 	}
 	
-	// 构		// 使用 LEFT JOIN 从 markets 表获取有数据的比赛
-		// 或者从 tracked_events 表获取所有比赛
-		query := `
-			SELECT DISTINCT ON (te.event_id)
-				te.event_id, te.srn_id, te.sport_id, te.status, te.schedule_time,
-				te.home_team_id, te.home_team_name, te.away_team_id, te.away_team_name,
-				te.home_score, te.away_score, te.match_status, te.match_time,
-				te.message_count, te.last_message_at, te.subscribed,
-				te.created_at, te.updated_at,
-				COALESCE(MAX(m.updated_at), te.last_message_at) as last_update
-			FROM tracked_events te
-			LEFT JOIN markets m ON te.event_id = m.event_id
-			GROUP BY te.event_id, te.srn_id, te.sport_id, te.status, te.schedule_time,
-				te.home_team_id, te.home_team_name, te.away_team_id, te.away_team_name,
-				te.home_score, te.away_score, te.match_status, te.match_time,
-				te.message_count, te.last_message_at, te.subscribed,
-				te.created_at, te.updated_at
-		`
-	
-	args := []interface{}{}
-	whereClauses := []string{}
-	
+		// 构建 SQL 查询
+		args := []interface{}{}
+		whereClauses := []string{}
+		
 		// 添加 status 过滤
 		if status != "" {
 			whereClauses = append(whereClauses, "te.status = $"+fmt.Sprintf("%d", len(args)+1))
@@ -134,14 +116,35 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 			whereClauses = append(whereClauses, "(te.home_team_name ILIKE $"+fmt.Sprintf("%d", len(args)+1)+" OR te.away_team_name ILIKE $"+fmt.Sprintf("%d", len(args)+2)+")")
 			args = append(args, searchPattern, searchPattern)
 		}
-	
-	// 组合 WHERE 子句
-	if len(whereClauses) > 0 {
-		query += " WHERE " + whereClauses[0]
-		for i := 1; i < len(whereClauses); i++ {
-			query += " AND " + whereClauses[i]
+		
+		// 构建 WHERE 子句
+		whereClause := ""
+		if len(whereClauses) > 0 {
+			whereClause = " WHERE " + whereClauses[0]
+			for i := 1; i < len(whereClauses); i++ {
+				whereClause += " AND " + whereClauses[i]
+			}
 		}
-	}
+		
+		// 使用 LEFT JOIN 从 markets 表获取有数据的比赛
+		// WHERE 子句必须在 GROUP BY 之前
+		query := `
+			SELECT 
+				te.event_id, te.srn_id, te.sport_id, te.status, te.schedule_time,
+				te.home_team_id, te.home_team_name, te.away_team_id, te.away_team_name,
+				te.home_score, te.away_score, te.match_status, te.match_time,
+				te.message_count, te.last_message_at, te.subscribed,
+				te.created_at, te.updated_at,
+				COALESCE(MAX(m.updated_at), te.last_message_at) as last_update
+			FROM tracked_events te
+			LEFT JOIN markets m ON te.event_id = m.event_id
+		` + whereClause + `
+			GROUP BY te.event_id, te.srn_id, te.sport_id, te.status, te.schedule_time,
+				te.home_team_id, te.home_team_name, te.away_team_id, te.away_team_name,
+				te.home_score, te.away_score, te.match_status, te.match_time,
+				te.message_count, te.last_message_at, te.subscribed,
+				te.created_at, te.updated_at
+		`
 	
 		// 添加排序和限制
 		query += " ORDER BY last_update DESC NULLS LAST, te.event_id LIMIT $" + fmt.Sprintf("%d", len(args)+1)
