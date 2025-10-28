@@ -32,6 +32,7 @@ type AMQPConsumer struct {
 	oddsChangeParser  *OddsChangeParser
 	oddsParser        *OddsParser
 	srnMappingService *SRNMappingService
+	fixtureService    *FixtureService
 	conn              *amqp.Connection
 	channel           *amqp.Channel
 	done              chan bool
@@ -46,6 +47,7 @@ func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster Messag
 	fixtureParser := NewFixtureParser(store.db, srnMappingService)
 	oddsChangeParser := NewOddsChangeParser(store.db)
 	oddsParser := NewOddsParser(store.db)
+	fixtureService := NewFixtureService(cfg.UOFAPIToken)
 	
 	// 从数据库加载 SRN mapping 缓存
 	if err := srnMappingService.LoadCacheFromDB(); err != nil {
@@ -63,6 +65,7 @@ func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster Messag
 			oddsChangeParser:  oddsChangeParser,
 			oddsParser:        oddsParser,
 			srnMappingService: srnMappingService,
+			fixtureService:    fixtureService,
 			done:              make(chan bool),
 		}
 }
@@ -394,6 +397,15 @@ func (c *AMQPConsumer) handleOddsChange(eventID string, productID *int, xmlConte
 	// 更新跟踪的赛事
 	c.messageStore.UpdateTrackedEvent(eventID)
 	
+	// 检查是否有队伍信息，如果没有则自动获取
+	hasTeamInfo, err := c.messageStore.HasTeamInfo(eventID)
+	if err != nil {
+		log.Printf("[OddsChange] Failed to check team info for %s: %v", eventID, err)
+	} else if !hasTeamInfo {
+		log.Printf("[OddsChange] Event %s missing team info, fetching fixture...", eventID)
+		go c.fetchAndStoreFixture(eventID) // 异步获取，不阻塞消息处理
+	}
+	
 	// 使用 OddsChangeParser 解析比分和比赛信息
 	if err := c.oddsChangeParser.ParseAndStore(xmlContent); err != nil {
 		log.Printf("Failed to parse odds_change data: %v", err)
@@ -659,5 +671,33 @@ func (c *AMQPConsumer) handleSnapshotComplete(xmlContent string) {
 				}
 			}
 		}
+}
+
+
+
+// fetchAndStoreFixture 获取并存储赛事的 Fixture 信息
+func (c *AMQPConsumer) fetchAndStoreFixture(eventID string) {
+	if c.fixtureService == nil {
+		log.Printf("[FixtureFetch] ⚠️  FixtureService not initialized")
+		return
+	}
+	
+	// 获取 Fixture 信息
+	fixture, err := c.fixtureService.FetchFixture(eventID)
+	if err != nil {
+		log.Printf("[FixtureFetch] ❌ Failed to fetch fixture for %s: %v", eventID, err)
+		return
+	}
+	
+	// 提取队伍信息
+	homeID, homeName, awayID, awayName, sportID, sportName := fixture.GetTeamInfo()
+	
+	// 更新数据库
+	if err := c.messageStore.UpdateEventTeamInfo(eventID, homeID, homeName, awayID, awayName, sportID, sportName); err != nil {
+		log.Printf("[FixtureFetch] ❌ Failed to update team info for %s: %v", eventID, err)
+		return
+	}
+	
+	log.Printf("[FixtureFetch] ✅ Updated team info for %s: %s vs %s", eventID, homeName, awayName)
 }
 
