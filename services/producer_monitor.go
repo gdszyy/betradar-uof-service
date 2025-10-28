@@ -98,7 +98,7 @@ func (pm *ProducerMonitor) sendProducerDownAlert(producerID int, downTime time.D
 		downTime.Round(time.Second))
 	
 	if pm.notifier != nil {
-		pm.notifier.SendMessage(message)
+		pm.notifier.SendText(message)
 	}
 }
 

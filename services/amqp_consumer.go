@@ -346,7 +346,7 @@ func (c *AMQPConsumer) handleAlive(xmlContent string) {
 				"Producer %d subscription has been cancelled.\n"+
 				"All markets from this producer should be suspended.",
 				alive.ProductID)
-			c.notifier.SendMessage(message)
+			c.notifier.SendText(message)
 		}
 	}
 }
