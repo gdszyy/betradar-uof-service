@@ -33,30 +33,38 @@ func NewFixtureService(apiToken, apiBaseURL string) *FixtureService {
 }
 
 // FixtureData Fixture XML 数据结构
-// 根元素是 <fixtures_fixture>，包含一个 <fixture> 子元素
+// 实际的 XML 结构：
+// <fixtures_fixture>
+//   <fixture status="live" ...>
+//     <tournament>
+//       <sport id="sr:sport:109" name="ESport Counter-Strike"/>
+//     </tournament>
+//     <competitors>
+//       <competitor qualifier="home" id="..." name="..."/>
+//     </competitors>
+//   </fixture>
+// </fixtures_fixture>
 type FixtureData struct {
 	XMLName xml.Name `xml:"fixtures_fixture"`
 	Fixture struct {
-		SportEvent struct {
-			ID        string `xml:"id,attr"`
-			StartTime string `xml:"start_time,attr"`
-			Sport     struct {
+		ID     string `xml:"id,attr"`
+		Status string `xml:"status,attr"` // live, not_started, ended, etc.
+		Tournament struct {
+			ID   string `xml:"id,attr"`
+			Name string `xml:"name,attr"`
+			Sport struct {
 				ID   string `xml:"id,attr"`
 				Name string `xml:"name,attr"`
 			} `xml:"sport"`
-			Tournament struct {
-				ID   string `xml:"id,attr"`
-				Name string `xml:"name,attr"`
-			} `xml:"tournament"`
-			Competitors struct {
-				Competitor []struct {
-					ID           string `xml:"id,attr"`
-					Name         string `xml:"name,attr"`
-					Qualifier    string `xml:"qualifier,attr"` // "home" or "away"
-					Abbreviation string `xml:"abbreviation,attr"`
-				} `xml:"competitor"`
-			} `xml:"competitors"`
-		} `xml:"sport_event"`
+		} `xml:"tournament"`
+		Competitors struct {
+			Competitor []struct {
+				ID           string `xml:"id,attr"`
+				Name         string `xml:"name,attr"`
+				Qualifier    string `xml:"qualifier,attr"` // "home" or "away"
+				Abbreviation string `xml:"abbreviation,attr"`
+			} `xml:"competitor"`
+		} `xml:"competitors"`
 	} `xml:"fixture"`
 }
 
@@ -90,7 +98,7 @@ func (s *FixtureService) FetchFixture(eventID string) (*FixtureData, error) {
 		return nil, fmt.Errorf("fixture API returned status %d: %s", resp.StatusCode, string(body))
 	}
 	
-	// 读取响应体用于调试
+	// 读取响应体
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
@@ -108,15 +116,15 @@ func (s *FixtureService) FetchFixture(eventID string) (*FixtureData, error) {
 		return nil, fmt.Errorf("failed to decode fixture XML response: %w", err)
 	}
 	
-	log.Printf("[FixtureService] ✅ Fetched fixture for %s: %s", 
-		eventID, fixture.Fixture.SportEvent.ID)
+	log.Printf("[FixtureService] ✅ Fetched fixture for %s (sport: %s, status: %s)", 
+		eventID, fixture.Fixture.Tournament.Sport.Name, fixture.Fixture.Status)
 	
 	return &fixture, nil
 }
 
 // GetTeamInfo 从 Fixture 中提取队伍信息
-func (f *FixtureData) GetTeamInfo() (homeID, homeName, awayID, awayName, sportID, sportName string) {
-	for _, competitor := range f.Fixture.SportEvent.Competitors.Competitor {
+func (f *FixtureData) GetTeamInfo() (homeID, homeName, awayID, awayName, sportID, sportName, status string) {
+	for _, competitor := range f.Fixture.Competitors.Competitor {
 		if competitor.Qualifier == "home" {
 			homeID = competitor.ID
 			homeName = competitor.Name
@@ -126,8 +134,9 @@ func (f *FixtureData) GetTeamInfo() (homeID, homeName, awayID, awayName, sportID
 		}
 	}
 	
-	sportID = f.Fixture.SportEvent.Sport.ID
-	sportName = f.Fixture.SportEvent.Sport.Name
+	sportID = f.Fixture.Tournament.Sport.ID
+	sportName = f.Fixture.Tournament.Sport.Name
+	status = f.Fixture.Status
 	
 	return
 }

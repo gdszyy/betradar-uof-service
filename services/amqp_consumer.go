@@ -689,15 +689,15 @@ func (c *AMQPConsumer) fetchAndStoreFixture(eventID string) {
 		return
 	}
 	
-	// 提取队伍信息
-	homeID, homeName, awayID, awayName, sportID, sportName := fixture.GetTeamInfo()
+	// 提取队伍信息、运动类型和状态
+	homeID, homeName, awayID, awayName, sportID, sportName, status := fixture.GetTeamInfo()
 	
 	// 更新数据库
-	if err := c.messageStore.UpdateEventTeamInfo(eventID, homeID, homeName, awayID, awayName, sportID, sportName); err != nil {
+	if err := c.messageStore.UpdateEventTeamInfo(eventID, homeID, homeName, awayID, awayName, sportID, sportName, status); err != nil {
 		log.Printf("[FixtureFetch] ❌ Failed to update team info for %s: %v", eventID, err)
 		return
 	}
 	
-	log.Printf("[FixtureFetch] ✅ Updated team info for %s: %s vs %s", eventID, homeName, awayName)
+	log.Printf("[FixtureFetch] ✅ Updated team info for %s: %s vs %s (sport: %s, status: %s)", eventID, homeName, awayName, sportName, status)
 }
 
