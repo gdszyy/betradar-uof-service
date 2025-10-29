@@ -251,12 +251,25 @@ func replaceSpecifiers(template string, ctx ReplacementContext) string {
 	if ctx.Specifiers != "" {
 		specMap := parseSpecifiers(ctx.Specifiers)
 		for key, value := range specMap {
+			// 处理 {+X} 格式 (例如 {+hcp})
+			plusPlaceholder := fmt.Sprintf("{+%s}", key)
+			if strings.Contains(result, plusPlaceholder) {
+				result = strings.ReplaceAll(result, plusPlaceholder, "+"+value)
+			}
+			
+			// 处理 {-X} 格式 (例如 {-hcp})
+			minusPlaceholder := fmt.Sprintf("{-%s}", key)
+			if strings.Contains(result, minusPlaceholder) {
+				result = strings.ReplaceAll(result, minusPlaceholder, "-"+value)
+			}
+			
+			// 处理普通 {X} 格式 (例如 {hcp})
 			placeholder := fmt.Sprintf("{%s}", key)
 			result = strings.ReplaceAll(result, placeholder, value)
 		}
 	}
 	
-	// TODO: 更多复杂的替换逻辑 (例如 {!setnr}, {+hcp}, {-hcp})
+	// TODO: 更多复杂的替换逻辑 (例如 {!setnr})
 	
 	return result
 }
