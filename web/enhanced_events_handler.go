@@ -409,8 +409,7 @@ func (s *Server) getMarketOutcomes(marketPK int) ([]OutcomeInfo, error) {
 		}
 		
 		// 获取结果名称 (简化版)
-		outcome.Name = s.getOutcomeName(outcome.OutcomeID)
-		
+			outcome.OutcomeName = s.getOutcomeName(marketPK.MarketID, outcome.OutcomeID)
 		outcomes = append(outcomes, outcome)
 	}
 	
@@ -457,7 +456,16 @@ func (s *Server) getMarketName(marketID string) string {
 }
 
 // getOutcomeName 获取结果名称
-func (s *Server) getOutcomeName(outcomeID string) string {
+func (s *Server) getOutcomeName(marketID string, outcomeID string) string {
+	// 优先使用 Market Descriptions Service
+	if s.marketDescService != nil {
+		name := s.marketDescService.GetOutcomeName(marketID, outcomeID, "")
+		// 如果不是默认的 "Outcome X" 格式,说明找到了
+		if name != "Outcome "+outcomeID {
+			return name
+		}
+	}
+	
 	// Fallback: 常见结果的硬编码映射
 	outcomeNames := map[string]string{
 		"1":  "Home",

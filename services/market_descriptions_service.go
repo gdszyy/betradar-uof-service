@@ -77,7 +77,8 @@ func (s *MarketDescriptionsService) Start() error {
 
 // loadMarketDescriptions 加载市场描述
 func (s *MarketDescriptionsService) loadMarketDescriptions() error {
-	url := fmt.Sprintf("%s/v1/descriptions/en/markets.xml", s.apiBaseURL)
+	// 尝试去掉 /v1，因为 API Base URL 可能已经包含了
+	url := fmt.Sprintf("%s/descriptions/en/markets.xml", s.apiBaseURL)
 	
 	logger.Printf("[MarketDescService] Fetching market descriptions from: %s", url)
 	
