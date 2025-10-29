@@ -12,6 +12,13 @@ import (
 	"uof-service/logger"
 )
 
+// ReplacementContext 变量替换所需的上下文信息
+type ReplacementContext struct {
+	HomeTeamName string
+	AwayTeamName string
+	Specifiers   string // 原始 specifiers 字符串
+}
+
 // MarketDescriptionsService 市场描述服务
 type MarketDescriptionsService struct {
 	token       string
@@ -156,7 +163,7 @@ func (s *MarketDescriptionsService) refreshLoop() {
 }
 
 // GetMarketName 获取市场名称
-func (s *MarketDescriptionsService) GetMarketName(marketID string, specifiers string) string {
+func (s *MarketDescriptionsService) GetMarketName(marketID string, ctx ReplacementContext) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	
@@ -167,17 +174,14 @@ func (s *MarketDescriptionsService) GetMarketName(marketID string, specifiers st
 	
 	name := market.Name
 	
-	// 替换 specifiers (简化版)
-	if specifiers != "" {
-		specMap := parseSpecifiers(specifiers)
-		name = replaceSpecifiers(name, specMap)
-	}
+	// 替换 specifiers
+	name = replaceSpecifiers(name, ctx)
 	
 	return name
 }
 
 // GetOutcomeName 获取结果名称
-func (s *MarketDescriptionsService) GetOutcomeName(marketID string, outcomeID string, specifiers string) string {
+func (s *MarketDescriptionsService) GetOutcomeName(marketID string, outcomeID string, ctx ReplacementContext) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	
@@ -193,11 +197,8 @@ func (s *MarketDescriptionsService) GetOutcomeName(marketID string, outcomeID st
 	
 	name := outcome.Name
 	
-	// 替换 specifiers (简化版)
-	if specifiers != "" {
-		specMap := parseSpecifiers(specifiers)
-		name = replaceSpecifiers(name, specMap)
-	}
+	// 替换 specifiers
+	name = replaceSpecifiers(name, ctx)
 	
 	return name
 }
@@ -238,17 +239,27 @@ func parseSpecifiers(specifiers string) map[string]string {
 // - {!X}: 替换为 specifier X 的序数形式 (1st, 2nd, 3rd, ...)
 // - {+X}: 替换为 specifier X 的值并添加 +/- 符号
 // - {-X}: 替换为 specifier X 的负值并添加 +/- 符号
-// - {$competitor1}, {$competitor2}: 保留原样 (需要从 event 获取)
-func replaceSpecifiers(template string, specifiers map[string]string) string {
+// - {$competitor1},// replaceSpecifiers 替换市场名称中的 specifiers
+func replaceSpecifiers(template string, ctx ReplacementContext) string {
 	result := template
 	
-	// 简单替换 {X}
-	for key, value := range specifiers {
-		placeholder := fmt.Sprintf("{%s}", key)
-		result = strings.ReplaceAll(result, placeholder, value)
+	// 1. 处理 {$competitor1} 和 {$competitor2}
+	result = strings.ReplaceAll(result, "{$competitor1}", ctx.HomeTeamName)
+	result = strings.ReplaceAll(result, "{$competitor2}", ctx.AwayTeamName)
+	
+	// 2. 处理 {X} 格式的 specifiers (例如 {hcp})
+	if ctx.Specifiers != "" {
+		specMap := parseSpecifiers(ctx.Specifiers)
+		for key, value := range specMap {
+			placeholder := fmt.Sprintf("{%s}", key)
+			result = strings.ReplaceAll(result, placeholder, value)
+		}
 	}
 	
-	// TODO: 实现更复杂的模板替换逻辑
+	// TODO: 更多复杂的替换逻辑 (例如 {!setnr}, {+hcp}, {-hcp})
+	
+	return result
+}// TODO: 实现更复杂的模板替换逻辑
 	// - {!X}: 序数形式
 	// - {+X}, {-X}: 带符号的数字
 	// - {$competitor1}, {$competitor2}: 队伍名称

@@ -358,8 +358,8 @@ func (s *Server) getEventMarketsWithProducer(eventID string, producer string) ([
 			market.ProducerID = int(producerID.Int64)
 		}
 		
-		// 获取市场名称 (简化版,可以后续从 market descriptions 获取)
-		market.MarketName = s.getMarketName(market.MarketID)
+// 获取市场名称 (简化版,可以后续从 market descriptions 获取)
+			market.MarketName = s.getMarketName(market.MarketID, event.HomeTeamName, event.AwayTeamName, market.Specifiers)
 		
 // 获取该盘口的赔率 (使用 marketPK)
 			outcomes, err := s.getMarketOutcomes(marketPK, market.MarketID)
@@ -410,7 +410,7 @@ func (s *Server) getMarketOutcomes(marketPK int, marketID string) ([]OutcomeInfo
 		}
 		
 		// 获取结果名称 (简化版)
-			outcome.OutcomeName = s.getOutcomeName(marketID, outcome.OutcomeID)
+			outcome.OutcomeName = s.getOutcomeName(marketID, outcome.OutcomeID, event.HomeTeamName, event.AwayTeamName, market.Specifiers)
 		outcomes = append(outcomes, outcome)
 	}
 	
@@ -418,10 +418,15 @@ func (s *Server) getMarketOutcomes(marketPK int, marketID string) ([]OutcomeInfo
 }
 
 // getMarketName 获取市场名称
-func (s *Server) getMarketName(marketID string) string {
+func (s *Server) getMarketName(marketID string, homeTeamName string, awayTeamName string, specifiers string) string {
 	// 优先使用 Market Descriptions Service
 	if s.marketDescService != nil {
-		name := s.marketDescService.GetMarketName(marketID, "")
+		ctx := services.ReplacementContext{
+			HomeTeamName: homeTeamName,
+			AwayTeamName: awayTeamName,
+			Specifiers:   specifiers,
+		}
+		name := s.marketDescService.GetMarketName(marketID, ctx)
 		// 如果不是默认的 "Market X" 格式,说明找到了
 		if name != "Market "+marketID {
 			return name
@@ -457,10 +462,15 @@ func (s *Server) getMarketName(marketID string) string {
 }
 
 // getOutcomeName 获取结果名称
-func (s *Server) getOutcomeName(marketID string, outcomeID string) string {
+func (s *Server) getOutcomeName(marketID string, outcomeID string, homeTeamName string, awayTeamName string, specifiers string) string {
 	// 优先使用 Market Descriptions Service
 	if s.marketDescService != nil {
-		name := s.marketDescService.GetOutcomeName(marketID, outcomeID, "")
+		ctx := services.ReplacementContext{
+			HomeTeamName: homeTeamName,
+			AwayTeamName: awayTeamName,
+			Specifiers:   specifiers,
+		}
+		name := s.marketDescService.GetOutcomeName(marketID, outcomeID, ctx)
 		// 如果不是默认的 "Outcome X" 格式,说明找到了
 		if name != "Outcome "+outcomeID {
 			return name
