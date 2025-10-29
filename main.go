@@ -101,6 +101,22 @@ func main() {
 	
 	logger.Println("Match monitor started (hourly)")
 	
+	// 启动静态数据服务 (每周刷新一次)
+	staticDataService := services.NewStaticDataService(db, cfg.AccessToken, cfg.APIBaseURL)
+	if err := staticDataService.Start(); err != nil {
+		logger.Errorf("[StaticData] ⚠️  Failed to start: %v", err)
+	} else {
+		logger.Println("[StaticData] ✅ Static data service started (weekly refresh)")
+	}
+	
+	// 启动赛程服务 (每天凌晨 1 点执行一次)
+	scheduleService := services.NewScheduleService(db, cfg.AccessToken, cfg.APIBaseURL)
+	if err := scheduleService.Start(); err != nil {
+		logger.Errorf("[Schedule] ⚠️  Failed to start: %v", err)
+	} else {
+		logger.Println("[Schedule] ✅ Schedule service started (daily at 1:00 AM)")
+	}
+	
 	// 启动订阅清理服务 (每小时执行一次)
 	subscriptionCleanup := services.NewSubscriptionCleanupService(cfg, db, larkNotifier)
 	

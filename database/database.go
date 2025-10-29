@@ -188,6 +188,73 @@ func Migrate(db *sql.DB) error {
 				team2_players TEXT
 			)`,
 			`CREATE INDEX IF NOT EXISTS idx_ld_lineups_match_id ON ld_lineups(match_id)`,
+			
+			// 静态数据表 - Sports
+			`CREATE TABLE IF NOT EXISTS sports (
+				id VARCHAR(50) PRIMARY KEY,
+				name VARCHAR(255) NOT NULL,
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			)`,
+			
+			// 静态数据表 - Categories
+			`CREATE TABLE IF NOT EXISTS categories (
+				id VARCHAR(50) PRIMARY KEY,
+				sport_id VARCHAR(50) NOT NULL,
+				name VARCHAR(255) NOT NULL,
+				country_code VARCHAR(10),
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			)`,
+			`CREATE INDEX IF NOT EXISTS idx_categories_sport_id ON categories(sport_id)`,
+			
+			// 静态数据表 - Tournaments
+			`CREATE TABLE IF NOT EXISTS tournaments (
+				id VARCHAR(50) PRIMARY KEY,
+				sport_id VARCHAR(50) NOT NULL,
+				category_id VARCHAR(50) NOT NULL,
+				name VARCHAR(255) NOT NULL,
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			)`,
+			`CREATE INDEX IF NOT EXISTS idx_tournaments_sport_id ON tournaments(sport_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_tournaments_category_id ON tournaments(category_id)`,
+			
+			// 静态数据表 - Void Reasons
+			`CREATE TABLE IF NOT EXISTS void_reasons (
+				id INT PRIMARY KEY,
+				description VARCHAR(255) NOT NULL,
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			)`,
+			
+			// 静态数据表 - Betstop Reasons
+			`CREATE TABLE IF NOT EXISTS betstop_reasons (
+				id INT PRIMARY KEY,
+				description VARCHAR(255) NOT NULL,
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			)`,
+			
+			// 赛程表 - Scheduled Events
+			`CREATE TABLE IF NOT EXISTS scheduled_events (
+				id BIGSERIAL PRIMARY KEY,
+				event_id VARCHAR(100) UNIQUE NOT NULL,
+				sport_id VARCHAR(50),
+				sport_name VARCHAR(255),
+				category_id VARCHAR(50),
+				category_name VARCHAR(255),
+				tournament_id VARCHAR(50),
+				tournament_name VARCHAR(255),
+				home_team_id VARCHAR(100),
+				home_team_name VARCHAR(255),
+				away_team_id VARCHAR(100),
+				away_team_name VARCHAR(255),
+				scheduled_time TIMESTAMP,
+				status VARCHAR(50),
+				live_odds VARCHAR(20),
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			)`,
+			`CREATE INDEX IF NOT EXISTS idx_scheduled_events_event_id ON scheduled_events(event_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_scheduled_events_sport_id ON scheduled_events(sport_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_scheduled_events_scheduled_time ON scheduled_events(scheduled_time)`,
+			`CREATE INDEX IF NOT EXISTS idx_scheduled_events_status ON scheduled_events(status)`,
 	}
 
 	for _, migration := range migrations {
