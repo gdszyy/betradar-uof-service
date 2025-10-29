@@ -94,7 +94,7 @@ func (c *AutoBookingController) run() {
 func (c *AutoBookingController) executeBooking() {
 	logger.Println("[AutoBookingController] Executing auto-booking...")
 
-	bookable, success, err := c.service.ScanAndBookLiveMatches()
+	bookable, success, err := c.service.BookAllBookableMatches()
 	if err != nil {
 		logger.Errorf("[AutoBookingController] ❌ Failed: %v", err)
 		return
