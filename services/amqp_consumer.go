@@ -193,7 +193,7 @@ func (c *AMQPConsumer) Start() error {
 			if err := c.recoveryManager.TriggerFullRecovery(); err != nil {
 				logger.Errorf("Auto recovery failed: %v", err)
 			} else {
-				logger.Println("Auto recovery completed successfully")
+				loglogger.Println("Auto recovery completed successfully")
 			}
 		}()
 	}
@@ -391,7 +391,7 @@ func (c *AMQPConsumer) handleOddsChange(eventID string, productID *int, xmlConte
 		eventID, marketsCount, oddsChange.SportEventStatus.Status)
 
 	if err := c.messageStore.SaveOddsChange(eventID, *productID, timestamp, xmlContent, marketsCount); err != nil {
-		log.Printf("Failed to save odds change: %v", err)
+		logger.Printf("Failed to save odds change: %v", err)
 	}
 
 	// 更新跟踪的赛事
@@ -651,21 +651,21 @@ func (c *AMQPConsumer) handleSnapshotComplete(xmlContent string) {
 
 	var snapshot SnapshotComplete
 	if err := xml.Unmarshal([]byte(xmlContent), &snapshot); err != nil {
-		log.Printf("Failed to parse snapshot_complete: %v", err)
+		logger.Printf("Failed to parse snapshot_complete: %v", err)
 		return
 	}
 
-		log.Printf("✅ Snapshot complete: product=%d, request_id=%d, timestamp=%d", snapshot.Product, snapshot.RequestID, snapshot.Timestamp)
+		logger.Printf("✅ Snapshot complete: product=%d, request_id=%d, timestamp=%d", snapshot.Product, snapshot.RequestID, snapshot.Timestamp)
 		
 		// 更新恢复状态
 		if snapshot.RequestID > 0 {
 			if err := c.messageStore.UpdateRecoveryCompleted(snapshot.RequestID, snapshot.Product, snapshot.Timestamp); err != nil {
-				log.Printf("Failed to update recovery status: %v", err)
+				logger.Printf("Failed to update recovery status: %v", err)
 				if c.notifier != nil {
 					c.notifier.NotifyError("Recovery", fmt.Sprintf("Failed to update recovery status: %v", err))
 				}
 			} else {
-				log.Printf("Recovery request %d for product %d marked as completed", snapshot.RequestID, snapshot.Product)
+				logger.Printf("Recovery request %d for product %d marked as completed", snapshot.RequestID, snapshot.Product)
 				if c.notifier != nil {
 					c.notifier.NotifyRecoveryComplete(snapshot.Product, int64(snapshot.RequestID))
 				}
@@ -678,14 +678,14 @@ func (c *AMQPConsumer) handleSnapshotComplete(xmlContent string) {
 // fetchAndStoreFixture 获取并存储赛事的 Fixture 信息
 func (c *AMQPConsumer) fetchAndStoreFixture(eventID string) {
 	if c.fixtureService == nil {
-		log.Printf("[FixtureFetch] ⚠️  FixtureService not initialized")
+		logger.Printf("[FixtureFetch] ⚠️  FixtureService not initialized")
 		return
 	}
 	
 	// 获取 Fixture 信息
 	fixture, err := c.fixtureService.FetchFixture(eventID)
 	if err != nil {
-		log.Printf("[FixtureFetch] ❌ Failed to fetch fixture for %s: %v", eventID, err)
+		logger.Printf("[FixtureFetch] ❌ Failed to fetch fixture for %s: %v", eventID, err)
 		return
 	}
 	
@@ -694,10 +694,10 @@ func (c *AMQPConsumer) fetchAndStoreFixture(eventID string) {
 	
 	// 更新数据库
 	if err := c.messageStore.UpdateEventTeamInfo(eventID, homeID, homeName, awayID, awayName, sportID, sportName, status); err != nil {
-		log.Printf("[FixtureFetch] ❌ Failed to update team info for %s: %v", eventID, err)
+		logger.Printf("[FixtureFetch] ❌ Failed to update team info for %s: %v", eventID, err)
 		return
 	}
 	
-	log.Printf("[FixtureFetch] ✅ Updated team info for %s: %s vs %s (sport: %s, status: %s)", eventID, homeName, awayName, sportName, status)
+	logger.Printf("[FixtureFetch] ✅ Updated team info for %s: %s vs %s (sport: %s, status: %s)", eventID, homeName, awayName, sportName, status)
 }
 
