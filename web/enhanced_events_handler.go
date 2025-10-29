@@ -269,11 +269,11 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 		}
 		
 	// 解引用 HomeTeamName 和 AwayTeamName
-	homeTeamName := ""
+	var homeTeamName string
 	if event.HomeTeamName != nil {
 		homeTeamName = *event.HomeTeamName
 	}
-	awayTeamName := ""
+	var awayTeamName string
 	if event.AwayTeamName != nil {
 		awayTeamName = *event.AwayTeamName
 	}
