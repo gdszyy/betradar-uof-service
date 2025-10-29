@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gdszyy/betradar-uof-service/logger"
+	"uof-service/logger"
 )
 
 // MarketDescriptionsService 市场描述服务
