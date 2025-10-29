@@ -193,7 +193,7 @@ func (c *AMQPConsumer) Start() error {
 			if err := c.recoveryManager.TriggerFullRecovery(); err != nil {
 				logger.Errorf("Auto recovery failed: %v", err)
 			} else {
-				loglogger.Println("Auto recovery completed successfully")
+				logger.Println("Auto recovery completed successfully")
 			}
 		}()
 	}
