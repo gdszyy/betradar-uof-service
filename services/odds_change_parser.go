@@ -177,18 +177,38 @@ func (p *OddsChangeParser) storeOddsChangeData(
 	matchStatus, status, matchTime string,
 	homeTeamID, homeTeamName, awayTeamID, awayTeamName string,
 ) error {
+	// 将 sport_event_status.status 数字映射为状态名称
+	statusMap := map[string]string{
+		"0": "not_started",
+		"1": "live",
+		"2": "suspended",
+		"3": "ended",      // 比赛结束
+		"4": "closed",     // 结果确认
+		"5": "cancelled",
+		"6": "delayed",
+		"7": "interrupted",
+		"8": "postponed",
+		"9": "abandoned",
+	}
+	
+	statusName := ""
+	if name, ok := statusMap[status]; ok {
+		statusName = name
+	}
+	
 	// 更新 tracked_events 表 (不再使用 ld_matches)
 	query := `
 		INSERT INTO tracked_events (
-			event_id, home_score, away_score, match_status, match_time,
+			event_id, home_score, away_score, match_status, match_time, status,
 			home_team_id, away_team_id, home_team_name, away_team_name,
 			last_message_at, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		ON CONFLICT (event_id) DO UPDATE SET
 			home_score = COALESCE(EXCLUDED.home_score, tracked_events.home_score),
 			away_score = COALESCE(EXCLUDED.away_score, tracked_events.away_score),
 			match_status = COALESCE(NULLIF(EXCLUDED.match_status, ''), tracked_events.match_status),
 			match_time = COALESCE(NULLIF(EXCLUDED.match_time, ''), tracked_events.match_time),
+			status = COALESCE(NULLIF(EXCLUDED.status, ''), tracked_events.status),
 			home_team_id = COALESCE(NULLIF(EXCLUDED.home_team_id, ''), tracked_events.home_team_id),
 			away_team_id = COALESCE(NULLIF(EXCLUDED.away_team_id, ''), tracked_events.away_team_id),
 			home_team_name = COALESCE(NULLIF(EXCLUDED.home_team_name, ''), tracked_events.home_team_name),
@@ -214,7 +234,7 @@ func (p *OddsChangeParser) storeOddsChangeData(
 
 	_, err := p.db.Exec(
 		query,
-		eventID, t1Score, t2Score, finalStatus, matchTime,
+		eventID, t1Score, t2Score, finalStatus, matchTime, statusName,
 		homeTeamID, awayTeamID, homeTeamName, awayTeamName,
 		now, now, now,
 	)
