@@ -19,7 +19,6 @@ type MarketDescriptionsService struct {
 	markets     map[string]*MarketDescription
 	outcomes    map[string]map[string]*OutcomeDescription // marketID -> outcomeID -> outcome
 	mu          sync.RWMutex
-	logger      *logger.Logger
 	lastUpdated time.Time
 }
 
@@ -58,13 +57,12 @@ func NewMarketDescriptionsService(token string, apiBaseURL string) *MarketDescri
 		apiBaseURL: apiBaseURL,
 		markets:    make(map[string]*MarketDescription),
 		outcomes:   make(map[string]map[string]*OutcomeDescription),
-		logger:     logger.New(),
 	}
 }
 
 // Start 启动服务并加载市场描述
 func (s *MarketDescriptionsService) Start() error {
-	s.logger.Info("Starting Market Descriptions Service...")
+	logger.Println("[MarketDescService] Starting Market Descriptions Service...")
 	
 	// 首次加载
 	if err := s.loadMarketDescriptions(); err != nil {
@@ -81,7 +79,7 @@ func (s *MarketDescriptionsService) Start() error {
 func (s *MarketDescriptionsService) loadMarketDescriptions() error {
 	url := fmt.Sprintf("%s/v1/descriptions/en/markets.xml", s.apiBaseURL)
 	
-	s.logger.Info("Fetching market descriptions from: %s", url)
+	logger.Printf("[MarketDescService] Fetching market descriptions from: %s", url)
 	
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -138,7 +136,7 @@ func (s *MarketDescriptionsService) loadMarketDescriptions() error {
 	
 	s.lastUpdated = time.Now()
 	
-	s.logger.Info("Loaded %d market descriptions", len(s.markets))
+	logger.Printf("[MarketDescService] Loaded %d market descriptions", len(s.markets))
 	
 	return nil
 }
@@ -149,9 +147,9 @@ func (s *MarketDescriptionsService) refreshLoop() {
 	defer ticker.Stop()
 	
 	for range ticker.C {
-		s.logger.Info("Refreshing market descriptions...")
+		logger.Println("[MarketDescService] Refreshing market descriptions...")
 		if err := s.loadMarketDescriptions(); err != nil {
-			s.logger.Error("Failed to refresh market descriptions: %v", err)
+			logger.Errorf("[MarketDescService] Failed to refresh market descriptions: %v", err)
 		}
 	}
 }
