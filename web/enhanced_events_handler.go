@@ -268,18 +268,18 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 			event.AwayTeamIDMapped = s.srMapper.ExtractCompetitorIDFromURN(*event.AwayTeamID)
 		}
 		
-	// 解引用 HomeTeamName 和 AwayTeamName
-	var homeTeamName string
-	if event.HomeTeamName != nil {
-		homeTeamName = *event.HomeTeamName
-	}
-	var awayTeamName string
-	if event.AwayTeamName != nil {
-		awayTeamName = *event.AwayTeamName
-	}
-	
-	// 获取盘口信息 (按 producer 过滤)
-	markets, err := s.getEventMarketsWithProducer(eventID, producer, homeTeamName, awayTeamName)
+		// 解引用 HomeTeamName 和 AwayTeamName
+		localHomeTeamName := ""
+		if event.HomeTeamName != nil {
+			localHomeTeamName = *event.HomeTeamName
+		}
+		localAwayTeamName := ""
+		if event.AwayTeamName != nil {
+			localAwayTeamName = *event.AwayTeamName
+		}
+		
+		// 获取盘口信息 (按 producer 过滤)
+		markets, err := s.getEventMarketsWithProducer(eventID, producer, localHomeTeamName, localAwayTeamName)
 			if err != nil {
 				log.Printf("[API] Failed to get markets for %s: %v", event.EventID, err)
 				event.Markets = []MarketInfo{} // 空数组而不是 null
