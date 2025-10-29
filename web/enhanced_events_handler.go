@@ -268,8 +268,18 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 			event.AwayTeamIDMapped = s.srMapper.ExtractCompetitorIDFromURN(*event.AwayTeamID)
 		}
 		
-			// 获取盘口信息 (按 producer 过滤)
-			markets, err := s.getEventMarketsWithProducer(eventID, producer, event.HomeTeamName, event.AwayTeamName)
+	// 解引用 HomeTeamName 和 AwayTeamName
+	homeTeamName := ""
+	if event.HomeTeamName != nil {
+		homeTeamName = *event.HomeTeamName
+	}
+	awayTeamName := ""
+	if event.AwayTeamName != nil {
+		awayTeamName = *event.AwayTeamName
+	}
+	
+	// 获取盘口信息 (按 producer 过滤)
+	markets, err := s.getEventMarketsWithProducer(eventID, producer, homeTeamName, awayTeamName)
 			if err != nil {
 				log.Printf("[API] Failed to get markets for %s: %v", event.EventID, err)
 				event.Markets = []MarketInfo{} // 空数组而不是 null
@@ -308,7 +318,8 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 
 // getEventMarkets 获取赛事的盘口信息
 func (s *Server) getEventMarkets(eventID string) ([]MarketInfo, error) {
-	return s.getEventMarketsWithProducer(eventID, "")
+	// 传入空字符串作为默认值
+	return s.getEventMarketsWithProducer(eventID, "", "", "")
 }
 
 // getEventMarketsWithProducer 获取赛事的盘口信息 (按 producer 过滤)
