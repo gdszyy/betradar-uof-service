@@ -163,20 +163,32 @@ func (s *SubscriptionCleanupService) findEndedMatches(matches []BookedMatch) []B
 		isEnded := false
 		reason := ""
 		
-		// 方法1: 检查数据库中的 match_status (来自 odds_change 消息)
-		var matchStatus sql.NullString
-		query := `SELECT match_status FROM tracked_events WHERE event_id = $1`
-		err := s.db.QueryRow(query, match.ID).Scan(&matchStatus)
+		// 方法1: 检查是否有 bet_settlement 消息 (最可靠的判断)
+		var settlementCount int
+		query := `SELECT COUNT(*) FROM bet_settlements WHERE event_id = $1`
+		err := s.db.QueryRow(query, match.ID).Scan(&settlementCount)
 		
-		if err == nil && matchStatus.Valid {
-			// 使用映射器判断是否已结束
-			if s.mapper.IsMatchEnded(matchStatus.String) {
-				isEnded = true
-				reason = fmt.Sprintf("match_status=%s", matchStatus.String)
+		if err == nil && settlementCount > 0 {
+			isEnded = true
+			reason = fmt.Sprintf("bet_settlement (count=%d)", settlementCount)
+		}
+		
+		// 方法2: 检查数据库中的 match_status (来自 odds_change 消息)
+		if !isEnded {
+			var matchStatus sql.NullString
+			query = `SELECT match_status FROM tracked_events WHERE event_id = $1`
+			err = s.db.QueryRow(query, match.ID).Scan(&matchStatus)
+		
+			if err == nil && matchStatus.Valid {
+				// 使用映射器判断是否已结束
+				if s.mapper.IsMatchEnded(matchStatus.String) {
+					isEnded = true
+					reason = fmt.Sprintf("match_status=%s", matchStatus.String)
+				}
 			}
 		}
 		
-		// 方法2: 检查 tracked_events.status (来自 Betradar API)
+		// 方法3: 检查 tracked_events.status (来自 Betradar API)
 		// 如果 match_status 为空,使用这个作为备用判断
 		if !isEnded && match.Status != "" {
 			// Betradar API 的 status 值:
@@ -189,6 +201,21 @@ func (s *SubscriptionCleanupService) findEndedMatches(matches []BookedMatch) []B
 			   match.Status == "cancelled" || match.Status == "abandoned" {
 				isEnded = true
 				reason = fmt.Sprintf("api_status=%s", match.Status)
+			}
+		}
+		
+		// 方法4: 基于时间判断 (如果开始时间已过 6 小时，且状态仍然是 not_started)
+		if !isEnded && match.Scheduled != "" {
+			scheduledTime, err := time.Parse(time.RFC3339, match.Scheduled)
+			if err == nil {
+				now := time.Now()
+				hoursSinceScheduled := now.Sub(scheduledTime).Hours()
+				
+				// 如果开始时间已过 6 小时，且状态仍然是 not_started
+				if hoursSinceScheduled > 6 && match.Status == "not_started" {
+					isEnded = true
+					reason = fmt.Sprintf("timeout (%.1fh since scheduled)", hoursSinceScheduled)
+				}
 			}
 		}
 		
