@@ -9,7 +9,15 @@ import (
 
 // handleGetTableStats 获取表统计信息
 func (s *Server) handleGetTableStats(w http.ResponseWriter, r *http.Request) {
-	dataCleanup := services.NewDataCleanupService(s.db)
+	// 使用默认配置
+	cleanupConfig := services.CleanupConfig{
+		RetainDaysMessages: 7,
+		RetainDaysOdds:     7,
+		RetainDaysBets:     7,
+		RetainDaysLiveData: 3,
+		RetainDaysEvents:   30,
+	}
+	dataCleanup := services.NewDataCleanupService(s.db, cleanupConfig)
 	
 	// 获取表行数
 	rowCounts, err := dataCleanup.GetTableRowCounts()
@@ -61,7 +69,15 @@ func (s *Server) handleManualCleanup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	dataCleanup := services.NewDataCleanupService(s.db)
+	// 使用默认配置
+	cleanupConfig := services.CleanupConfig{
+		RetainDaysMessages: 7,
+		RetainDaysOdds:     7,
+		RetainDaysBets:     7,
+		RetainDaysLiveData: 3,
+		RetainDaysEvents:   30,
+	}
+	dataCleanup := services.NewDataCleanupService(s.db, cleanupConfig)
 	
 	// 执行清理
 	results, err := dataCleanup.ExecuteCleanup()

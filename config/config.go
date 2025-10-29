@@ -42,6 +42,17 @@ type Config struct {
 	
 	// 自动订阅配置
 	AutoBookingIntervalMinutes int // 自动订阅间隔(分钟)
+	
+	// 数据清理配置
+	CleanupRetainDaysMessages    int // uof_messages 保留天数
+	CleanupRetainDaysOdds        int // odds_changes, markets, odds 保留天数
+	CleanupRetainDaysBets        int // bet_stops, bet_settlements 保留天数
+	CleanupRetainDaysLiveData    int // ld_events, ld_lineups 保留天数
+	CleanupRetainDaysEvents      int // tracked_events, ld_matches 保留天数
+	
+	// Producer 监控配置
+	ProducerCheckIntervalSeconds int // 检查间隔（秒）
+	ProducerDownThresholdSeconds int // 下线阈值（秒）
 }
 
 func Load() *Config {
@@ -104,9 +115,20 @@ func Load() *Config {
 			TheSportsUsername: getEnv("THESPORTS_USERNAME", ""),
 			TheSportsSecret:   getEnv("THESPORTS_SECRET", ""),
 			
-			// 自动订阅配置
-			AutoBookingIntervalMinutes: getEnvInt("AUTO_BOOKING_INTERVAL_MINUTES", 30),
-		}
+		// 自动订阅配置
+		AutoBookingIntervalMinutes: getEnvInt("AUTO_BOOKING_INTERVAL_MINUTES", 30),
+		
+		// 数据清理配置
+		CleanupRetainDaysMessages:  getEnvInt("CLEANUP_RETAIN_DAYS_MESSAGES", 7),   // 原始消息默认保留 7 天
+		CleanupRetainDaysOdds:      getEnvInt("CLEANUP_RETAIN_DAYS_ODDS", 7),       // 赔率数据默认保留 7 天
+		CleanupRetainDaysBets:      getEnvInt("CLEANUP_RETAIN_DAYS_BETS", 7),       // 投注记录默认保留 7 天
+		CleanupRetainDaysLiveData:  getEnvInt("CLEANUP_RETAIN_DAYS_LIVEDATA", 3),   // Live Data 默认保留 3 天
+		CleanupRetainDaysEvents:    getEnvInt("CLEANUP_RETAIN_DAYS_EVENTS", 30),    // 赛事信息默认保留 30 天
+		
+		// Producer 监控配置
+		ProducerCheckIntervalSeconds: getEnvInt("PRODUCER_CHECK_INTERVAL_SECONDS", 60),   // 默认每 60 秒检查一次
+		ProducerDownThresholdSeconds: getEnvInt("PRODUCER_DOWN_THRESHOLD_SECONDS", 180), // 默认 180 秒（3分钟）不响应才告警
+	}
 }
 
 func getEnv(key, defaultValue string) string {

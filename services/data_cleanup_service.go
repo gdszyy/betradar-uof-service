@@ -8,7 +8,17 @@ import (
 
 // DataCleanupService 数据清理服务
 type DataCleanupService struct {
-	db *sql.DB
+	db     *sql.DB
+	config CleanupConfig
+}
+
+// CleanupConfig 清理配置
+type CleanupConfig struct {
+	RetainDaysMessages  int // uof_messages 保留天数
+	RetainDaysOdds      int // odds_changes, markets, odds 保留天数
+	RetainDaysBets      int // bet_stops, bet_settlements 保留天数
+	RetainDaysLiveData  int // ld_events, ld_lineups 保留天数
+	RetainDaysEvents    int // tracked_events, ld_matches 保留天数
 }
 
 // CleanupResult 清理结果
@@ -20,9 +30,10 @@ type CleanupResult struct {
 }
 
 // NewDataCleanupService 创建数据清理服务
-func NewDataCleanupService(db *sql.DB) *DataCleanupService {
+func NewDataCleanupService(db *sql.DB, config CleanupConfig) *DataCleanupService {
 	return &DataCleanupService{
-		db: db,
+		db:     db,
+		config: config,
 	}
 }
 
@@ -42,19 +53,19 @@ func NewDataCleanupService(db *sql.DB) *DataCleanupService {
 func (s *DataCleanupService) ExecuteCleanup() ([]CleanupResult, error) {
 	results := []CleanupResult{}
 
-	// 清理配置：表名 -> 保留天数
+	// 清理配置：表名 -> 保留天数（从配置读取）
 	cleanupConfig := map[string]int{
-		"uof_messages":    7,   // 原始消息（占用最大）
-		"odds_changes":    7,   // 赔率变化
-		"bet_stops":       7,   // 投注停止
-		"bet_settlements": 7,   // 投注结算
-		"odds_history":    7,   // 赔率历史
-		"markets":         7,   // 盘口数据
-		"odds":            7,   // 赔率详情
-		"ld_events":       3,   // Live Data 事件（更新频繁）
-		"ld_lineups":      7,   // 阵容信息
-		"tracked_events":  30,  // 赛事信息（保留更长时间）
-		"ld_matches":      30,  // 比赛信息（保留更长时间）
+		"uof_messages":    s.config.RetainDaysMessages,  // 原始消息（占用最大）
+		"odds_changes":    s.config.RetainDaysOdds,      // 赔率变化
+		"bet_stops":       s.config.RetainDaysBets,      // 投注停止
+		"bet_settlements": s.config.RetainDaysBets,      // 投注结算
+		"odds_history":    s.config.RetainDaysOdds,      // 赔率历史
+		"markets":         s.config.RetainDaysOdds,      // 盘口数据
+		"odds":            s.config.RetainDaysOdds,      // 赔率详情
+		"ld_events":       s.config.RetainDaysLiveData,  // Live Data 事件（更新频繁）
+		"ld_lineups":      s.config.RetainDaysLiveData,  // 阵容信息
+		"tracked_events":  s.config.RetainDaysEvents,    // 赛事信息（保留更长时间）
+		"ld_matches":      s.config.RetainDaysEvents,    // 比赛信息（保留更长时间）
 	}
 
 	// 按表清理数据

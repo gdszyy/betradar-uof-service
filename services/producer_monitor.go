@@ -9,30 +9,36 @@ import (
 
 // ProducerMonitor 监控 UOF Producer 健康状态
 type ProducerMonitor struct {
-	db       *sql.DB
-	notifier *LarkNotifier
-	ticker   *time.Ticker
-	done     chan bool
+	db                *sql.DB
+	notifier          *LarkNotifier
+	ticker            *time.Ticker
+	done              chan bool
+	checkInterval     time.Duration // 检查间隔
+	downThreshold     time.Duration // 下线阈值
+	alertedProducers  map[int]bool  // 已告警的 Producer
 }
 
 // NewProducerMonitor 创建 Producer 监控器
-func NewProducerMonitor(db *sql.DB, notifier *LarkNotifier) *ProducerMonitor {
+func NewProducerMonitor(db *sql.DB, notifier *LarkNotifier, checkIntervalSeconds, downThresholdSeconds int) *ProducerMonitor {
 	return &ProducerMonitor{
-		db:       db,
-		notifier: notifier,
-		done:     make(chan bool),
+		db:               db,
+		notifier:         notifier,
+		done:            make(chan bool),
+		checkInterval:    time.Duration(checkIntervalSeconds) * time.Second,
+		downThreshold:    time.Duration(downThresholdSeconds) * time.Second,
+		alertedProducers: make(map[int]bool),
 	}
 }
 
 // Start 启动监控
 func (pm *ProducerMonitor) Start() {
-	log.Println("⏳ Producer monitor will start in 30 seconds (waiting for alive messages)...")
+	log.Printf("⏳ Producer monitor will start in 60 seconds (waiting for alive messages)...")
 	
-	// 延迟 30 秒启动，等待 AMQP 连接并接收 alive 消息
-	time.Sleep(30 * time.Second)
+	// 延迟 60 秒启动，等待 AMQP 连接并接收 alive 消息
+	time.Sleep(60 * time.Second)
 	
-	pm.ticker = time.NewTicker(5 * time.Second)
-	log.Println("✅ Producer monitor started (checking every 5 seconds)")
+	pm.ticker = time.NewTicker(pm.checkInterval)
+	log.Printf("✅ Producer monitor started (checking every %v, threshold: %v)", pm.checkInterval, pm.downThreshold)
 	
 	go func() {
 		for {
@@ -84,14 +90,26 @@ func (pm *ProducerMonitor) checkProducers() {
 		// 转换为 time.Time (毫秒转秒)
 		lastAliveAt := time.Unix(lastAlive/1000, (lastAlive%1000)*1000000)
 		
-		// 检查是否超过 20 秒没有收到 alive 消息
+		// 检查是否超过阈值没有收到 alive 消息
 		timeSinceLastAlive := now.Sub(lastAliveAt)
-		if timeSinceLastAlive > 20*time.Second {
-			log.Printf("[ProducerMonitor] ⚠️  Producer %d is DOWN (last alive: %v ago)", 
-				producerID, timeSinceLastAlive.Round(time.Second))
-			
-			// 发送告警通知
-			pm.sendProducerDownAlert(producerID, timeSinceLastAlive)
+		if timeSinceLastAlive > pm.downThreshold {
+			// 只在首次检测到下线时发送告警
+			if !pm.alertedProducers[producerID] {
+				log.Printf("[ProducerMonitor] ⚠️  Producer %d is DOWN (last alive: %v ago)", 
+					producerID, timeSinceLastAlive.Round(time.Second))
+				
+				// 发送告警通知
+				pm.sendProducerDownAlert(producerID, timeSinceLastAlive)
+				
+				// 标记为已告警
+				pm.alertedProducers[producerID] = true
+			}
+		} else {
+			// 如果恢复正常，清除告警标记
+			if pm.alertedProducers[producerID] {
+				log.Printf("[ProducerMonitor] ✅ Producer %d is back online", producerID)
+				delete(pm.alertedProducers, producerID)
+			}
 		}
 	}
 }
@@ -138,9 +156,9 @@ func (pm *ProducerMonitor) GetProducerStatus() ([]ProducerStatus, error) {
 		// 转换为 time.Time (毫秒转秒)
 		lastAliveAt := time.Unix(lastAlive/1000, (lastAlive%1000)*1000000)
 		
-		status.LastAliveAt = lastAliveAt.Format(time.RFC3339)
-		status.SecondsSinceLastAlive = int(now.Sub(lastAliveAt).Seconds())
-		status.IsHealthy = status.SecondsSinceLastAlive <= 20
+	status.LastAliveAt = lastAliveAt.Format(time.RFC3339)
+	status.SecondsSinceLastAlive = int(now.Sub(lastAliveAt).Seconds())
+	status.IsHealthy = time.Duration(status.SecondsSinceLastAlive)*time.Second <= pm.downThreshold
 		
 		statuses = append(statuses, status)
 	}

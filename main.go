@@ -45,7 +45,7 @@ func main() {
 	messageStore := services.NewMessageStore(db)
 	
 	// 创建 Producer 监控服务
-	producerMonitor := services.NewProducerMonitor(db, larkNotifier)
+	producerMonitor := services.NewProducerMonitor(db, larkNotifier, cfg.ProducerCheckIntervalSeconds, cfg.ProducerDownThresholdSeconds)
 	go producerMonitor.Start()
 
 	// 创建WebSocket Hub
@@ -121,7 +121,14 @@ func main() {
 	logger.Println("Subscription cleanup started (hourly)")
 	
 	// 启动数据清理服务 (每天凌晨 2 点执行一次)
-	dataCleanup := services.NewDataCleanupService(db)
+	cleanupConfig := services.CleanupConfig{
+		RetainDaysMessages: cfg.CleanupRetainDaysMessages,
+		RetainDaysOdds:     cfg.CleanupRetainDaysOdds,
+		RetainDaysBets:     cfg.CleanupRetainDaysBets,
+		RetainDaysLiveData: cfg.CleanupRetainDaysLiveData,
+		RetainDaysEvents:   cfg.CleanupRetainDaysEvents,
+	}
+	dataCleanup := services.NewDataCleanupService(db, cleanupConfig)
 	
 	// 定期执行数据清理
 	go func() {

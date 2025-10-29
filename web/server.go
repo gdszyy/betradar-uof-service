@@ -54,7 +54,7 @@ func NewServer(cfg *config.Config, db *sql.DB, hub *Hub, larkNotifier *services.
 		replayClient:    replayClient,
 		larkNotifier:    larkNotifier,
 		autoBooking:     services.NewAutoBookingService(cfg, db, larkNotifier),
-		producerMonitor: services.NewProducerMonitor(db, larkNotifier),
+		producerMonitor: services.NewProducerMonitor(db, larkNotifier, cfg.ProducerCheckIntervalSeconds, cfg.ProducerDownThresholdSeconds),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
