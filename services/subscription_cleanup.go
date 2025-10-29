@@ -30,8 +30,8 @@ func NewSubscriptionCleanupService(cfg *config.Config, db *sql.DB, notifier *Lar
 	}
 }
 
-// CleanupResult 清理结果
-type CleanupResult struct {
+// SubscriptionCleanupResult 订阅清理结果
+type SubscriptionCleanupResult struct {
 	TotalBooked    int
 	EndedMatches   int
 	Unbooked       int
@@ -41,10 +41,10 @@ type CleanupResult struct {
 }
 
 // ExecuteCleanup 执行清理
-func (s *SubscriptionCleanupService) ExecuteCleanup() (*CleanupResult, error) {
+func (s *SubscriptionCleanupService) ExecuteCleanup() (*SubscriptionCleanupResult, error) {
 	log.Println("[SubscriptionCleanup] 🧹 Starting subscription cleanup...")
 	
-	result := &CleanupResult{
+	result := &SubscriptionCleanupResult{
 		UnbookedList: []string{},
 		FailedList:   make(map[string]string),
 	}
@@ -240,7 +240,7 @@ func (s *SubscriptionCleanupService) unbookMatch(matchID string) error {
 }
 
 // sendCleanupReport 发送清理报告
-func (s *SubscriptionCleanupService) sendCleanupReport(result *CleanupResult) {
+func (s *SubscriptionCleanupService) sendCleanupReport(result *SubscriptionCleanupResult) {
 	if s.larkNotifier == nil {
 		return
 	}
