@@ -419,7 +419,16 @@ func (s *Server) getMarketOutcomes(marketPK int) ([]OutcomeInfo, error) {
 
 // getMarketName 获取市场名称
 func (s *Server) getMarketName(marketID string) string {
-	// 常见市场的映射
+	// 优先使用 Market Descriptions Service
+	if s.marketDescService != nil {
+		name := s.marketDescService.GetMarketName(marketID, "")
+		// 如果不是默认的 "Market X" 格式,说明找到了
+		if name != "Market "+marketID {
+			return name
+		}
+	}
+	
+	// Fallback: 常见市场的硬编码映射
 	marketNames := map[string]string{
 		"1":   "1X2",
 		"10":  "Double Chance",
@@ -447,9 +456,9 @@ func (s *Server) getMarketName(marketID string) string {
 	return "Market " + marketID
 }
 
-// getOutcomeName 获取结果名称 (简化版)
+// getOutcomeName 获取结果名称
 func (s *Server) getOutcomeName(outcomeID string) string {
-	// 常见结果的映射
+	// Fallback: 常见结果的硬编码映射
 	outcomeNames := map[string]string{
 		"1":  "Home",
 		"2":  "Away",

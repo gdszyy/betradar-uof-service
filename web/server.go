@@ -30,6 +30,7 @@ type Server struct {
 	autoBooking         *services.AutoBookingService
 	srMapper            *services.SRMapper
 	producerMonitor     *services.ProducerMonitor
+	marketDescService   *services.MarketDescriptionsService
 	httpServer          *http.Server
 	upgrader            websocket.Upgrader
 }
@@ -52,9 +53,10 @@ func NewServer(cfg *config.Config, db *sql.DB, hub *Hub, larkNotifier *services.
 		recoveryManager: services.NewRecoveryManager(cfg, services.NewMessageStore(db)),
 		srMapper:        services.NewSRMapper(),
 		replayClient:    replayClient,
-		larkNotifier:    larkNotifier,
-		autoBooking:     services.NewAutoBookingService(cfg, db, larkNotifier),
-		producerMonitor: services.NewProducerMonitor(db, larkNotifier, cfg.ProducerCheckIntervalSeconds, cfg.ProducerDownThresholdSeconds),
+		larkNotifier:      larkNotifier,
+		autoBooking:       services.NewAutoBookingService(cfg, db, larkNotifier),
+		producerMonitor:   services.NewProducerMonitor(db, larkNotifier, cfg.ProducerCheckIntervalSeconds, cfg.ProducerDownThresholdSeconds),
+		marketDescService: services.NewMarketDescriptionsService(cfg.AccessToken, cfg.APIBaseURL),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -66,6 +68,14 @@ func NewServer(cfg *config.Config, db *sql.DB, hub *Hub, larkNotifier *services.
 }
 
 func (s *Server) Start() error {
+	// 启动 Market Descriptions Service
+	if err := s.marketDescService.Start(); err != nil {
+		log.Printf("[Server] ⚠️  Failed to start Market Descriptions Service: %v", err)
+		log.Println("[Server] Continuing with fallback market names...")
+	} else {
+		log.Printf("[Server] ✅ Market Descriptions Service started with %d markets", s.marketDescService.GetMarketCount())
+	}
+	
 	router := mux.NewRouter()
 
 	// API路由
