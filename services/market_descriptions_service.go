@@ -259,11 +259,5 @@ func replaceSpecifiers(template string, ctx ReplacementContext) string {
 	// TODO: 更多复杂的替换逻辑 (例如 {!setnr}, {+hcp}, {-hcp})
 	
 	return result
-}// TODO: 实现更复杂的模板替换逻辑
-	// - {!X}: 序数形式
-	// - {+X}, {-X}: 带符号的数字
-	// - {$competitor1}, {$competitor2}: 队伍名称
-	
-	return result
 }
 
