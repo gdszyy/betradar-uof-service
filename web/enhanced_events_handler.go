@@ -81,6 +81,10 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 	subscribed := r.URL.Query().Get("subscribed")
 	sportID := r.URL.Query().Get("sport_id")
 	search := r.URL.Query().Get("search")
+	producer := r.URL.Query().Get("producer")
+	isLive := r.URL.Query().Get("is_live")
+	isEnded := r.URL.Query().Get("is_ended")
+	hasMarkets := r.URL.Query().Get("has_markets")
 	limit := r.URL.Query().Get("limit")
 	
 	if limit == "" {
@@ -115,6 +119,23 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 			searchPattern := "%" + search + "%"
 			whereClauses = append(whereClauses, "(te.home_team_name ILIKE $"+fmt.Sprintf("%d", len(args)+1)+" OR te.away_team_name ILIKE $"+fmt.Sprintf("%d", len(args)+2)+")")
 			args = append(args, searchPattern, searchPattern)
+		}
+		
+		// 添加 is_ended 过滤 (排除已结束的比赛)
+		if isEnded != "" {
+			if isEnded == "false" {
+				// 排除已结束的比赛 (status 不是 ended, closed, cancelled, abandoned)
+				whereClauses = append(whereClauses, "te.status NOT IN ('ended', 'closed', 'cancelled', 'abandoned')")
+			} else if isEnded == "true" {
+				// 只返回已结束的比赛
+				whereClauses = append(whereClauses, "te.status IN ('ended', 'closed', 'cancelled', 'abandoned')")
+			}
+		}
+		
+		// 添加 is_live 过滤
+		if isLive == "true" {
+			// 只返回 live 的比赛 (status = 'live')
+			whereClauses = append(whereClauses, "te.status = 'live'")
 		}
 		
 		// 构建 WHERE 子句
@@ -244,19 +265,24 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 			event.AwayTeamIDMapped = s.srMapper.ExtractCompetitorIDFromURN(*event.AwayTeamID)
 		}
 		
-		// 获取盘口信息
-		markets, err := s.getEventMarkets(event.EventID)
-		if err != nil {
-			log.Printf("[API] Failed to get markets for %s: %v", event.EventID, err)
-			event.Markets = []MarketInfo{} // 空数组而不是 null
-		} else {
-			// 确保不为 nil，即使没有 markets 也返回空数组
-			if markets == nil {
-				event.Markets = []MarketInfo{}
+			// 获取盘口信息 (按 producer 过滤)
+			markets, err := s.getEventMarketsWithProducer(event.EventID, producer)
+			if err != nil {
+				log.Printf("[API] Failed to get markets for %s: %v", event.EventID, err)
+				event.Markets = []MarketInfo{} // 空数组而不是 null
 			} else {
-				event.Markets = markets
+				// 确保不为 nil，即使没有 markets 也返回空数组
+				if markets == nil {
+					event.Markets = []MarketInfo{}
+				} else {
+					event.Markets = markets
+				}
 			}
-		}
+			
+			// 如果 has_markets=true，过滤掉没有 markets 的比赛
+			if hasMarkets == "true" && len(event.Markets) == 0 {
+				continue
+			}
 		
 		events = append(events, event)
 	}
@@ -279,15 +305,29 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 
 // getEventMarkets 获取赛事的盘口信息
 func (s *Server) getEventMarkets(eventID string) ([]MarketInfo, error) {
+	return s.getEventMarketsWithProducer(eventID, "")
+}
+
+// getEventMarketsWithProducer 获取赛事的盘口信息 (按 producer 过滤)
+func (s *Server) getEventMarketsWithProducer(eventID string, producer string) ([]MarketInfo, error) {
 	query := `
 		SELECT DISTINCT ON (market_id, specifiers)
 			id, market_id, specifiers, status, producer_id, updated_at
 		FROM markets
 		WHERE event_id = $1
-		ORDER BY market_id, specifiers, updated_at DESC
 	`
 	
-	rows, err := s.db.Query(query, eventID)
+	args := []interface{}{eventID}
+	
+	// 添加 producer 过滤
+	if producer != "" {
+		query += " AND producer_id = $2"
+		args = append(args, producer)
+	}
+	
+	query += " ORDER BY market_id, specifiers, updated_at DESC"
+	
+	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
