@@ -397,6 +397,15 @@ func (c *AMQPConsumer) handleOddsChange(eventID string, productID *int, xmlConte
 	// 更新跟踪的赛事
 	c.messageStore.UpdateTrackedEvent(eventID)
 	
+	// 如果是 Producer 1 的 odds_change，自动将该比赛标记为已订阅
+	if *productID == 1 {
+		if err := c.messageStore.SetEventSubscribed(eventID, true); err != nil {
+			logger.Errorf("[OddsChange] Failed to set event %s as subscribed: %v", eventID, err)
+		} else {
+			logger.Printf("[OddsChange] ✅ Event %s marked as subscribed (Producer 1)", eventID)
+		}
+	}
+	
 	// 检查是否有队伍信息，如果没有则自动获取
 	hasTeamInfo, err := c.messageStore.HasTeamInfo(eventID)
 	if err != nil {

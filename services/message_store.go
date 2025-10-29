@@ -383,3 +383,16 @@ func (s *MessageStore) GetRecoveryStatus(limit int) ([]map[string]interface{}, e
 	return statuses, nil
 }
 
+
+// SetEventSubscribed 设置赛事的订阅状态
+func (s *MessageStore) SetEventSubscribed(eventID string, subscribed bool) error {
+	query := `
+		UPDATE tracked_events
+		SET subscribed = $2, updated_at = $3
+		WHERE event_id = $1
+	`
+	
+	_, err := s.db.Exec(query, eventID, subscribed, time.Now())
+	return err
+}
+
