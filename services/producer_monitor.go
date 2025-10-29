@@ -3,7 +3,6 @@ package services
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"time"
 )
 
@@ -32,13 +31,13 @@ func NewProducerMonitor(db *sql.DB, notifier *LarkNotifier, checkIntervalSeconds
 
 // Start 启动监控
 func (pm *ProducerMonitor) Start() {
-	log.Printf("⏳ Producer monitor will start in 60 seconds (waiting for alive messages)...")
+	logger.Printf("⏳ Producer monitor will start in 60 seconds (waiting for alive messages)...")
 	
 	// 延迟 60 秒启动，等待 AMQP 连接并接收 alive 消息
 	time.Sleep(60 * time.Second)
 	
 	pm.ticker = time.NewTicker(pm.checkInterval)
-	log.Printf("✅ Producer monitor started (checking every %v, threshold: %v)", pm.checkInterval, pm.downThreshold)
+	logger.Printf("✅ Producer monitor started (checking every %v, threshold: %v)", pm.checkInterval, pm.downThreshold)
 	
 	go func() {
 		for {
@@ -58,7 +57,7 @@ func (pm *ProducerMonitor) Stop() {
 		pm.ticker.Stop()
 	}
 	close(pm.done)
-	log.Println("Producer monitor stopped")
+	logger.Println("Producer monitor stopped")
 }
 
 // checkProducers 检查所有 Producer 的健康状态
@@ -71,7 +70,7 @@ func (pm *ProducerMonitor) checkProducers() {
 	
 	rows, err := pm.db.Query(query)
 	if err != nil {
-		log.Printf("[ProducerMonitor] Failed to query producer status: %v", err)
+		logger.Printf("[ProducerMonitor] Failed to query producer status: %v", err)
 		return
 	}
 	defer rows.Close()
@@ -83,7 +82,7 @@ func (pm *ProducerMonitor) checkProducers() {
 		var subscribed int
 		
 		if err := rows.Scan(&producerID, &lastAlive, &subscribed); err != nil {
-			log.Printf("[ProducerMonitor] Failed to scan producer status: %v", err)
+			logger.Printf("[ProducerMonitor] Failed to scan producer status: %v", err)
 			continue
 		}
 		
@@ -95,7 +94,7 @@ func (pm *ProducerMonitor) checkProducers() {
 		if timeSinceLastAlive > pm.downThreshold {
 			// 只在首次检测到下线时发送告警
 			if !pm.alertedProducers[producerID] {
-				log.Printf("[ProducerMonitor] ⚠️  Producer %d is DOWN (last alive: %v ago)", 
+				logger.Printf("[ProducerMonitor] ⚠️  Producer %d is DOWN (last alive: %v ago)", 
 					producerID, timeSinceLastAlive.Round(time.Second))
 				
 				// 发送告警通知
@@ -107,7 +106,7 @@ func (pm *ProducerMonitor) checkProducers() {
 		} else {
 			// 如果恢复正常，清除告警标记
 			if pm.alertedProducers[producerID] {
-				log.Printf("[ProducerMonitor] ✅ Producer %d is back online", producerID)
+				logger.Printf("[ProducerMonitor] ✅ Producer %d is back online", producerID)
 				delete(pm.alertedProducers, producerID)
 			}
 		}

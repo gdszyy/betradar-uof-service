@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
 
@@ -33,7 +32,7 @@ func NewRecoveryManager(cfg *config.Config, store *MessageStore) *RecoveryManage
 
 // TriggerFullRecovery 触发全量恢复
 func (r *RecoveryManager) TriggerFullRecovery() error {
-	log.Println("Starting full recovery for all configured products...")
+	logger.Println("Starting full recovery for all configured products...")
 	
 	var errors []error
 	var rateLimitErrors int
@@ -41,14 +40,14 @@ func (r *RecoveryManager) TriggerFullRecovery() error {
 	for _, product := range r.config.RecoveryProducts {
 		if err := r.triggerProductRecovery(product); err != nil {
 			if bytes.Contains([]byte(err.Error()), []byte("rate limit exceeded")) {
-				log.Printf("⚠️  Recovery for product %s: rate limited, retry scheduled", product)
+				logger.Printf("⚠️  Recovery for product %s: rate limited, retry scheduled", product)
 				rateLimitErrors++
 			} else {
-				log.Printf("❌ Failed to trigger recovery for product %s: %v", product, err)
+				logger.Printf("❌ Failed to trigger recovery for product %s: %v", product, err)
 				errors = append(errors, err)
 			}
 		} else {
-			log.Printf("✅ Successfully triggered recovery for product: %s", product)
+			logger.Printf("✅ Successfully triggered recovery for product: %s", product)
 		}
 	}
 	
@@ -57,10 +56,10 @@ func (r *RecoveryManager) TriggerFullRecovery() error {
 	}
 	
 	if rateLimitErrors > 0 {
-		log.Printf("ℹ️  %d product(s) rate limited, retries scheduled in background", rateLimitErrors)
+		logger.Printf("ℹ️  %d product(s) rate limited, retries scheduled in background", rateLimitErrors)
 	}
 	
-	log.Println("Full recovery triggered successfully for all products")
+	logger.Println("Full recovery triggered successfully for all products")
 	return nil
 }
 
@@ -80,12 +79,12 @@ func (r *RecoveryManager) triggerProductRecovery(product string) error {
 		// 调用频率限制 https://docs.sportradar.com/uof/api-and-structure/api/odds-recovery/restrictions-for-odds-recovery
 		hours := r.config.RecoveryAfterHours
 		if hours > 10 {
-			log.Printf("WARNING: RECOVERY_AFTER_HOURS=%d exceeds Betradar limit (10 hours), using 10 hours instead", hours)
+			logger.Printf("WARNING: RECOVERY_AFTER_HOURS=%d exceeds Betradar limit (10 hours), using 10 hours instead", hours)
 			hours = 10
 		}
 		afterTimestamp := time.Now().Add(-time.Duration(hours) * time.Hour).UnixMilli()
 		url = fmt.Sprintf("%s?after=%d&request_id=%d&node_id=%d", url, afterTimestamp, requestID, r.nodeID)
-		log.Printf("Recovery for %s: requesting data after %s (%d hours ago) [request_id=%d, node_id=%d]", 
+		logger.Printf("Recovery for %s: requesting data after %s (%d hours ago) [request_id=%d, node_id=%d]", 
 			product, 
 			time.UnixMilli(afterTimestamp).Format(time.RFC3339),
 			hours,
@@ -95,9 +94,9 @@ func (r *RecoveryManager) triggerProductRecovery(product string) error {
 		// 即使不使用after参数，也添加request_id和node_id用于追踪
 		url = fmt.Sprintf("%s?request_id=%d&node_id=%d", url, requestID, r.nodeID)
 		if product == "liveodds" {
-			log.Printf("Recovery for %s: using default range (no 'after' parameter) [request_id=%d, node_id=%d]", product, requestID, r.nodeID)
+			logger.Printf("Recovery for %s: using default range (no 'after' parameter) [request_id=%d, node_id=%d]", product, requestID, r.nodeID)
 		} else {
-			log.Printf("Recovery for %s: using default range (Betradar default) [request_id=%d, node_id=%d]", product, requestID, r.nodeID)
+			logger.Printf("Recovery for %s: using default range (Betradar default) [request_id=%d, node_id=%d]", product, requestID, r.nodeID)
 		}
 	}
 	
@@ -110,7 +109,7 @@ func (r *RecoveryManager) triggerProductRecovery(product string) error {
 	// 添加认证头
 	req.Header.Set("x-access-token", r.config.AccessToken)
 	
-	log.Printf("Sending recovery request to: %s", url)
+	logger.Printf("Sending recovery request to: %s", url)
 	
 	// 发送请求
 	resp, err := r.client.Do(req)
@@ -129,8 +128,8 @@ func (r *RecoveryManager) triggerProductRecovery(product string) error {
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
 		// 检查是否是频率限制错误
 		if resp.StatusCode == http.StatusForbidden && bytes.Contains(body, []byte("Too many requests")) {
-			log.Printf("⚠️  Recovery rate limit exceeded for product %s", product)
-			log.Printf("   Will schedule retry in background...")
+			logger.Printf("⚠️  Recovery rate limit exceeded for product %s", product)
+			logger.Printf("   Will schedule retry in background...")
 			
 			// 异步重试，不阻塞启动
 			go r.scheduleRecoveryRetry(product, requestID, 15*time.Minute)
@@ -141,7 +140,7 @@ func (r *RecoveryManager) triggerProductRecovery(product string) error {
 		return fmt.Errorf("recovery request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 	
-	log.Printf("Recovery response for %s (status %d): %s", product, resp.StatusCode, string(body))
+	logger.Printf("Recovery response for %s (status %d): %s", product, resp.StatusCode, string(body))
 	
 	// 保存恢复初始化状态
 	if r.messageStore != nil {
@@ -152,7 +151,7 @@ func (r *RecoveryManager) triggerProductRecovery(product string) error {
 		}
 		
 		if err := r.messageStore.SaveRecoveryInitiated(requestID, productID, r.nodeID); err != nil {
-			log.Printf("Warning: Failed to save recovery status: %v", err)
+			logger.Printf("Warning: Failed to save recovery status: %v", err)
 		}
 	}
 	
@@ -171,7 +170,7 @@ func (r *RecoveryManager) TriggerEventRecovery(product, eventID string) error {
 	
 	req.Header.Set("x-access-token", r.config.AccessToken)
 	
-	log.Printf("Sending event recovery request to: %s", url)
+	logger.Printf("Sending event recovery request to: %s", url)
 	
 	resp, err := r.client.Do(req)
 	if err != nil {
@@ -188,7 +187,7 @@ func (r *RecoveryManager) TriggerEventRecovery(product, eventID string) error {
 		return fmt.Errorf("event recovery failed with status %d: %s", resp.StatusCode, string(body))
 	}
 	
-	log.Printf("Event recovery response (status %d): %s", resp.StatusCode, string(body))
+	logger.Printf("Event recovery response (status %d): %s", resp.StatusCode, string(body))
 	
 	return nil
 }
@@ -205,7 +204,7 @@ func (r *RecoveryManager) TriggerStatefulMessagesRecovery(product, eventID strin
 	
 	req.Header.Set("x-access-token", r.config.AccessToken)
 	
-	log.Printf("Sending stateful messages recovery request to: %s", url)
+	logger.Printf("Sending stateful messages recovery request to: %s", url)
 	
 	resp, err := r.client.Do(req)
 	if err != nil {
@@ -222,7 +221,7 @@ func (r *RecoveryManager) TriggerStatefulMessagesRecovery(product, eventID strin
 		return fmt.Errorf("stateful messages recovery failed with status %d: %s", resp.StatusCode, string(body))
 	}
 	
-	log.Printf("Stateful messages recovery response (status %d): %s", resp.StatusCode, string(body))
+	logger.Printf("Stateful messages recovery response (status %d): %s", resp.StatusCode, string(body))
 	
 	return nil
 }
@@ -231,23 +230,23 @@ func (r *RecoveryManager) TriggerStatefulMessagesRecovery(product, eventID strin
 
 // scheduleRecoveryRetry 计划在指定延迟后重试恢复
 func (r *RecoveryManager) scheduleRecoveryRetry(product string, requestID int, delay time.Duration) {
-	log.Printf("📅 Scheduling recovery retry for product %s in %v", product, delay)
+	logger.Printf("📅 Scheduling recovery retry for product %s in %v", product, delay)
 	
 	time.Sleep(delay)
 	
-	log.Printf("🔄 Retrying recovery for product %s (after rate limit delay)", product)
+	logger.Printf("🔄 Retrying recovery for product %s (after rate limit delay)", product)
 	
 	if err := r.triggerProductRecovery(product); err != nil {
 		// 如果再次失败，检查是否还是频率限制
 		if bytes.Contains([]byte(err.Error()), []byte("rate limit exceeded")) {
 			// 如果还是频率限制，再等更长时间重试
-			log.Printf("⚠️  Recovery retry still rate limited, will try again in 30 minutes")
+			logger.Printf("⚠️  Recovery retry still rate limited, will try again in 30 minutes")
 			go r.scheduleRecoveryRetry(product, requestID, 30*time.Minute)
 		} else {
-			log.Printf("❌ Recovery retry failed for product %s: %v", product, err)
+			logger.Printf("❌ Recovery retry failed for product %s: %v", product, err)
 		}
 	} else {
-		log.Printf("✅ Recovery retry successful for product %s", product)
+		logger.Printf("✅ Recovery retry successful for product %s", product)
 	}
 }
 

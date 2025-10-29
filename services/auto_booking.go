@@ -6,7 +6,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
 	"uof-service/config"
@@ -38,8 +37,8 @@ func (s *AutoBookingService) BookMatch(matchID string) error {
 	// API: POST /liveodds/booking-calendar/events/{id}/book
 	url := fmt.Sprintf("%s/liveodds/booking-calendar/events/%s/book", s.config.APIBaseURL, matchID)
 	
-	log.Printf("[AutoBooking] 📝 Booking match: %s", matchID)
-	log.Printf("[AutoBooking] 📤 API URL: %s", url)
+	logger.Printf("[AutoBooking] 📝 Booking match: %s", matchID)
+	logger.Printf("[AutoBooking] 📤 API URL: %s", url)
 	
 	req, err := http.NewRequest("POST", url, nil)
 	if err != nil {
@@ -61,8 +60,8 @@ func (s *AutoBookingService) BookMatch(matchID string) error {
 		return fmt.Errorf("booking failed with status %d: %s", resp.StatusCode, string(body))
 	}
 	
-	log.Printf("[AutoBooking] ✅ Match booked successfully: %s", matchID)
-	log.Printf("[AutoBooking] Response: %s", string(body))
+	logger.Printf("[AutoBooking] ✅ Match booked successfully: %s", matchID)
+	logger.Printf("[AutoBooking] Response: %s", string(body))
 	
 	// 更新数据库中的订阅状态
 	if s.db != nil {
@@ -71,7 +70,7 @@ func (s *AutoBookingService) BookMatch(matchID string) error {
 			matchID,
 		)
 		if err != nil {
-			log.Printf("[AutoBooking] ⚠️  Failed to update subscribed status: %v", err)
+			logger.Printf("[AutoBooking] ⚠️  Failed to update subscribed status: %v", err)
 		}
 	}
 	
@@ -80,7 +79,7 @@ func (s *AutoBookingService) BookMatch(matchID string) error {
 
 // BookAllBookableMatches 查询并自动订阅所有可订阅的比赛
 func (s *AutoBookingService) BookAllBookableMatches() (int, int, error) {
-		log.Println("[AutoBooking] 🔍 Querying live schedule for bookable matches...")
+		logger.Println("[AutoBooking] 🔍 Querying live schedule for bookable matches...")
 	
 	// Subscription manager removed - cleanup handled elsewhere
 	
@@ -125,7 +124,7 @@ func (s *AutoBookingService) BookAllBookableMatches() (int, int, error) {
 		return 0, 0, fmt.Errorf("failed to parse XML: %w", err)
 	}
 	
-	log.Printf("[AutoBooking] 📊 Found %d live matches", len(schedule.SportEvents))
+	logger.Printf("[AutoBooking] 📊 Found %d live matches", len(schedule.SportEvents))
 	
 	// 统计和订阅
 	bookableCount := 0
@@ -141,19 +140,19 @@ func (s *AutoBookingService) BookAllBookableMatches() (int, int, error) {
 		}
 	}
 	
-	log.Printf("[AutoBooking] 🎯 Found %d bookable matches", bookableCount)
+	logger.Printf("[AutoBooking] 🎯 Found %d bookable matches", bookableCount)
 	
 	if bookableCount == 0 {
-		log.Println("[AutoBooking] ℹ️  No bookable matches found")
+		logger.Println("[AutoBooking] ℹ️  No bookable matches found")
 		return 0, 0, nil
 	}
 	
-	log.Printf("[AutoBooking] 🚀 Auto-booking enabled: will subscribe all %d bookable matches", bookableCount)
+	logger.Printf("[AutoBooking] 🚀 Auto-booking enabled: will subscribe all %d bookable matches", bookableCount)
 	
 	// 订阅所有 bookable 比赛
 	for _, matchID := range bookableMatches {
 		if err := s.BookMatch(matchID); err != nil {
-			log.Printf("[AutoBooking] ❌ Failed to book %s: %v", matchID, err)
+			logger.Printf("[AutoBooking] ❌ Failed to book %s: %v", matchID, err)
 			failedCount++
 		} else {
 			successCount++
@@ -163,7 +162,7 @@ func (s *AutoBookingService) BookAllBookableMatches() (int, int, error) {
 		time.Sleep(500 * time.Millisecond)
 	}
 	
-	log.Printf("[AutoBooking] 📈 Booking summary: %d success, %d failed out of %d bookable", 
+	logger.Printf("[AutoBooking] 📈 Booking summary: %d success, %d failed out of %d bookable", 
 		successCount, failedCount, bookableCount)
 	
 	// 发送飞书通知

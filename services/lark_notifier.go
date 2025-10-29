@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 )
@@ -20,9 +19,9 @@ type LarkNotifier struct {
 func NewLarkNotifier(webhookURL string) *LarkNotifier {
 	enabled := webhookURL != ""
 	if enabled {
-		log.Printf("[LarkNotifier] Initialized with webhook")
+		logger.Printf("[LarkNotifier] Initialized with webhook")
 	} else {
-		log.Printf("[LarkNotifier] Disabled (no webhook URL)")
+		logger.Printf("[LarkNotifier] Disabled (no webhook URL)")
 	}
 	
 	return &LarkNotifier{

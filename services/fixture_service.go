@@ -4,7 +4,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
 )
@@ -22,7 +21,7 @@ func NewFixtureService(apiToken, apiBaseURL string) *FixtureService {
 	if apiBaseURL == "" {
 		apiBaseURL = "https://global.api.betradar.com/v1"
 	}
-	log.Printf("[FixtureService] Using API: %s", apiBaseURL)
+	logger.Printf("[FixtureService] Using API: %s", apiBaseURL)
 	return &FixtureService{
 		apiToken: apiToken,
 		baseURL:  apiBaseURL,
@@ -74,7 +73,7 @@ func (s *FixtureService) FetchFixture(eventID string) (*FixtureData, error) {
 	url := fmt.Sprintf("%s/sports/en/sport_events/%s/fixture.xml",
 		s.baseURL, eventID)
 	
-	log.Printf("[FixtureService] Fetching fixture for event: %s", eventID)
+	logger.Printf("[FixtureService] Fetching fixture for event: %s", eventID)
 	
 	// 创建请求
 	req, err := http.NewRequest("GET", url, nil)
@@ -112,11 +111,11 @@ func (s *FixtureService) FetchFixture(eventID string) (*FixtureData, error) {
 		if len(preview) > 500 {
 			preview = preview[:500] + "..."
 		}
-		log.Printf("[FixtureService] ⚠️  XML parse error. Response preview: %s", preview)
+		logger.Printf("[FixtureService] ⚠️  XML parse error. Response preview: %s", preview)
 		return nil, fmt.Errorf("failed to decode fixture XML response: %w", err)
 	}
 	
-	log.Printf("[FixtureService] ✅ Fetched fixture for %s (sport: %s, status: %s)", 
+	logger.Printf("[FixtureService] ✅ Fetched fixture for %s (sport: %s, status: %s)", 
 		eventID, fixture.Fixture.Tournament.Sport.Name, fixture.Fixture.Status)
 	
 	return &fixture, nil

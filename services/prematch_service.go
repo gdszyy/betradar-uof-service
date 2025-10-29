@@ -5,7 +5,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
 	"uof-service/config"
@@ -46,7 +45,7 @@ type PrematchResult struct {
 
 // FetchPrematchEvents 获取所有 pre-match 赛事
 func (s *PrematchService) FetchPrematchEvents() ([]PrematchEvent, error) {
-	log.Println("[PrematchService] 🔍 Fetching pre-match events...")
+	logger.Println("[PrematchService] 🔍 Fetching pre-match events...")
 	
 	var allEvents []PrematchEvent
 	start := 0
@@ -95,7 +94,7 @@ func (s *PrematchService) FetchPrematchEvents() ([]PrematchEvent, error) {
 		
 		allEvents = append(allEvents, schedule.SportEvents...)
 		
-		log.Printf("[PrematchService] 📄 Fetched page %d: %d events (start=%d)", 
+		logger.Printf("[PrematchService] 📄 Fetched page %d: %d events (start=%d)", 
 			page+1, len(schedule.SportEvents), start)
 		
 		if len(schedule.SportEvents) < limit {
@@ -105,7 +104,7 @@ func (s *PrematchService) FetchPrematchEvents() ([]PrematchEvent, error) {
 		start += limit
 	}
 	
-	log.Printf("[PrematchService] ✅ Total fetched: %d pre-match events", len(allEvents))
+	logger.Printf("[PrematchService] ✅ Total fetched: %d pre-match events", len(allEvents))
 	
 	return allEvents, nil
 }
@@ -148,14 +147,14 @@ func (s *PrematchService) StorePrematchEvents(events []PrematchEvent) (int, erro
 		)
 		
 		if err != nil {
-			log.Printf("[PrematchService] ⚠️  Failed to store %s: %v", event.ID, err)
+			logger.Printf("[PrematchService] ⚠️  Failed to store %s: %v", event.ID, err)
 			continue
 		}
 		
 		stored++
 	}
 	
-	log.Printf("[PrematchService] 💾 Stored %d events to database", stored)
+	logger.Printf("[PrematchService] 💾 Stored %d events to database", stored)
 	
 	return stored, nil
 }
@@ -172,7 +171,7 @@ func (s *PrematchService) BookPrematchEvents(events []PrematchEvent) (*PrematchR
 			
 			// 订阅赛事
 			if err := s.bookEvent(event.ID); err != nil {
-				log.Printf("[PrematchService] ⚠️  Failed to book %s: %v", event.ID, err)
+				logger.Printf("[PrematchService] ⚠️  Failed to book %s: %v", event.ID, err)
 				result.Failed++
 			} else {
 				result.Success++
@@ -186,12 +185,12 @@ func (s *PrematchService) BookPrematchEvents(events []PrematchEvent) (*PrematchR
 				time.Now(), event.ID,
 			)
 			if err != nil {
-				log.Printf("[PrematchService] ⚠️  Failed to update database for %s: %v", event.ID, err)
+				logger.Printf("[PrematchService] ⚠️  Failed to update database for %s: %v", event.ID, err)
 			}
 		}
 	}
 	
-	log.Printf("[PrematchService] 📊 Booking completed: %d bookable, %d already booked, %d success, %d failed",
+	logger.Printf("[PrematchService] 📊 Booking completed: %d bookable, %d already booked, %d success, %d failed",
 		result.Bookable, result.AlreadyBooked, result.Success, result.Failed)
 	
 	return result, nil
@@ -226,17 +225,17 @@ func (s *PrematchService) bookEvent(eventID string) error {
 		time.Now(), eventID,
 	)
 	if err != nil {
-		log.Printf("[PrematchService] ⚠️  Failed to update database for %s: %v", eventID, err)
+		logger.Printf("[PrematchService] ⚠️  Failed to update database for %s: %v", eventID, err)
 	}
 	
-	log.Printf("[PrematchService] ✅ Successfully booked %s", eventID)
+	logger.Printf("[PrematchService] ✅ Successfully booked %s", eventID)
 	
 	return nil
 }
 
 // ExecutePrematchBooking 执行完整的 pre-match 订阅流程
 func (s *PrematchService) ExecutePrematchBooking() (*PrematchResult, error) {
-	log.Println("[PrematchService] 🚀 Starting pre-match booking...")
+	logger.Println("[PrematchService] 🚀 Starting pre-match booking...")
 	
 	// 1. 获取 pre-match 赛事
 	events, err := s.FetchPrematchEvents()
@@ -247,9 +246,9 @@ func (s *PrematchService) ExecutePrematchBooking() (*PrematchResult, error) {
 	// 2. 存储到数据库
 	stored, err := s.StorePrematchEvents(events)
 	if err != nil {
-		log.Printf("[PrematchService] ⚠️  Failed to store events: %v", err)
+		logger.Printf("[PrematchService] ⚠️  Failed to store events: %v", err)
 	} else {
-		log.Printf("[PrematchService] ✅ Stored %d events", stored)
+		logger.Printf("[PrematchService] ✅ Stored %d events", stored)
 	}
 	
 	// 3. 订阅赛事
@@ -258,7 +257,7 @@ func (s *PrematchService) ExecutePrematchBooking() (*PrematchResult, error) {
 		return nil, fmt.Errorf("failed to book events: %w", err)
 	}
 	
-	log.Printf("[PrematchService] 🎉 Pre-match booking completed: %d/%d successful",
+	logger.Printf("[PrematchService] 🎉 Pre-match booking completed: %d/%d successful",
 		result.Success, result.Bookable)
 	
 	return result, nil

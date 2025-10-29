@@ -5,7 +5,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
 	"uof-service/config"
@@ -42,7 +41,7 @@ type BookingResult struct {
 
 // ExecuteStartupBooking 执行启动时自动订阅
 func (s *StartupBookingService) ExecuteStartupBooking() (*BookingResult, error) {
-	log.Println("[StartupBooking] 🚀 Starting automatic booking on service startup...")
+	logger.Println("[StartupBooking] 🚀 Starting automatic booking on service startup...")
 	
 	result := &BookingResult{
 		BookedMatches: []string{},
@@ -56,10 +55,10 @@ func (s *StartupBookingService) ExecuteStartupBooking() (*BookingResult, error) 
 	}
 	
 	result.TotalLive = len(liveMatches)
-	log.Printf("[StartupBooking] 📊 Found %d live matches", result.TotalLive)
+	logger.Printf("[StartupBooking] 📊 Found %d live matches", result.TotalLive)
 	
 	if result.TotalLive == 0 {
-		log.Println("[StartupBooking] ℹ️  No live matches found, skipping booking")
+		logger.Println("[StartupBooking] ℹ️  No live matches found, skipping booking")
 		s.sendStartupReport(result)
 		return result, nil
 	}
@@ -67,24 +66,24 @@ func (s *StartupBookingService) ExecuteStartupBooking() (*BookingResult, error) 
 	// 2. 筛选可订阅的比赛
 	bookableMatches := s.filterBookableMatches(liveMatches)
 	result.Bookable = len(bookableMatches)
-	log.Printf("[StartupBooking] 🎯 Found %d bookable matches", result.Bookable)
+	logger.Printf("[StartupBooking] 🎯 Found %d bookable matches", result.Bookable)
 	
 	if result.Bookable == 0 {
-		log.Println("[StartupBooking] ℹ️  No bookable matches found")
+		logger.Println("[StartupBooking] ℹ️  No bookable matches found")
 		s.sendStartupReport(result)
 		return result, nil
 	}
 	
 	// 3. 订阅所有可订阅的比赛
-	log.Printf("[StartupBooking] 📝 Booking %d matches...", result.Bookable)
+	logger.Printf("[StartupBooking] 📝 Booking %d matches...", result.Bookable)
 	
 	for _, match := range bookableMatches {
 		if err := s.bookMatch(match.ID); err != nil {
-			log.Printf("[StartupBooking] ❌ Failed to book %s: %v", match.ID, err)
+			logger.Printf("[StartupBooking] ❌ Failed to book %s: %v", match.ID, err)
 			result.Failed++
 			result.FailedMatches[match.ID] = err.Error()
 		} else {
-			log.Printf("[StartupBooking] ✅ Successfully booked %s", match.ID)
+			logger.Printf("[StartupBooking] ✅ Successfully booked %s", match.ID)
 			result.Success++
 			result.BookedMatches = append(result.BookedMatches, match.ID)
 		}
@@ -93,17 +92,17 @@ func (s *StartupBookingService) ExecuteStartupBooking() (*BookingResult, error) 
 		time.Sleep(500 * time.Millisecond)
 	}
 	
-	log.Printf("[StartupBooking] 📈 Booking completed: %d success, %d failed out of %d bookable", 
+	logger.Printf("[StartupBooking] 📈 Booking completed: %d success, %d failed out of %d bookable", 
 		result.Success, result.Failed, result.Bookable)
 	
 	// 4. 验证订阅状态
 	if result.Success > 0 {
-		log.Println("[StartupBooking] 🔍 Verifying subscriptions...")
+		logger.Println("[StartupBooking] 🔍 Verifying subscriptions...")
 		time.Sleep(2 * time.Second) // 等待订阅生效
 		
 		verified := s.verifySubscriptions(result.BookedMatches)
 		result.AlreadyBooked = verified
-		log.Printf("[StartupBooking] ✅ Verified %d subscriptions", verified)
+		logger.Printf("[StartupBooking] ✅ Verified %d subscriptions", verified)
 	}
 	
 	// 5. 发送飞书通知
@@ -193,7 +192,7 @@ func (s *StartupBookingService) bookMatch(matchID string) error {
 		time.Now(), matchID,
 	)
 	if err != nil {
-		log.Printf("[StartupBooking] ⚠️  Failed to update database for %s: %v", matchID, err)
+		logger.Printf("[StartupBooking] ⚠️  Failed to update database for %s: %v", matchID, err)
 		// 不返回错误，因为 API 订阅已经成功
 	}
 	
@@ -216,7 +215,7 @@ func (s *StartupBookingService) verifySubscriptions(matchIDs []string) int {
 		}
 	}
 	
-	log.Println("[StartupBooking] ⚠️  All verification API endpoints failed")
+	logger.Println("[StartupBooking] ⚠️  All verification API endpoints failed")
 	return 0
 }
 
@@ -225,7 +224,7 @@ func (s *StartupBookingService) verifySubscriptionsFromURL(url string, matchIDs 
 	
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		log.Printf("[StartupBooking] ⚠️  Failed to create verification request: %v", err)
+		logger.Printf("[StartupBooking] ⚠️  Failed to create verification request: %v", err)
 		return -1
 	}
 	
@@ -233,19 +232,19 @@ func (s *StartupBookingService) verifySubscriptionsFromURL(url string, matchIDs 
 	
 	resp, err := s.client.Do(req)
 	if err != nil {
-		log.Printf("[StartupBooking] ⚠️  Failed to verify subscriptions: %v", err)
+		logger.Printf("[StartupBooking] ⚠️  Failed to verify subscriptions: %v", err)
 		return -1
 	}
 	defer resp.Body.Close()
 	
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Printf("[StartupBooking] ⚠️  Failed to read verification response: %v", err)
+		logger.Printf("[StartupBooking] ⚠️  Failed to read verification response: %v", err)
 		return -1
 	}
 	
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("[StartupBooking] ⚠️  Verification API %s returned status %d", url, resp.StatusCode)
+		logger.Printf("[StartupBooking] ⚠️  Verification API %s returned status %d", url, resp.StatusCode)
 		return -1
 	}
 	
@@ -255,11 +254,11 @@ func (s *StartupBookingService) verifySubscriptionsFromURL(url string, matchIDs 
 	
 	var calendar BookingCalendar
 	if err := xml.Unmarshal(body, &calendar); err != nil {
-		log.Printf("[StartupBooking] ⚠️  Failed to parse verification response from %s: %v", url, err)
+		logger.Printf("[StartupBooking] ⚠️  Failed to parse verification response from %s: %v", url, err)
 		return -1
 	}
 	
-	log.Printf("[StartupBooking] ✅ Successfully queried %s, found %d booked matches", url, len(calendar.SportEvents))
+	logger.Printf("[StartupBooking] ✅ Successfully queried %s, found %d booked matches", url, len(calendar.SportEvents))
 	
 	// 统计匹配的订阅
 	bookedMap := make(map[string]bool)
@@ -271,9 +270,9 @@ func (s *StartupBookingService) verifySubscriptionsFromURL(url string, matchIDs 
 	for _, matchID := range matchIDs {
 		if bookedMap[matchID] {
 			verified++
-			log.Printf("[StartupBooking] ✅ Verified subscription: %s", matchID)
+			logger.Printf("[StartupBooking] ✅ Verified subscription: %s", matchID)
 		} else {
-			log.Printf("[StartupBooking] ⚠️  Subscription not found: %s", matchID)
+			logger.Printf("[StartupBooking] ⚠️  Subscription not found: %s", matchID)
 		}
 	}
 	

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
 )
@@ -27,19 +26,19 @@ type ReplayStatus struct {
 // accessToken: Betradar access token (from BETRADAR_ACCESS_TOKEN)
 // apiBaseURL: API base URL (from BETRADAR_API_BASE_URL)
 func NewReplayClient(accessToken, apiBaseURL string) *ReplayClient {
-	log.Println("[ReplayClient] Initializing Replay API client...")
+	logger.Println("[ReplayClient] Initializing Replay API client...")
 	
 	if accessToken != "" {
-		log.Printf("[ReplayClient] ✅ Access token configured (length: %d)", len(accessToken))
+		logger.Printf("[ReplayClient] ✅ Access token configured (length: %d)", len(accessToken))
 	} else {
-		log.Println("[ReplayClient] ⚠️  Access token is empty")
+		logger.Println("[ReplayClient] ⚠️  Access token is empty")
 	}
 	
 	// 默认使用 global API
 	if apiBaseURL == "" {
 		apiBaseURL = "https://global.api.betradar.com/v1"
 	}
-	log.Printf("[ReplayClient] Using API: %s", apiBaseURL)
+	logger.Printf("[ReplayClient] Using API: %s", apiBaseURL)
 	
 	return &ReplayClient{
 		baseURL:     apiBaseURL,
@@ -70,9 +69,9 @@ func (r *ReplayClient) doRequest(method, path string, body interface{}) ([]byte,
 	// 添加access token到HTTP header
 	if r.accessToken != "" {
 		req.Header.Set("x-access-token", r.accessToken)
-		log.Printf("[ReplayClient] Making %s request to %s with x-access-token header", method, path)
+		logger.Printf("[ReplayClient] Making %s request to %s with x-access-token header", method, path)
 	} else {
-		log.Printf("[ReplayClient] ⚠️  Making %s request to %s WITHOUT token", method, path)
+		logger.Printf("[ReplayClient] ⚠️  Making %s request to %s WITHOUT token", method, path)
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -98,7 +97,7 @@ func (r *ReplayClient) doRequest(method, path string, body interface{}) ([]byte,
 
 // ListEvents 列出重放列表中的赛事
 func (r *ReplayClient) ListEvents() (string, error) {
-	log.Println("📋 Listing replay events...")
+	logger.Println("📋 Listing replay events...")
 	respBody, err := r.doRequest("GET", "/replay/", nil)
 	if err != nil {
 		return "", err
@@ -113,26 +112,26 @@ func (r *ReplayClient) AddEvent(eventID string, startTime int) error {
 		path += fmt.Sprintf("?start_time=%d", startTime)
 	}
 	
-	log.Printf("➕ Adding event %s to replay list (start_time: %d min)...", eventID, startTime)
+	logger.Printf("➕ Adding event %s to replay list (start_time: %d min)...", eventID, startTime)
 	_, err := r.doRequest("PUT", path, nil)
 	if err != nil {
 		return fmt.Errorf("add event: %w", err)
 	}
 	
-	log.Printf("✅ Event %s added successfully", eventID)
+	logger.Printf("✅ Event %s added successfully", eventID)
 	return nil
 }
 
 // RemoveEvent 从重放列表中删除赛事
 func (r *ReplayClient) RemoveEvent(eventID string) error {
 	path := fmt.Sprintf("/replay/events/%s", eventID)
-	log.Printf("➖ Removing event %s from replay list...", eventID)
+	logger.Printf("➖ Removing event %s from replay list...", eventID)
 	_, err := r.doRequest("DELETE", path, nil)
 	if err != nil {
 		return fmt.Errorf("remove event: %w", err)
 	}
 	
-	log.Printf("✅ Event %s removed successfully", eventID)
+	logger.Printf("✅ Event %s removed successfully", eventID)
 	return nil
 }
 
@@ -167,7 +166,7 @@ func (r *ReplayClient) Play(options PlayOptions) error {
 		path += "&use_replay_timestamp=true"
 	}
 	
-	log.Printf("▶️  Starting replay (speed: %dx, max_delay: %dms, node_id: %d)...", 
+	logger.Printf("▶️  Starting replay (speed: %dx, max_delay: %dms, node_id: %d)...", 
 		options.Speed, options.MaxDelay, options.NodeID)
 	
 	_, err := r.doRequest("POST", path, nil)
@@ -175,37 +174,37 @@ func (r *ReplayClient) Play(options PlayOptions) error {
 		return fmt.Errorf("start replay: %w", err)
 	}
 	
-	log.Println("✅ Replay started successfully")
+	logger.Println("✅ Replay started successfully")
 	return nil
 }
 
 // Stop 停止重放
 func (r *ReplayClient) Stop() error {
-	log.Println("⏸️  Stopping replay...")
+	logger.Println("⏸️  Stopping replay...")
 	_, err := r.doRequest("POST", "/replay/stop", nil)
 	if err != nil {
 		return fmt.Errorf("stop replay: %w", err)
 	}
 	
-	log.Println("✅ Replay stopped successfully")
+	logger.Println("✅ Replay stopped successfully")
 	return nil
 }
 
 // Reset 重置(停止并清空列表)
 func (r *ReplayClient) Reset() error {
-	log.Println("🔄 Resetting replay (stop and clear playlist)...")
+	logger.Println("🔄 Resetting replay (stop and clear playlist)...")
 	_, err := r.doRequest("POST", "/replay/reset", nil)
 	if err != nil {
 		return fmt.Errorf("reset replay: %w", err)
 	}
 	
-	log.Println("✅ Replay reset successfully")
+	logger.Println("✅ Replay reset successfully")
 	return nil
 }
 
 // GetStatus 获取重放状态
 func (r *ReplayClient) GetStatus() (string, error) {
-	log.Println("📊 Getting replay status...")
+	logger.Println("📊 Getting replay status...")
 	respBody, err := r.doRequest("GET", "/replay/status", nil)
 	if err != nil {
 		return "", err
@@ -215,7 +214,7 @@ func (r *ReplayClient) GetStatus() (string, error) {
 
 // WaitUntilReady 等待重放准备就绪
 func (r *ReplayClient) WaitUntilReady(maxWait time.Duration) error {
-	log.Println("⏳ Waiting for replay to be ready...")
+	logger.Println("⏳ Waiting for replay to be ready...")
 	
 	start := time.Now()
 	for {
@@ -230,11 +229,11 @@ func (r *ReplayClient) WaitUntilReady(maxWait time.Duration) error {
 		
 		// 检查是否还在设置中
 		if !bytes.Contains([]byte(status), []byte("SETTING_UP")) {
-			log.Println("✅ Replay is ready")
+			logger.Println("✅ Replay is ready")
 			return nil
 		}
 		
-		log.Println("   Still setting up, waiting...")
+		logger.Println("   Still setting up, waiting...")
 		time.Sleep(2 * time.Second)
 	}
 }
@@ -243,7 +242,7 @@ func (r *ReplayClient) WaitUntilReady(maxWait time.Duration) error {
 func (r *ReplayClient) QuickReplay(eventID string, speed int, nodeID int) error {
 	// 1. 重置以清空之前的列表
 	if err := r.Reset(); err != nil {
-		log.Printf("⚠️  Reset failed (may be already empty): %v", err)
+		logger.Printf("⚠️  Reset failed (may be already empty): %v", err)
 	}
 	
 	// 2. 添加赛事
@@ -252,7 +251,7 @@ func (r *ReplayClient) QuickReplay(eventID string, speed int, nodeID int) error 
 	}
 	
 	// 3. 等待一下让事件被添加到列表
-	log.Println("⏳ Waiting for event to be added to playlist...")
+	logger.Println("⏳ Waiting for event to be added to playlist...")
 	time.Sleep(3 * time.Second)
 	
 	// 4. 验证事件已在列表中 (最多重试5次)
@@ -267,7 +266,7 @@ func (r *ReplayClient) QuickReplay(eventID string, speed int, nodeID int) error 
 		// 检查是否为空
 		if bytes.Contains([]byte(eventsXML), []byte("size=\"0\"")) {
 			if i < 4 {
-				log.Printf("⚠️  Playlist still empty, waiting 2 more seconds... (attempt %d/5)", i+1)
+				logger.Printf("⚠️  Playlist still empty, waiting 2 more seconds... (attempt %d/5)", i+1)
 				time.Sleep(2 * time.Second)
 				continue
 			}
@@ -275,26 +274,26 @@ func (r *ReplayClient) QuickReplay(eventID string, speed int, nodeID int) error 
 		
 		// 检查XML中是否包含我们的事件
 		if bytes.Contains([]byte(eventsXML), []byte(eventID)) {
-			log.Printf("✅ Event %s confirmed in playlist (attempt %d)", eventID, i+1)
+			logger.Printf("✅ Event %s confirmed in playlist (attempt %d)", eventID, i+1)
 			break
 		}
 		
 		if i < 4 {
-			log.Printf("⚠️  Event not in playlist yet, waiting 2 more seconds... (attempt %d/5)", i+1)
+			logger.Printf("⚠️  Event not in playlist yet, waiting 2 more seconds... (attempt %d/5)", i+1)
 			time.Sleep(2 * time.Second)
 		}
 	}
 	
 	// 最终验证
 	if !bytes.Contains([]byte(eventsXML), []byte(eventID)) {
-		log.Printf("❌ Playlist verification failed after 5 attempts!")
-		log.Printf("   Expected event: %s", eventID)
-		log.Printf("   Playlist response: %s", eventsXML)
-		log.Printf("   ")
-		log.Printf("ℹ️  Possible reasons:")
-		log.Printf("   1. Event is less than 48 hours old (only older events are replayable)")
-		log.Printf("   2. Event ID is invalid or not available in Replay server")
-		log.Printf("   3. Event was added but immediately removed by Betradar")
+		logger.Printf("❌ Playlist verification failed after 5 attempts!")
+		logger.Printf("   Expected event: %s", eventID)
+		logger.Printf("   Playlist response: %s", eventsXML)
+		logger.Printf("   ")
+		logger.Printf("ℹ️  Possible reasons:")
+		logger.Printf("   1. Event is less than 48 hours old (only older events are replayable)")
+		logger.Printf("   2. Event ID is invalid or not available in Replay server")
+		logger.Printf("   3. Event was added but immediately removed by Betradar")
 		return fmt.Errorf("event %s not found in playlist - may be too recent (need >48h old) or invalid", eventID)
 	}
 	
@@ -315,7 +314,7 @@ func (r *ReplayClient) QuickReplay(eventID string, speed int, nodeID int) error 
 		return fmt.Errorf("wait for ready: %w", err)
 	}
 	
-	log.Printf("🎉 Replay of %s is now running!", eventID)
+	logger.Printf("🎉 Replay of %s is now running!", eventID)
 	return nil
 }
 

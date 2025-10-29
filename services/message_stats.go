@@ -2,7 +2,6 @@ package services
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"time"
 )
@@ -63,7 +62,7 @@ func (t *MessageStatsTracker) CheckAndReport() {
 			// 异步发送通知
 			go func() {
 				if err := t.notifier.NotifyMessageStats(statsCopy, t.totalCount, period); err != nil {
-					log.Printf("[MessageStats] Failed to send notification: %v", err)
+					logger.Printf("[MessageStats] Failed to send notification: %v", err)
 				}
 			}()
 			

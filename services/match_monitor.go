@@ -4,7 +4,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
 	
@@ -71,12 +70,12 @@ func NewMatchMonitor(cfg *config.Config, _ interface{}) *MatchMonitor {
 
 // QueryBookedMatches 查询已订阅的比赛 (使用 REST API)
 func (m *MatchMonitor) QueryBookedMatches() (*ScheduleResponse, error) {
-	log.Printf("📋 Querying live matches via REST API...")
+	logger.Printf("📋 Querying live matches via REST API...")
 	
 	// 使用 Live Schedule API
 	url := fmt.Sprintf("%s/sports/en/schedules/live/schedule.xml", m.config.APIBaseURL)
 	
-	log.Printf("📤 Calling API: %s", url)
+	logger.Printf("📤 Calling API: %s", url)
 	
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -98,7 +97,7 @@ func (m *MatchMonitor) QueryBookedMatches() (*ScheduleResponse, error) {
 		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 	
-	log.Printf("📥 Received response (%d bytes)", resp.ContentLength)
+	logger.Printf("📥 Received response (%d bytes)", resp.ContentLength)
 	
 	// 解析响应
 	body, err := io.ReadAll(resp.Body)
@@ -116,9 +115,9 @@ func (m *MatchMonitor) QueryBookedMatches() (*ScheduleResponse, error) {
 
 // AnalyzeBookedMatches 分析已订阅的比赛
 func (m *MatchMonitor) AnalyzeBookedMatches(schedule *ScheduleResponse) {
-	log.Println("\n" + "═══════════════════════════════════════════════════════════")
-	log.Println("📊 BOOKED MATCHES ANALYSIS")
-	log.Println("═══════════════════════════════════════════════════════════")
+	logger.Println("\n" + "═══════════════════════════════════════════════════════════")
+	logger.Println("📊 BOOKED MATCHES ANALYSIS")
+	logger.Println("═══════════════════════════════════════════════════════════")
 	
 	totalMatches := len(schedule.SportEvents)
 	bookedCount := 0
@@ -149,19 +148,19 @@ func (m *MatchMonitor) AnalyzeBookedMatches(schedule *ScheduleResponse) {
 		}
 	}
 	
-	log.Printf("📈 Summary:")
-	log.Printf("  Total live matches: %d", totalMatches)
-	log.Printf("  Booked matches: %d", bookedCount)
-	log.Printf("    - Live/Started: %d", liveCount)
-	log.Printf("    - Not started: %d", notStartedCount)
-	log.Printf("  Bookable (not booked): %d", bookableCount)
-	log.Printf("  Not available: %d", notAvailableCount)
+	logger.Printf("📈 Summary:")
+	logger.Printf("  Total live matches: %d", totalMatches)
+	logger.Printf("  Booked matches: %d", bookedCount)
+	logger.Printf("    - Live/Started: %d", liveCount)
+	logger.Printf("    - Not started: %d", notStartedCount)
+	logger.Printf("  Bookable (not booked): %d", bookableCount)
+	logger.Printf("  Not available: %d", notAvailableCount)
 	
 	// 显示已订阅的比赛
 	if bookedCount > 0 {
-		log.Println("\n🎯 Booked Matches:")
-		log.Printf("%-20s %-15s %-30s %-30s %s", "Match ID", "Status", "Home", "Away", "Sport")
-		log.Println("─────────────────────────────────────────────────────────────────────────────────────────────────────────")
+		logger.Println("\n🎯 Booked Matches:")
+		logger.Printf("%-20s %-15s %-30s %-30s %s", "Match ID", "Status", "Home", "Away", "Sport")
+		logger.Println("─────────────────────────────────────────────────────────────────────────────────────────────────────────")
 		
 		for _, event := range bookedMatches {
 			homeName := ""
@@ -176,7 +175,7 @@ func (m *MatchMonitor) AnalyzeBookedMatches(schedule *ScheduleResponse) {
 				}
 			}
 			
-			log.Printf("%-20s %-15s %-30s %-30s %s",
+			logger.Printf("%-20s %-15s %-30s %-30s %s",
 				truncate(event.ID, 20),
 				event.Status,
 				truncate(homeName, 30),
@@ -185,31 +184,31 @@ func (m *MatchMonitor) AnalyzeBookedMatches(schedule *ScheduleResponse) {
 			)
 		}
 	} else {
-		log.Println("\n⚠️  WARNING: No booked matches found!")
-		log.Println("   This explains why you're not receiving odds_change messages.")
-		log.Println("   You need to subscribe to matches to receive odds updates.")
+		logger.Println("\n⚠️  WARNING: No booked matches found!")
+		logger.Println("   This explains why you're not receiving odds_change messages.")
+		logger.Println("   You need to subscribe to matches to receive odds updates.")
 		
 		if bookableCount > 0 {
-			log.Printf("\n💡 TIP: There are %d bookable matches available.", bookableCount)
-			log.Println("   Use the booking API to subscribe to matches:")
-			log.Println("   POST /liveodds/booking-calendar/events/{match_id}/book")
+			logger.Printf("\n💡 TIP: There are %d bookable matches available.", bookableCount)
+			logger.Println("   Use the booking API to subscribe to matches:")
+			logger.Println("   POST /liveodds/booking-calendar/events/{match_id}/book")
 		}
 	}
 	
 	if bookedCount > 0 && liveCount == 0 {
-		log.Println("\n⚠️  NOTE: No live matches currently.")
-		log.Println("   Odds_change messages are typically sent for live matches.")
-		log.Println("   Pre-match odds updates are less frequent.")
+		logger.Println("\n⚠️  NOTE: No live matches currently.")
+		logger.Println("   Odds_change messages are typically sent for live matches.")
+		logger.Println("   Pre-match odds updates are less frequent.")
 	}
 	
-	log.Println("═══════════════════════════════════════════════════════════\n")
+	logger.Println("═══════════════════════════════════════════════════════════\n")
 }
 
 // CheckAndReport 检查并报告
 func (m *MatchMonitor) CheckAndReport() {
 	schedule, err := m.QueryBookedMatches()
 	if err != nil {
-		log.Printf("❌ Failed to query booked matches: %v", err)
+		logger.Printf("❌ Failed to query booked matches: %v", err)
 		return
 	}
 	
@@ -220,7 +219,7 @@ func (m *MatchMonitor) CheckAndReport() {
 func (m *MatchMonitor) CheckAndReportWithNotifier(notifier *LarkNotifier) {
 	schedule, err := m.QueryBookedMatches()
 	if err != nil {
-		log.Printf("❌ Failed to query booked matches: %v", err)
+		logger.Printf("❌ Failed to query booked matches: %v", err)
 		if notifier != nil {
 			notifier.NotifyError("MatchMonitor", fmt.Sprintf("Failed to query: %v", err))
 		}

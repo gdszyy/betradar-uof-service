@@ -4,7 +4,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
 )
@@ -56,7 +55,7 @@ func (s *FixtureChangesService) FetchFixtureChanges(after int64) ([]FixtureChang
 	
 	req.Header.Set("Authorization", "Bearer "+s.apiToken)
 	
-	log.Printf("[FixtureChanges] Fetching changes after timestamp %d", after)
+	logger.Printf("[FixtureChanges] Fetching changes after timestamp %d", after)
 	
 	resp, err := s.client.Do(req)
 	if err != nil {
@@ -79,7 +78,7 @@ func (s *FixtureChangesService) FetchFixtureChanges(after int64) ([]FixtureChang
 		return nil, fmt.Errorf("failed to parse XML response: %w", err)
 	}
 	
-	log.Printf("[FixtureChanges] Retrieved %d fixture changes", len(fixtureChanges.Changes))
+	logger.Printf("[FixtureChanges] Retrieved %d fixture changes", len(fixtureChanges.Changes))
 	
 	return fixtureChanges.Changes, nil
 }

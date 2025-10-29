@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"time"
 	"uof-service/config"
@@ -42,7 +41,7 @@ type SubscriptionCleanupResult struct {
 
 // ExecuteCleanup 执行清理
 func (s *SubscriptionCleanupService) ExecuteCleanup() (*SubscriptionCleanupResult, error) {
-	log.Println("[SubscriptionCleanup] 🧹 Starting subscription cleanup...")
+	logger.Println("[SubscriptionCleanup] 🧹 Starting subscription cleanup...")
 	
 	result := &SubscriptionCleanupResult{
 		UnbookedList: []string{},
@@ -56,34 +55,34 @@ func (s *SubscriptionCleanupService) ExecuteCleanup() (*SubscriptionCleanupResul
 	}
 	
 	result.TotalBooked = len(bookedMatches)
-	log.Printf("[SubscriptionCleanup] 📊 Found %d booked matches", result.TotalBooked)
+	logger.Printf("[SubscriptionCleanup] 📊 Found %d booked matches", result.TotalBooked)
 	
 	if result.TotalBooked == 0 {
-		log.Println("[SubscriptionCleanup] ℹ️  No booked matches to cleanup")
+		logger.Println("[SubscriptionCleanup] ℹ️  No booked matches to cleanup")
 		return result, nil
 	}
 	
 	// 2. 检查每个比赛的状态
 	endedMatches := s.findEndedMatches(bookedMatches)
 	result.EndedMatches = len(endedMatches)
-	log.Printf("[SubscriptionCleanup] 🎯 Found %d ended matches to unbook", result.EndedMatches)
+	logger.Printf("[SubscriptionCleanup] 🎯 Found %d ended matches to unbook", result.EndedMatches)
 	
 	if result.EndedMatches == 0 {
-		log.Println("[SubscriptionCleanup] ℹ️  No ended matches to unbook")
+		logger.Println("[SubscriptionCleanup] ℹ️  No ended matches to unbook")
 		s.sendCleanupReport(result)
 		return result, nil
 	}
 	
 	// 3. 取消订阅已结束的比赛
-	log.Printf("[SubscriptionCleanup] 🚀 Unbooking %d ended matches...", result.EndedMatches)
+	logger.Printf("[SubscriptionCleanup] 🚀 Unbooking %d ended matches...", result.EndedMatches)
 	
 	for _, match := range endedMatches {
 		if err := s.unbookMatch(match.ID); err != nil {
-			log.Printf("[SubscriptionCleanup] ❌ Failed to unbook %s: %v", match.ID, err)
+			logger.Printf("[SubscriptionCleanup] ❌ Failed to unbook %s: %v", match.ID, err)
 			result.Failed++
 			result.FailedList[match.ID] = err.Error()
 		} else {
-			log.Printf("[SubscriptionCleanup] ✅ Successfully unbooked %s", match.ID)
+			logger.Printf("[SubscriptionCleanup] ✅ Successfully unbooked %s", match.ID)
 			result.Unbooked++
 			result.UnbookedList = append(result.UnbookedList, match.ID)
 		}
@@ -92,7 +91,7 @@ func (s *SubscriptionCleanupService) ExecuteCleanup() (*SubscriptionCleanupResul
 		time.Sleep(500 * time.Millisecond)
 	}
 	
-	log.Printf("[SubscriptionCleanup] 📈 Cleanup completed: %d unbooked, %d failed out of %d ended", 
+	logger.Printf("[SubscriptionCleanup] 📈 Cleanup completed: %d unbooked, %d failed out of %d ended", 
 		result.Unbooked, result.Failed, result.EndedMatches)
 	
 	// 4. 发送飞书通知
@@ -125,7 +124,7 @@ func (s *SubscriptionCleanupService) queryBookedMatches() ([]BookedMatch, error)
 		var status sql.NullString
 		
 		if err := rows.Scan(&match.ID, &scheduleTime, &status); err != nil {
-			log.Printf("[SubscriptionCleanup] ⚠️  Failed to scan row: %v", err)
+			logger.Printf("[SubscriptionCleanup] ⚠️  Failed to scan row: %v", err)
 			continue
 		}
 		
@@ -220,7 +219,7 @@ func (s *SubscriptionCleanupService) findEndedMatches(matches []BookedMatch) []B
 		}
 		
 		if isEnded {
-			log.Printf("[SubscriptionCleanup] 🔍 Found ended match: %s (%s)", 
+			logger.Printf("[SubscriptionCleanup] 🔍 Found ended match: %s (%s)", 
 				match.ID, reason)
 			endedMatches = append(endedMatches, match)
 		}
@@ -251,7 +250,7 @@ func (s *SubscriptionCleanupService) unbookMatch(matchID string) error {
 	
 	// 404 表示比赛已经不在订阅中，视为成功
 	if resp.StatusCode == http.StatusNotFound {
-		log.Printf("[SubscriptionCleanup] ℹ️  Match %s already unbooked (404)", matchID)
+		logger.Printf("[SubscriptionCleanup] ℹ️  Match %s already unbooked (404)", matchID)
 		// 继续更新数据库
 	} else if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("status %d: %s", resp.StatusCode, string(body))
@@ -263,7 +262,7 @@ func (s *SubscriptionCleanupService) unbookMatch(matchID string) error {
 		time.Now(), matchID,
 	)
 	if err != nil {
-		log.Printf("[SubscriptionCleanup] ⚠️  Failed to update database for %s: %v", matchID, err)
+		logger.Printf("[SubscriptionCleanup] ⚠️  Failed to update database for %s: %v", matchID, err)
 		// 不返回错误，因为 API 取消订阅已经成功
 	}
 	

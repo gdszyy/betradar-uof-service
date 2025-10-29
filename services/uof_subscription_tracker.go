@@ -2,7 +2,6 @@ package services
 
 import (
 	"database/sql"
-	"log"
 	"sync"
 	"time"
 )
@@ -53,7 +52,7 @@ func (t *UOFSubscriptionTracker) loadFromDatabase() {
 	since := time.Now().Add(-24 * time.Hour)
 	rows, err := t.db.Query(query, since.Unix())
 	if err != nil {
-		log.Printf("[UOFTracker] Failed to load subscriptions from database: %v", err)
+		logger.Printf("[UOFTracker] Failed to load subscriptions from database: %v", err)
 		return
 	}
 	defer rows.Close()
@@ -78,7 +77,7 @@ func (t *UOFSubscriptionTracker) loadFromDatabase() {
 		count++
 	}
 	
-	log.Printf("[UOFTracker] Loaded %d active subscriptions from database", count)
+	logger.Printf("[UOFTracker] Loaded %d active subscriptions from database", count)
 }
 
 // AddSubscription 添加订阅记录
@@ -97,7 +96,7 @@ func (t *UOFSubscriptionTracker) AddSubscription(eventID string) {
 		MatchStatus: "not_started",
 	}
 	
-	log.Printf("[UOFTracker] ✅ Added subscription for event %s", eventID)
+	logger.Printf("[UOFTracker] ✅ Added subscription for event %s", eventID)
 }
 
 // UpdateMatchStatus 更新比赛状态
@@ -122,7 +121,7 @@ func (t *UOFSubscriptionTracker) UpdateMatchStatus(eventID, status string) {
 	sub.EventCount++
 	
 	if (status == "ended" || status == "closed") && oldStatus != status {
-		log.Printf("[UOFTracker] 🏁 Event %s ended (status: %s)", eventID, status)
+		logger.Printf("[UOFTracker] 🏁 Event %s ended (status: %s)", eventID, status)
 	}
 }
 
@@ -178,7 +177,7 @@ func (t *UOFSubscriptionTracker) RemoveSubscription(eventID string) {
 	defer t.mu.Unlock()
 	
 	delete(t.subscriptions, eventID)
-	log.Printf("[UOFTracker] 🗑️  Removed subscription for event %s", eventID)
+	logger.Printf("[UOFTracker] 🗑️  Removed subscription for event %s", eventID)
 }
 
 // GetStats 获取统计信息

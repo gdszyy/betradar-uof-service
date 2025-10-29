@@ -1,7 +1,6 @@
 package services
 
 import (
-	"log"
 	"sync"
 	"time"
 )
@@ -75,7 +74,7 @@ func (m *Monitor) resetHourlyStats() {
 
 // Start 启动监控
 func (m *Monitor) Start() {
-	log.Println("📊 Starting message monitor...")
+	logger.Println("📊 Starting message monitor...")
 	
 	// 启动定期检查
 	go m.periodicCheck()
@@ -134,13 +133,13 @@ func (m *Monitor) checkAlerts() {
 		// 告警1: 消息数低于阈值
 		if count < int64(threshold) {
 			if msgType == "odds_change" && count == 0 {
-				log.Printf("⚠️  ALERT: No odds_change messages received in the last hour!")
-				log.Printf("   Possible reasons:")
-				log.Printf("   1. No booked matches (booked=0)")
-				log.Printf("   2. No live matches currently")
-				log.Printf("   3. Account permission issue")
+				logger.Printf("⚠️  ALERT: No odds_change messages received in the last hour!")
+				logger.Printf("   Possible reasons:")
+				logger.Printf("   1. No booked matches (booked=0)")
+				logger.Printf("   2. No live matches currently")
+				logger.Printf("   3. Account permission issue")
 			} else if count > 0 {
-				log.Printf("⚠️  WARNING: %s messages below threshold (received: %d, expected: %d)",
+				logger.Printf("⚠️  WARNING: %s messages below threshold (received: %d, expected: %d)",
 					msgType, count, threshold)
 			}
 		}
@@ -149,7 +148,7 @@ func (m *Monitor) checkAlerts() {
 		if exists {
 			timeSince := now.Sub(lastTime)
 			if timeSince > 10*time.Minute {
-				log.Printf("⚠️  WARNING: No %s messages for %v", msgType, timeSince.Round(time.Second))
+				logger.Printf("⚠️  WARNING: No %s messages for %v", msgType, timeSince.Round(time.Second))
 			}
 		}
 	}
@@ -160,19 +159,19 @@ func (m *Monitor) printHourlyReport() {
 	m.stats.mu.RLock()
 	defer m.stats.mu.RUnlock()
 	
-	log.Println("\n" + "═══════════════════════════════════════════════════════════")
-	log.Println("📊 HOURLY MESSAGE REPORT")
-	log.Println("═══════════════════════════════════════════════════════════")
+	logger.Println("\n" + "═══════════════════════════════════════════════════════════")
+	logger.Println("📊 HOURLY MESSAGE REPORT")
+	logger.Println("═══════════════════════════════════════════════════════════")
 	
 	// 运行时间
 	uptime := time.Since(m.stats.startTime)
-	log.Printf("⏱️  Uptime: %v", uptime.Round(time.Second))
+	logger.Printf("⏱️  Uptime: %v", uptime.Round(time.Second))
 	
 	// 总消息数
-	log.Printf("📨 Total messages: %d", m.stats.totalMessages)
+	logger.Printf("📨 Total messages: %d", m.stats.totalMessages)
 	
 	// 按类型统计
-	log.Println("\n📋 Messages by type (last hour):")
+	logger.Println("\n📋 Messages by type (last hour):")
 	
 	// 关键消息类型
 	keyTypes := []string{"odds_change", "bet_stop", "bet_settlement", "fixture_change", "alive"}
@@ -190,16 +189,16 @@ func (m *Monitor) printHourlyReport() {
 		
 		if exists {
 			timeSince := time.Since(lastTime)
-			log.Printf("  %s %-20s: %4d (total: %d, last: %v ago)",
+			logger.Printf("  %s %-20s: %4d (total: %d, last: %v ago)",
 				status, msgType, count, totalCount, timeSince.Round(time.Second))
 		} else {
-			log.Printf("  %s %-20s: %4d (total: %d, never received)",
+			logger.Printf("  %s %-20s: %4d (total: %d, never received)",
 				status, msgType, count, totalCount)
 		}
 	}
 	
 	// 其他消息类型
-	log.Println("\n📋 Other message types:")
+	logger.Println("\n📋 Other message types:")
 	for msgType, count := range m.stats.messagesLastHour {
 		// 跳过已经显示的关键类型
 		isKey := false
@@ -211,21 +210,21 @@ func (m *Monitor) printHourlyReport() {
 		}
 		if !isKey {
 			totalCount := m.stats.messagesByType[msgType]
-			log.Printf("  %-20s: %4d (total: %d)", msgType, count, totalCount)
+			logger.Printf("  %-20s: %4d (total: %d)", msgType, count, totalCount)
 		}
 	}
 	
 	// 特别关注odds_change
 	if m.stats.messagesLastHour["odds_change"] == 0 {
-		log.Println("\n⚠️  ODDS_CHANGE ALERT:")
-		log.Println("   No odds_change messages received in the last hour!")
-		log.Println("   This is likely because:")
-		log.Println("   1. No matches are booked (booked=0)")
-		log.Println("   2. No live matches currently")
-		log.Println("   3. Account doesn't have odds feed permission")
+		logger.Println("\n⚠️  ODDS_CHANGE ALERT:")
+		logger.Println("   No odds_change messages received in the last hour!")
+		logger.Println("   This is likely because:")
+		logger.Println("   1. No matches are booked (booked=0)")
+		logger.Println("   2. No live matches currently")
+		logger.Println("   3. Account doesn't have odds feed permission")
 	}
 	
-	log.Println("═══════════════════════════════════════════════════════════\n")
+	logger.Println("═══════════════════════════════════════════════════════════\n")
 }
 
 // GetStats 获取统计信息
