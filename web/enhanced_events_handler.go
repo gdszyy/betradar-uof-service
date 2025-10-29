@@ -66,7 +66,8 @@ type MarketInfo struct {
 // OutcomeInfo 结果信息
 type OutcomeInfo struct {
 	OutcomeID   string  `json:"outcome_id"`
-	Name        string  `json:"name"`
+		Name        string  `json:"name"`
+	OutcomeName string  `json:"outcome_name"` // 新增字段
 	Odds        float64 `json:"odds"`
 	Probability float64 `json:"probability"`
 	Active      bool    `json:"active"`
@@ -360,8 +361,8 @@ func (s *Server) getEventMarketsWithProducer(eventID string, producer string) ([
 		// 获取市场名称 (简化版,可以后续从 market descriptions 获取)
 		market.MarketName = s.getMarketName(market.MarketID)
 		
-		// 获取该盘口的赔率 (使用 marketPK)
-		outcomes, err := s.getMarketOutcomes(marketPK)
+// 获取该盘口的赔率 (使用 marketPK)
+			outcomes, err := s.getMarketOutcomes(marketPK, market.MarketID)
 		if err != nil {
 			log.Printf("[API] Failed to get outcomes for market %s: %v", market.MarketID, err)
 			market.Outcomes = []OutcomeInfo{}
@@ -377,7 +378,7 @@ func (s *Server) getEventMarketsWithProducer(eventID string, producer string) ([
 }
 
 // getMarketOutcomes 获取盘口的赔率
-func (s *Server) getMarketOutcomes(marketPK int) ([]OutcomeInfo, error) {
+func (s *Server) getMarketOutcomes(marketPK int, marketID string) ([]OutcomeInfo, error) {
 	query := `
 		SELECT outcome_id, odds_value, probability, active, updated_at
 		FROM odds
@@ -409,7 +410,7 @@ func (s *Server) getMarketOutcomes(marketPK int) ([]OutcomeInfo, error) {
 		}
 		
 		// 获取结果名称 (简化版)
-			outcome.OutcomeName = s.getOutcomeName(marketPK.MarketID, outcome.OutcomeID)
+			outcome.OutcomeName = s.getOutcomeName(marketID, outcome.OutcomeID)
 		outcomes = append(outcomes, outcome)
 	}
 	
