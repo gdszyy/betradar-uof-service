@@ -31,6 +31,7 @@ type Server struct {
 	srMapper            *services.SRMapper
 	producerMonitor     *services.ProducerMonitor
 	marketDescService   *services.MarketDescriptionsService
+	subscriptionSync    *services.SubscriptionSyncService
 	httpServer          *http.Server
 	upgrader            websocket.Upgrader
 }
@@ -57,6 +58,7 @@ func NewServer(cfg *config.Config, db *sql.DB, hub *Hub, larkNotifier *services.
 		autoBooking:       services.NewAutoBookingService(cfg, db, larkNotifier),
 		producerMonitor:   services.NewProducerMonitor(db, larkNotifier, cfg.ProducerCheckIntervalSeconds, cfg.ProducerDownThresholdSeconds),
 		marketDescService: services.NewMarketDescriptionsService(cfg.AccessToken, cfg.APIBaseURL),
+		subscriptionSync:  services.NewSubscriptionSyncService(db, cfg.AccessToken, cfg.APIBaseURL, cfg.SubscriptionSyncIntervalMinutes),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
@@ -74,6 +76,13 @@ func (s *Server) Start() error {
 		log.Println("[Server] Continuing with fallback market names...")
 	} else {
 		log.Printf("[Server] ✅ Market Descriptions Service started with %d markets", s.marketDescService.GetMarketCount())
+	}
+	
+	// 启动 Subscription Sync Service
+	if err := s.subscriptionSync.Start(); err != nil {
+		log.Printf("[Server] ⚠️  Failed to start Subscription Sync Service: %v", err)
+	} else {
+		log.Printf("[Server] ✅ Subscription Sync Service started (interval: %d minutes)", s.config.SubscriptionSyncIntervalMinutes)
 	}
 	
 	router := mux.NewRouter()
