@@ -17,10 +17,15 @@ func (s *Server) SyncSubscriptionsHandler(w http.ResponseWriter, r *http.Request
 	log.Println("[API] 🔄 Received subscription sync request")
 	
 	// 创建同步服务
-	syncService := services.NewSubscriptionSyncService(s.config, s.db)
+	syncService := services.NewSubscriptionSyncService(
+		s.db,
+		s.config.APIBaseURL,
+		s.config.BetradarAccessToken,
+		s.config.SubscriptionSyncIntervalMinutes,
+	)
 	
-	// 执行同步
-	result, err := syncService.ExecuteSync()
+	// 执行一次同步
+	result, err := syncService.SyncOnce()
 	if err != nil {
 		log.Printf("[API] ❌ Sync failed: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
