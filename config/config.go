@@ -41,7 +41,8 @@ type Config struct {
 	TheSportsSecret    string // The Sports Secret (for both HTTP API and MQTT)
 	
 	// 自动订阅配置
-	AutoBookingIntervalMinutes int // 自动订阅间隔(分钟)
+	AutoBookingEnabled         bool // 是否启用自动订阅
+	AutoBookingIntervalMinutes int  // 自动订阅间隔(分钟)
 	
 	// 数据清理配置
 	CleanupRetainDaysMessages    int // uof_messages 保留天数
@@ -119,6 +120,7 @@ func Load() *Config {
 			TheSportsSecret:   getEnv("THESPORTS_SECRET", ""),
 			
 		// 自动订阅配置
+		AutoBookingEnabled:         getEnv("AUTO_BOOKING_ENABLED", "false") == "true", // 默认关闭
 		AutoBookingIntervalMinutes: getEnvInt("AUTO_BOOKING_INTERVAL_MINUTES", 30),
 		
 		// 数据清理配置

@@ -28,6 +28,7 @@ type Server struct {
 	replayClient        *services.ReplayClient
 	larkNotifier        *services.LarkNotifier
 	autoBooking         *services.AutoBookingService
+	autoBookingController *services.AutoBookingController
 	srMapper            *services.SRMapper
 	producerMonitor     *services.ProducerMonitor
 	marketDescService   *services.MarketDescriptionsService
@@ -46,6 +47,10 @@ func NewServer(cfg *config.Config, db *sql.DB, hub *Hub, larkNotifier *services.
 		log.Println("[Server] ⚠️  Replay client not initialized - BETRADAR_ACCESS_TOKEN not set")
 	}
 	
+	// 创建自动订阅服务和控制器
+	autoBooking := services.NewAutoBookingService(cfg, db, larkNotifier)
+	autoBookingController := services.NewAutoBookingController(cfg, autoBooking)
+	
 	return &Server{
 		config:          cfg,
 		db:              db,
@@ -55,7 +60,8 @@ func NewServer(cfg *config.Config, db *sql.DB, hub *Hub, larkNotifier *services.
 		srMapper:        services.NewSRMapper(),
 		replayClient:    replayClient,
 		larkNotifier:      larkNotifier,
-		autoBooking:       services.NewAutoBookingService(cfg, db, larkNotifier),
+		autoBooking:       autoBooking,
+		autoBookingController: autoBookingController,
 		producerMonitor:   services.NewProducerMonitor(db, larkNotifier, cfg.ProducerCheckIntervalSeconds, cfg.ProducerDownThresholdSeconds),
 		marketDescService: services.NewMarketDescriptionsService(cfg.AccessToken, cfg.APIBaseURL),
 		subscriptionSync:  services.NewSubscriptionSyncService(db, cfg.AccessToken, cfg.APIBaseURL, cfg.SubscriptionSyncIntervalMinutes),
@@ -83,6 +89,14 @@ func (s *Server) Start() error {
 		log.Printf("[Server] ⚠️  Failed to start Subscription Sync Service: %v", err)
 	} else {
 		log.Printf("[Server] ✅ Subscription Sync Service started (interval: %d minutes)", s.config.SubscriptionSyncIntervalMinutes)
+	}
+	
+	// 启动自动订阅控制器（如果启用）
+	if s.config.AutoBookingEnabled {
+		s.autoBookingController.Start()
+		log.Printf("[Server] ✅ Auto-booking controller started (interval: %d minutes)", s.config.AutoBookingIntervalMinutes)
+	} else {
+		log.Println("[Server] ⚠️  Auto-booking is disabled (use API to enable)")
 	}
 	
 	router := mux.NewRouter()
@@ -123,6 +137,13 @@ func (s *Server) Start() error {
 	
 	// 订阅同步API
 	api.HandleFunc("/booking/sync", s.SyncSubscriptionsHandler).Methods("POST")
+	
+	// 自动订阅配置API
+	autoBookingHandler := NewAutoBookingHandler(s.autoBookingController)
+	api.HandleFunc("/auto-booking/status", autoBookingHandler.GetStatus).Methods("GET")
+	api.HandleFunc("/auto-booking/enable", autoBookingHandler.Enable).Methods("POST")
+	api.HandleFunc("/auto-booking/disable", autoBookingHandler.Disable).Methods("POST")
+	api.HandleFunc("/auto-booking/interval", autoBookingHandler.SetInterval).Methods("POST")
 	
 	// Pre-match API
 	api.HandleFunc("/prematch/trigger", s.handleTriggerPrematchBooking).Methods("POST")
