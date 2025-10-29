@@ -137,6 +137,10 @@ func (s *Server) Start() error {
 	// 数据库重置API（危险操作，需要确认）
 	api.HandleFunc("/database/reset", s.handleResetDatabase).Methods("POST")
 	
+	// 比赛记录查询 API
+	api.HandleFunc("/match/records", s.handleGetMatchRecords).Methods("GET")
+	api.HandleFunc("/record/detail", s.handleGetRecordDetail).Methods("GET")
+	
 	// LD and TheSports APIs removed - using UOF only
 	
 	// Subscription management API removed - no longer using subscription manager
