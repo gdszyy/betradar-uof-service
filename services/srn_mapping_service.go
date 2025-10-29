@@ -1,7 +1,6 @@
 package services
 
 import (
-"uof-service/logger"
 	"database/sql"
 	"encoding/json"
 	"fmt"

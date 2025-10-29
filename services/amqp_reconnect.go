@@ -235,9 +235,8 @@ func (c *AMQPConsumer) monitorConnection(config *ReconnectConfig) {
 		
 		// 检查是否达到最大重试次数
 		if config.MaxRetries > 0 && retryCount >= config.MaxRetries {
-			logger.Errorf("[AMQP] ❌ Max retries (%d) reached, giving up", config.MaxRetries)
-			c.notifier.NotifyError("AMQP Connection", 
-				fmt.Sprintf("Max retries reached after %d attempts", retryCount))
+		logger.Errorf("[AMQP] ❌ Max retries (%d) reached, giving up", config.MaxRetries)
+		c.notifier.SendText(fmt.Sprintf("❌ AMQP Connection: Max retries reached after %d attempts", retryCount))
 			return
 		}
 		
@@ -261,8 +260,7 @@ func (c *AMQPConsumer) monitorConnection(config *ReconnectConfig) {
 		
 		// 重连成功
 		logger.Println("[AMQP] ✅ Reconnected successfully")
-		c.notifier.NotifyInfo("AMQP Connection", 
-			fmt.Sprintf("Reconnected after %d attempts", retryCount))
+		c.notifier.SendText(fmt.Sprintf("✅ AMQP Connection: Reconnected after %d attempts", retryCount))
 		
 		// 重置重试计数和延迟
 		retryCount = 0
