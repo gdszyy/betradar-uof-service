@@ -269,7 +269,7 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 		}
 		
 			// 获取盘口信息 (按 producer 过滤)
-			markets, err := s.getEventMarketsWithProducer(eventID, producer, event.HomeTeamName, event.AwayTeamName)ducer)
+			markets, err := s.getEventMarketsWithProducer(eventID, producer, event.HomeTeamName, event.AwayTeamName)
 			if err != nil {
 				log.Printf("[API] Failed to get markets for %s: %v", event.EventID, err)
 				event.Markets = []MarketInfo{} // 空数组而不是 null
