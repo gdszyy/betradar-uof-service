@@ -21,21 +21,22 @@ type MessageBroadcaster interface {
 }
 
 type AMQPConsumer struct {
-	config            *config.Config
-	messageStore      *MessageStore
-	broadcaster       MessageBroadcaster
-	recoveryManager   *RecoveryManager
-	notifier          *LarkNotifier
-	statsTracker      *MessageStatsTracker
-	matchMonitor      *MatchMonitor
-	fixtureParser     *FixtureParser
-	oddsChangeParser  *OddsChangeParser
-	oddsParser        *OddsParser
-	srnMappingService *SRNMappingService
-	fixtureService    *FixtureService
-	conn              *amqp.Connection
-	channel           *amqp.Channel
-	done              chan bool
+	config               *config.Config
+	messageStore         *MessageStore
+	broadcaster          MessageBroadcaster
+	recoveryManager      *RecoveryManager
+	notifier             *LarkNotifier
+	statsTracker         *MessageStatsTracker
+	matchMonitor         *MatchMonitor
+	fixtureParser        *FixtureParser
+	oddsChangeParser     *OddsChangeParser
+	oddsParser           *OddsParser
+	betSettlementParser  *BetSettlementParser
+	srnMappingService    *SRNMappingService
+	fixtureService       *FixtureService
+	conn                 *amqp.Connection
+	channel              *amqp.Channel
+	done                 chan bool
 }
 
 func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster MessageBroadcaster) *AMQPConsumer {
@@ -47,6 +48,7 @@ func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster Messag
 	fixtureParser := NewFixtureParser(store.db, srnMappingService, cfg.APIBaseURL, cfg.AccessToken)
 	oddsChangeParser := NewOddsChangeParser(store.db)
 	oddsParser := NewOddsParser(store.db)
+	betSettlementParser := NewBetSettlementParser(store.db)
 	fixtureService := NewFixtureService(cfg.UOFAPIToken, cfg.APIBaseURL)
 	
 	// 从数据库加载 SRN mapping 缓存
@@ -55,18 +57,19 @@ func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster Messag
 	}
 	
 		return &AMQPConsumer{
-			config:            cfg,
-			messageStore:      store,
-			broadcaster:       broadcaster,
-			recoveryManager:   NewRecoveryManager(cfg, store),
-			notifier:          notifier,
-			statsTracker:      statsTracker,
-			fixtureParser:     fixtureParser,
-			oddsChangeParser:  oddsChangeParser,
-			oddsParser:        oddsParser,
-			srnMappingService: srnMappingService,
-			fixtureService:    fixtureService,
-			done:              make(chan bool),
+			config:               cfg,
+			messageStore:         store,
+			broadcaster:          broadcaster,
+			recoveryManager:      NewRecoveryManager(cfg, store),
+			notifier:             notifier,
+			statsTracker:         statsTracker,
+			fixtureParser:        fixtureParser,
+			oddsChangeParser:     oddsChangeParser,
+			oddsParser:           oddsParser,
+			betSettlementParser:  betSettlementParser,
+			srnMappingService:    srnMappingService,
+			fixtureService:       fixtureService,
+			done:                 make(chan bool),
 		}
 }
 
@@ -457,31 +460,16 @@ func (c *AMQPConsumer) handleBetSettlement(eventID string, productID *int, xmlCo
 		return
 	}
 
-	// 解析bet_settlement消息
-	type BetSettlement struct {
-		Certainty int `xml:"certainty,attr"`
-		Outcomes struct {
-			Markets []struct {
-				ID string `xml:"id,attr"`
-				Outcomes []struct {
-					ID     string `xml:"id,attr"`
-					Result int    `xml:"result,attr"`
-				} `xml:"outcome"`
-			} `xml:"market"`
-		} `xml:"outcomes"`
+	logger.Printf("Bet settlement for event %s (producer %d)", eventID, *productID)
+
+	// 使用 BetSettlementParser 解析并存储
+	if err := c.betSettlementParser.ParseAndStore(xmlContent); err != nil {
+		logger.Errorf("Failed to parse and store bet settlement: %v", err)
 	}
 
-	var settlement BetSettlement
-	if err := xml.Unmarshal([]byte(xmlContent), &settlement); err != nil {
-		logger.Errorf("Failed to parse bet_settlement: %v", err)
-	} else {
-		marketsCount := len(settlement.Outcomes.Markets)
-		logger.Printf("Bet settlement for event %s: %d markets, certainty=%d", 
-			eventID, marketsCount, settlement.Certainty)
-	}
-
+	// 仍然保存 XML 原文到 bet_settlements 表 (备份)
 	if err := c.messageStore.SaveBetSettlement(eventID, *productID, timestamp, xmlContent); err != nil {
-		logger.Errorf("Failed to save bet settlement: %v", err)
+		logger.Errorf("Failed to save bet settlement XML: %v", err)
 	}
 
 	c.messageStore.UpdateTrackedEvent(eventID)
