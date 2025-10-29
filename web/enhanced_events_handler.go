@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	
+	"uof-service/services"
 )
 
 // EnhancedEvent 增强的赛事信息
@@ -360,9 +362,9 @@ func (s *Server) getEventMarketsWithProducer(eventID string, producer string) ([
 		
 // 获取市场名称 (简化版,可以后续从 market descriptions 获取)
 			market.MarketName = s.getMarketName(market.MarketID, event.HomeTeamName, event.AwayTeamName, market.Specifiers)
-		
-// 获取该盘口的赔率 (使用 marketPK)
-			outcomes, err := s.getMarketOutcomes(marketPK, market.MarketID)
+			
+			// 获取该盘口的赔率 (使用 marketPK)
+			outcomes, err := s.getMarketOutcomes(marketPK, market.MarketID, event.HomeTeamName, event.AwayTeamName, market.Specifiers)
 		if err != nil {
 			log.Printf("[API] Failed to get outcomes for market %s: %v", market.MarketID, err)
 			market.Outcomes = []OutcomeInfo{}
@@ -378,7 +380,7 @@ func (s *Server) getEventMarketsWithProducer(eventID string, producer string) ([
 }
 
 // getMarketOutcomes 获取盘口的赔率
-func (s *Server) getMarketOutcomes(marketPK int, marketID string) ([]OutcomeInfo, error) {
+func (s *Server) getMarketOutcomes(marketPK int, marketID string, homeTeamName string, awayTeamName string, specifiers string) ([]OutcomeInfo, error) {
 	query := `
 		SELECT outcome_id, odds_value, probability, active, updated_at
 		FROM odds
@@ -410,7 +412,7 @@ func (s *Server) getMarketOutcomes(marketPK int, marketID string) ([]OutcomeInfo
 		}
 		
 		// 获取结果名称 (简化版)
-			outcome.OutcomeName = s.getOutcomeName(marketID, outcome.OutcomeID, event.HomeTeamName, event.AwayTeamName, market.Specifiers)
+			outcome.OutcomeName = s.getOutcomeName(marketID, outcome.OutcomeID, homeTeamName, awayTeamName, specifiers)
 		outcomes = append(outcomes, outcome)
 	}
 	
