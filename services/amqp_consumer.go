@@ -341,7 +341,7 @@ func (c *AMQPConsumer) handleAlive(xmlContent string) {
 	
 	// 检测订阅取消 (subscribed=0)
 	if alive.Subscribed == 0 {
-		log.Printf("[AliveMessage] ⚠️  Producer %d subscription cancelled! All markets should be suspended.", alive.ProductID)
+			logger.Printf("[AliveMessage] ⚠️  Producer %d subscription cancelled! All markets should be suspended.", alive.ProductID)
 		
 		// 发送告警通知
 		if c.notifier != nil {
@@ -502,9 +502,9 @@ func (c *AMQPConsumer) getBookmakerInfo() (bookmakerId, virtualHost string, err 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		log.Printf("API Error Response: Status=%d, Body=%s", resp.StatusCode, string(body))
-		return "", "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+			body, _ := io.ReadAll(resp.Body)
+			logger.Errorf("API Error Response: Status=%d, Body=%s", resp.StatusCode, string(body))
+			return "", "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	// 解析XML响应
@@ -560,13 +560,13 @@ func (c *AMQPConsumer) handleBetCancel(eventID string, productID *int, xmlConten
 	}
 
 	var betCancel BetCancel
-	if err := xml.Unmarshal([]byte(xmlContent), &betCancel); err != nil {
-		log.Printf("Failed to parse bet_cancel: %v", err)
-		return
-	}
+		if err := xml.Unmarshal([]byte(xmlContent), &betCancel); err != nil {
+			logger.Errorf("Failed to parse bet_cancel: %v", err)
+			return
+		}
 
-	marketsCount := len(betCancel.Markets)
-	log.Printf("Bet cancel for event %s: %d markets cancelled", eventID, marketsCount)
+		marketsCount := len(betCancel.Markets)
+		logger.Printf("Bet cancel for event %s: %d markets cancelled", eventID, marketsCount)
 
 	// 存储到数据库（使用通用的SaveMessage已经存储了，这里可以添加额外处理）
 	c.messageStore.UpdateTrackedEvent(eventID)
@@ -578,12 +578,12 @@ func (c *AMQPConsumer) handleFixture(eventID string, productID *int, xmlContent 
 		return
 	}
 	
-	log.Printf("Processing fixture for event: %s", eventID)
-	
-	// 使用 FixtureParser 解析完整的 fixture 消息
-	if err := c.fixtureParser.ParseAndStore(xmlContent); err != nil {
-		log.Printf("Failed to parse fixture data: %v", err)
-	}
+		logger.Printf("Processing fixture for event: %s", eventID)
+		
+		// 使用 FixtureParser 解析完整的 fixture 消息
+		if err := c.fixtureParser.ParseAndStore(xmlContent); err != nil {
+			logger.Errorf("Failed to parse fixture data: %v", err)
+		}
 	
 	c.messageStore.UpdateTrackedEvent(eventID)
 }
@@ -602,22 +602,22 @@ func (c *AMQPConsumer) handleFixtureChange(eventID string, productID *int, xmlCo
 	}
 
 	var fixtureChange FixtureChange
-	if err := xml.Unmarshal([]byte(xmlContent), &fixtureChange); err != nil {
-		log.Printf("Failed to parse fixture_change: %v", err)
-		return
-	}
+		if err := xml.Unmarshal([]byte(xmlContent), &fixtureChange); err != nil {
+			logger.Errorf("Failed to parse fixture_change: %v", err)
+			return
+		}
 
-	if fixtureChange.StartTime > 0 {
-		startTimeStr := time.UnixMilli(fixtureChange.StartTime).Format(time.RFC3339)
-		log.Printf("Fixture change for event %s: new start time %s", eventID, startTimeStr)
-	}
+		if fixtureChange.StartTime > 0 {
+			startTimeStr := time.UnixMilli(fixtureChange.StartTime).Format(time.RFC3339)
+			logger.Printf("Fixture change for event %s: new start time %s", eventID, startTimeStr)
+		}
 
 	c.messageStore.UpdateTrackedEvent(eventID)
 	
-	// 使用 FixtureParser 解析赛程变化
-	if err := c.fixtureParser.ParseFixtureChange(eventID, xmlContent); err != nil {
-		log.Printf("Failed to parse fixture_change data: %v", err)
-	}
+		// 使用 FixtureParser 解析赛程变化
+		if err := c.fixtureParser.ParseFixtureChange(eventID, xmlContent); err != nil {
+			logger.Errorf("Failed to parse fixture_change data: %v", err)
+		}
 }
 
 // handleRollbackBetSettlement 处理撤销投注结算消息
@@ -626,7 +626,7 @@ func (c *AMQPConsumer) handleRollbackBetSettlement(eventID string, productID *in
 		return
 	}
 
-	log.Printf("Rollback bet settlement for event %s", eventID)
+	logger.Printf("Rollback bet settlement for event %s", eventID)
 	c.messageStore.UpdateTrackedEvent(eventID)
 }
 
@@ -636,7 +636,7 @@ func (c *AMQPConsumer) handleRollbackBetCancel(eventID string, productID *int, x
 		return
 	}
 
-	log.Printf("Rollback bet cancel for event %s", eventID)
+	logger.Printf("Rollback bet cancel for event %s", eventID)
 	c.messageStore.UpdateTrackedEvent(eventID)
 }
 
