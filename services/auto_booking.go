@@ -1,6 +1,7 @@
 package services
 
 import (
+"uof-service/logger"
 	"bytes"
 	"database/sql"
 	"encoding/xml"
