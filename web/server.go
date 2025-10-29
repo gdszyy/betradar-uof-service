@@ -134,6 +134,9 @@ func (s *Server) Start() error {
 	api.HandleFunc("/cleanup/stats", s.handleGetTableStats).Methods("GET")
 	api.HandleFunc("/cleanup/manual", s.handleManualCleanup).Methods("POST")
 	
+	// 数据库重置API（危险操作，需要确认）
+	api.HandleFunc("/database/reset", s.handleResetDatabase).Methods("POST")
+	
 	// LD and TheSports APIs removed - using UOF only
 	
 	// Subscription management API removed - no longer using subscription manager

@@ -340,3 +340,39 @@ func (n *LarkNotifier) NotifyDataCleanup(totalDeleted int64, results []CleanupRe
 	return n.SendRichText("Data Cleanup", content)
 }
 
+
+
+// NotifyDatabaseReset 发送数据库重置通知
+func (n *LarkNotifier) NotifyDatabaseReset(deletedCounts map[string]int64, totalDeleted int64) error {
+	if !n.enabled {
+		return nil
+	}
+	
+	content := [][]LarkElement{
+		{
+			{Tag: "text", Text: "🔄 **数据库已重置**\n"},
+		},
+		{
+			{Tag: "text", Text: fmt.Sprintf("总删除行数: **%d**\n", totalDeleted)},
+		},
+		{
+			{Tag: "text", Text: "\n详细信息:\n"},
+		},
+	}
+	
+	// 添加每个表的删除数量
+	for table, count := range deletedCounts {
+		if count > 0 {
+			content = append(content, []LarkElement{
+				{Tag: "text", Text: fmt.Sprintf("  • %s: %d 行\n", table, count)},
+			})
+		}
+	}
+	
+	content = append(content, []LarkElement{
+		{Tag: "text", Text: fmt.Sprintf("\n⏰ 时间: %s", time.Now().Format("2006-01-02 15:04:05"))},
+	})
+	
+	return n.SendRichText("Database Reset", content)
+}
+
