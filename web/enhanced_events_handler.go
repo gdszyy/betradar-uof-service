@@ -269,7 +269,7 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 		}
 		
 			// 获取盘口信息 (按 producer 过滤)
-			markets, err := s.getEventMarketsWithProducer(event.EventID, producer)
+			markets, err := s.getEventMarketsWithProducer(eventID, producer, event.HomeTeamName, event.AwayTeamName)ducer)
 			if err != nil {
 				log.Printf("[API] Failed to get markets for %s: %v", event.EventID, err)
 				event.Markets = []MarketInfo{} // 空数组而不是 null
@@ -312,7 +312,7 @@ func (s *Server) getEventMarkets(eventID string) ([]MarketInfo, error) {
 }
 
 // getEventMarketsWithProducer 获取赛事的盘口信息 (按 producer 过滤)
-func (s *Server) getEventMarketsWithProducer(eventID string, producer string) ([]MarketInfo, error) {
+func (s *Server) getEventMarketsWithProducer(eventID string, producer string, homeTeamName string, awayTeamName string) ([]MarketInfo, error) {
 	query := `
 		SELECT DISTINCT ON (market_id, specifiers)
 			id, market_id, specifiers, status, producer_id, updated_at
@@ -360,11 +360,11 @@ func (s *Server) getEventMarketsWithProducer(eventID string, producer string) ([
 			market.ProducerID = int(producerID.Int64)
 		}
 		
-// 获取市场名称 (简化版,可以后续从 market descriptions 获取)
-			market.MarketName = s.getMarketName(market.MarketID, event.HomeTeamName, event.AwayTeamName, market.Specifiers)
+	// 获取市场名称 (简化版,可以后续从 market descriptions 获取)
+				market.MarketName = s.getMarketName(market.MarketID, homeTeamName, awayTeamName, market.Specifiers)
 			
-			// 获取该盘口的赔率 (使用 marketPK)
-			outcomes, err := s.getMarketOutcomes(marketPK, market.MarketID, event.HomeTeamName, event.AwayTeamName, market.Specifiers)
+				// 获取该盘口的赔率 (使用 marketPK)
+				outcomes, err := s.getMarketOutcomes(marketPK, market.MarketID, homeTeamName, awayTeamName, market.Specifiers)
 		if err != nil {
 			log.Printf("[API] Failed to get outcomes for market %s: %v", market.MarketID, err)
 			market.Outcomes = []OutcomeInfo{}
