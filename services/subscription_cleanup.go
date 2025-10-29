@@ -249,7 +249,11 @@ func (s *SubscriptionCleanupService) unbookMatch(matchID string) error {
 	
 	body, _ := io.ReadAll(resp.Body)
 	
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusNoContent {
+	// 404 表示比赛已经不在订阅中，视为成功
+	if resp.StatusCode == http.StatusNotFound {
+		log.Printf("[SubscriptionCleanup] ℹ️  Match %s already unbooked (404)", matchID)
+		// 继续更新数据库
+	} else if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("status %d: %s", resp.StatusCode, string(body))
 	}
 	
