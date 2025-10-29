@@ -20,6 +20,7 @@ func (s *Server) handleResetDatabase(w http.ResponseWriter, r *http.Request) {
 	// 按照依赖关系顺序删除数据
 	tables := []string{
 		"odds",                  // 赔率数据（依赖 markets）
+		"odds_history",          // 赔率历史数据
 		"markets",               // 盘口数据（依赖 odds_changes）
 		"bet_settlements",       // 结算数据
 		"bet_stops",             // 停止投注数据
@@ -29,7 +30,8 @@ func (s *Server) handleResetDatabase(w http.ResponseWriter, r *http.Request) {
 		"ld_matches",            // Live Data 比赛
 		"uof_messages",          // 原始消息
 		"tracked_events",        // 跟踪的赛事
-		"srn_mapping",           // SRN 映射
+		"producer_status",       // Producer 状态
+		"recovery_status",       // Recovery 状态
 	}
 	
 	deletedCounts := make(map[string]int64)
@@ -59,10 +61,12 @@ func (s *Server) handleResetDatabase(w http.ResponseWriter, r *http.Request) {
 		"bet_settlements_id_seq",
 		"markets_id_seq",
 		"odds_id_seq",
+		"odds_history_id_seq",
 		"ld_events_id_seq",
 		"ld_matches_id_seq",
 		"ld_lineups_id_seq",
-		"srn_mapping_id_seq",
+		"producer_status_id_seq",
+		"recovery_status_id_seq",
 	}
 	
 	for _, seq := range sequences {
