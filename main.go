@@ -120,6 +120,74 @@ func main() {
 	
 	logger.Println("Subscription cleanup started (hourly)")
 	
+	// 启动数据清理服务 (每天凌晨 2 点执行一次)
+	dataCleanup := services.NewDataCleanupService(db)
+	
+	// 定期执行数据清理
+	go func() {
+		// 计算到下一个凌晨 2 点的时间
+		now := time.Now()
+		nextRun := time.Date(now.Year(), now.Month(), now.Day(), 2, 0, 0, 0, now.Location())
+		if now.After(nextRun) {
+			// 如果已经过了今天的 2 点，设置为明天 2 点
+			nextRun = nextRun.Add(24 * time.Hour)
+		}
+		
+		// 等待到第一次执行时间
+		initialDelay := time.Until(nextRun)
+		logger.Printf("[DataCleanup] Next cleanup scheduled at %s (in %s)", nextRun.Format("2006-01-02 15:04:05"), initialDelay.Round(time.Minute))
+		time.Sleep(initialDelay)
+		
+		// 执行第一次清理
+		if results, err := dataCleanup.ExecuteCleanup(); err != nil {
+			logger.Errorf("[DataCleanup] ❌ Failed: %v", err)
+		} else {
+			totalDeleted := int64(0)
+			for _, result := range results {
+				if result.Error != nil {
+					logger.Errorf("[DataCleanup] ⚠️  %s: %v", result.TableName, result.Error)
+				} else if result.DeletedRows > 0 {
+					logger.Printf("[DataCleanup] ✅ %s: deleted %d rows (retain %d days)", result.TableName, result.DeletedRows, result.RetainedDays)
+					totalDeleted += result.DeletedRows
+				}
+			}
+			logger.Printf("[DataCleanup] ✅ Cleanup completed: %d total rows deleted", totalDeleted)
+			
+			// 发送通知
+			if totalDeleted > 0 {
+				larkNotifier.NotifyDataCleanup(totalDeleted, results)
+			}
+		}
+		
+		// 之后每 24 小时执行一次
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		
+		for range ticker.C {
+			if results, err := dataCleanup.ExecuteCleanup(); err != nil {
+				logger.Errorf("[DataCleanup] ❌ Failed: %v", err)
+			} else {
+				totalDeleted := int64(0)
+				for _, result := range results {
+					if result.Error != nil {
+						logger.Errorf("[DataCleanup] ⚠️  %s: %v", result.TableName, result.Error)
+					} else if result.DeletedRows > 0 {
+						logger.Printf("[DataCleanup] ✅ %s: deleted %d rows (retain %d days)", result.TableName, result.DeletedRows, result.RetainedDays)
+						totalDeleted += result.DeletedRows
+					}
+				}
+				logger.Printf("[DataCleanup] ✅ Cleanup completed: %d total rows deleted", totalDeleted)
+				
+				// 发送通知
+				if totalDeleted > 0 {
+					larkNotifier.NotifyDataCleanup(totalDeleted, results)
+				}
+			}
+		}
+	}()
+	
+	logger.Println("Data cleanup service started (daily at 2:00 AM)")
+	
 	// 冷启动初始化 - 获取所有比赛信息
 	coldStart := services.NewColdStart(cfg, db, larkNotifier)
 	go func() {

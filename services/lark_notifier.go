@@ -308,3 +308,35 @@ func (n *LarkNotifier) NotifyPrematchBooking(totalEvents, bookable, success, fai
 	return n.SendRichText("Pre-match Booking", content)
 }
 
+
+// NotifyDataCleanup 发送数据清理通知
+func (n *LarkNotifier) NotifyDataCleanup(totalDeleted int64, results []CleanupResult) error {
+	if !n.enabled {
+		return nil
+	}
+	
+	content := [][]LarkElement{
+		{
+			{Tag: "text", Text: "🧹 数据清理完成\n"},
+		},
+		{
+			{Tag: "text", Text: fmt.Sprintf("总删除行数: %d\n", totalDeleted)},
+		},
+	}
+	
+	// 添加每个表的清理结果
+	for _, result := range results {
+		if result.DeletedRows > 0 {
+			content = append(content, []LarkElement{
+				{Tag: "text", Text: fmt.Sprintf("  • %s: %d 行 (保留 %d 天)\n", result.TableName, result.DeletedRows, result.RetainedDays)},
+			})
+		}
+	}
+	
+	content = append(content, []LarkElement{
+		{Tag: "text", Text: fmt.Sprintf("时间: %s", time.Now().Format("2006-01-02 15:04:05"))},
+	})
+	
+	return n.SendRichText("Data Cleanup", content)
+}
+

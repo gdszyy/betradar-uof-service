@@ -130,6 +130,10 @@ func (s *Server) Start() error {
 	api.HandleFunc("/producer/status", s.handleGetProducerStatus).Methods("GET")
 	api.HandleFunc("/producer/bet-acceptance", s.handleGetBetAcceptance).Methods("GET")
 	
+	// 数据清理 API
+	api.HandleFunc("/cleanup/stats", s.handleGetTableStats).Methods("GET")
+	api.HandleFunc("/cleanup/manual", s.handleManualCleanup).Methods("POST")
+	
 	// LD and TheSports APIs removed - using UOF only
 	
 	// Subscription management API removed - no longer using subscription manager
