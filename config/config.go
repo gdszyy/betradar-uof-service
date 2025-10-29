@@ -91,7 +91,7 @@ func Load() *Config {
 		BookmakerID:   getEnv("BOOKMAKER_ID", username),
 		Products:      getProducts(),
 		MessagingHost: getEnv("BETRADAR_MESSAGING_HOST", "stgmq.betradar.com:5671"),
-		APIBaseURL:    getEnv("BETRADAR_API_BASE_URL", "https://global.api.betradar.com/v1"),
+		APIBaseURL:    getEnv("BETRADAR_API_BASE_URL", "https://stgapi.betradar.com"),
 		RoutingKeys:   getRoutingKeys(),
 
 		// 数据库配置
