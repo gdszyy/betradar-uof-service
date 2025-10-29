@@ -9,13 +9,13 @@ import (
 
 // handleGetTableStats 获取表统计信息
 func (s *Server) handleGetTableStats(w http.ResponseWriter, r *http.Request) {
-	// 使用默认配置
+	// 使用环境变量配置
 	cleanupConfig := services.CleanupConfig{
-		RetainDaysMessages: 7,
-		RetainDaysOdds:     7,
-		RetainDaysBets:     7,
-		RetainDaysLiveData: 3,
-		RetainDaysEvents:   30,
+		RetainDaysMessages: s.config.CleanupRetainDaysMessages,
+		RetainDaysOdds:     s.config.CleanupRetainDaysOdds,
+		RetainDaysBets:     s.config.CleanupRetainDaysBets,
+		RetainDaysLiveData: s.config.CleanupRetainDaysLiveData,
+		RetainDaysEvents:   s.config.CleanupRetainDaysEvents,
 	}
 	dataCleanup := services.NewDataCleanupService(s.db, cleanupConfig)
 	
@@ -69,13 +69,13 @@ func (s *Server) handleManualCleanup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	// 使用默认配置
+	// 使用环境变量配置
 	cleanupConfig := services.CleanupConfig{
-		RetainDaysMessages: 7,
-		RetainDaysOdds:     7,
-		RetainDaysBets:     7,
-		RetainDaysLiveData: 3,
-		RetainDaysEvents:   30,
+		RetainDaysMessages: s.config.CleanupRetainDaysMessages,
+		RetainDaysOdds:     s.config.CleanupRetainDaysOdds,
+		RetainDaysBets:     s.config.CleanupRetainDaysBets,
+		RetainDaysLiveData: s.config.CleanupRetainDaysLiveData,
+		RetainDaysEvents:   s.config.CleanupRetainDaysEvents,
 	}
 	dataCleanup := services.NewDataCleanupService(s.db, cleanupConfig)
 	
