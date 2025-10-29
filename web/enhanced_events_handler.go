@@ -135,11 +135,24 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 			}
 		}
 		
-		// 添加 is_live 过滤
-		if isLive == "true" {
-			// 只返回 live 的比赛 (status = 'live')
-			whereClauses = append(whereClauses, "te.status = 'live'")
-		}
+	// 添加 is_live 过滤
+	if isLive == "true" {
+		// 只返回 live 的比赛 (status = 'live')
+		whereClauses = append(whereClauses, "te.status = 'live'")
+	}
+	
+	// 添加 producer 过滤
+	if producer != "" {
+		// 通过 markets 表过滤 producer_id
+		whereClauses = append(whereClauses, "EXISTS (SELECT 1 FROM markets m WHERE m.event_id = te.event_id AND m.producer_id = $"+fmt.Sprintf("%d", len(args)+1)+")")
+		args = append(args, producer)
+	}
+	
+	// 添加 has_markets 过滤
+	if hasMarkets == "true" {
+		// 只返回有 markets 数据的比赛
+		whereClauses = append(whereClauses, "EXISTS (SELECT 1 FROM markets m WHERE m.event_id = te.event_id)")
+	}
 		
 		// 构建 WHERE 子句
 		whereClause := ""
