@@ -6,8 +6,8 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
+	"uof-service/logger"
 	"time"
 
 	"github.com/streadway/amqp"
@@ -51,7 +51,7 @@ func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster Messag
 	
 	// 从数据库加载 SRN mapping 缓存
 	if err := srnMappingService.LoadCacheFromDB(); err != nil {
-		log.Printf("Warning: failed to load SRN mapping cache: %v", err)
+		logger.Errorf("Warning: failed to load SRN mapping cache: %v", err)
 	}
 	
 		return &AMQPConsumer{
@@ -77,12 +77,12 @@ func (c *AMQPConsumer) Start() error {
 		return fmt.Errorf("failed to get bookmaker info: %w", err)
 	}
 
-	log.Printf("Bookmaker ID: %s", bookmakerId)
-	log.Printf("Virtual Host: %s", virtualHost)
-	log.Printf("Connecting to AMQP (vhost: %s)...", virtualHost)
+	logger.Printf("Bookmaker ID: %s", bookmakerId)
+	logger.Printf("Virtual Host: %s", virtualHost)
+	logger.Printf("Connecting to AMQP (vhost: %s)...", virtualHost)
 
 	// 使用amqp.DialConfig更精确地控制连接参数，与Python的pika.ConnectionParameters类似
-	log.Printf("Resolving host: %s", c.config.MessagingHost)
+	logger.Printf("Resolving host: %s", c.config.MessagingHost)
 	
 	// TLS配置 - 与Python代码一致，禁用证书验证
 	tlsConfig := &tls.Config{
@@ -103,23 +103,23 @@ func (c *AMQPConsumer) Start() error {
 		c.config.MessagingHost,
 	)
 	
-	log.Printf("AMQP URL: amqps://[token]:@%s", c.config.MessagingHost)
-	log.Printf("Attempting AMQP connection with DialConfig...")
-	log.Printf("This may take up to 30 seconds...")
+	logger.Printf("AMQP URL: amqps://[token]:@%s", c.config.MessagingHost)
+	logger.Println("Attempting AMQP connection with DialConfig...")
+	logger.Println("This may take up to 30 seconds...")
 	
 	conn, err := amqp.DialConfig(amqpURL, config)
 	
 	if err != nil {
-		log.Printf("Connection failed: %v", err)
-		log.Printf("Possible causes:")
-		log.Printf("  1. Network firewall blocking port 5671")
-		log.Printf("  2. Railway IP not whitelisted by Betradar")
-		log.Printf("  3. AMQP server unreachable from this location")
+		logger.Errorf("Connection failed: %v", err)
+		logger.Errorf("Possible causes:")
+		logger.Errorf("  1. Network firewall blocking port 5671")
+		logger.Errorf("  2. Railway IP not whitelisted by Betradar")
+		logger.Errorf("  3. AMQP server unreachable from this location")
 		return fmt.Errorf("failed to connect to AMQP: %w", err)
 	}
 	c.conn = conn
 
-	log.Println("Connected to AMQP server")
+	logger.Println("Connected to AMQP server")
 
 	// 创建channel
 	channel, err := conn.Channel()
@@ -146,7 +146,7 @@ func (c *AMQPConsumer) Start() error {
 		return fmt.Errorf("failed to declare queue: %w", err)
 	}
 
-	log.Printf("Queue declared: %s", queue.Name)
+	logger.Printf("Queue declared: %s", queue.Name)
 
 	// 绑定routing keys
 	for _, routingKey := range c.config.RoutingKeys {
@@ -159,7 +159,7 @@ func (c *AMQPConsumer) Start() error {
 		); err != nil {
 			return fmt.Errorf("failed to bind queue: %w", err)
 		}
-		log.Printf("Bound to routing key: %s", routingKey)
+		logger.Printf("Bound to routing key: %s", routingKey)
 	}
 
 	// 开始消费消息
@@ -176,7 +176,7 @@ func (c *AMQPConsumer) Start() error {
 		return fmt.Errorf("failed to consume: %w", err)
 	}
 
-	log.Println("Started consuming messages")
+	logger.Println("Started consuming messages")
 	
 	// 发送服务启动通知
 	go c.notifier.NotifyServiceStart(bookmakerId, c.config.RecoveryProducts)
@@ -186,14 +186,14 @@ func (c *AMQPConsumer) Start() error {
 		
 	// 自动触发恢复（如果启用）
 	if c.config.AutoRecovery {
-		log.Println("Auto recovery is enabled, triggering full recovery...")
+		logger.Println("Auto recovery is enabled, triggering full recovery...")
 		go func() {
 			// 等待几秒确保AMQP连接稳定
 			time.Sleep(3 * time.Second)
 			if err := c.recoveryManager.TriggerFullRecovery(); err != nil {
-				log.Printf("Auto recovery failed: %v", err)
+				logger.Errorf("Auto recovery failed: %v", err)
 			} else {
-				log.Println("Auto recovery completed successfully")
+				logger.Println("Auto recovery completed successfully")
 			}
 		}()
 	}
@@ -206,7 +206,7 @@ func (c *AMQPConsumer) Start() error {
 }
 
 func (c *AMQPConsumer) Stop() {
-	log.Println("Stopping AMQP consumer...")
+	logger.Println("Stopping AMQP consumer...")
 	
 	if c.channel != nil {
 		c.channel.Close()
@@ -239,7 +239,7 @@ func (c *AMQPConsumer) processMessage(msg amqp.Delivery) {
 
 	// 存储到数据库
 	if err := c.messageStore.SaveMessage(messageType, eventID, productID, sportID, routingKey, xmlContent, timestamp); err != nil {
-		log.Printf("Failed to save message: %v", err)
+		logger.Errorf("Failed to save message: %v", err)
 	}
 
 	// 广播到WebSocket客户端
@@ -330,13 +330,13 @@ func (c *AMQPConsumer) handleAlive(xmlContent string) {
 
 	var alive AliveMessage
 	if err := xml.Unmarshal([]byte(xmlContent), &alive); err != nil {
-		log.Printf("Failed to parse alive message: %v", err)
+		logger.Errorf("Failed to parse alive message: %v", err)
 		return
 	}
 
 	// 更新生产者状态
 	if err := c.messageStore.UpdateProducerStatus(alive.ProductID, alive.Timestamp, alive.Subscribed); err != nil {
-		log.Printf("Failed to update producer status: %v", err)
+		logger.Errorf("Failed to update producer status: %v", err)
 	}
 	
 	// 检测订阅取消 (subscribed=0)
@@ -382,12 +382,12 @@ func (c *AMQPConsumer) handleOddsChange(eventID string, productID *int, xmlConte
 
 	var oddsChange OddsChange
 	if err := xml.Unmarshal([]byte(xmlContent), &oddsChange); err != nil {
-		log.Printf("Failed to parse odds_change: %v", err)
+		logger.Errorf("Failed to parse odds_change: %v", err)
 		return
 	}
 
 	marketsCount := len(oddsChange.Odds.Markets)
-	log.Printf("Odds change for event %s: %d markets, status=%s", 
+	logger.Printf("Odds change for event %s: %d markets, status=%s", 
 		eventID, marketsCount, oddsChange.SportEventStatus.Status)
 
 	if err := c.messageStore.SaveOddsChange(eventID, *productID, timestamp, xmlContent, marketsCount); err != nil {
@@ -400,20 +400,20 @@ func (c *AMQPConsumer) handleOddsChange(eventID string, productID *int, xmlConte
 	// 检查是否有队伍信息，如果没有则自动获取
 	hasTeamInfo, err := c.messageStore.HasTeamInfo(eventID)
 	if err != nil {
-		log.Printf("[OddsChange] Failed to check team info for %s: %v", eventID, err)
+		logger.Errorf("[OddsChange] Failed to check team info for %s: %v", eventID, err)
 	} else if !hasTeamInfo {
-		log.Printf("[OddsChange] Event %s missing team info, fetching fixture...", eventID)
+		logger.Printf("[OddsChange] Event %s missing team info, fetching fixture...", eventID)
 		go c.fetchAndStoreFixture(eventID) // 异步获取，不阻塞消息处理
 	}
 	
 	// 使用 OddsChangeParser 解析比分和比赛信息
 	if err := c.oddsChangeParser.ParseAndStore(xmlContent); err != nil {
-		log.Printf("Failed to parse odds_change data: %v", err)
+		logger.Errorf("Failed to parse odds_change data: %v", err)
 	}
 	
 	// 使用 OddsParser 解析和存储赔率数据
 	if err := c.oddsParser.ParseAndStoreOdds([]byte(xmlContent), *productID); err != nil {
-		log.Printf("Failed to parse and store odds: %v", err)
+		logger.Errorf("Failed to parse and store odds: %v", err)
 	}
 }
 
@@ -430,14 +430,14 @@ func (c *AMQPConsumer) handleBetStop(eventID string, productID *int, xmlContent 
 
 	var betStop BetStop
 	if err := xml.Unmarshal([]byte(xmlContent), &betStop); err != nil {
-		log.Printf("Failed to parse bet_stop: %v", err)
+		logger.Errorf("Failed to parse bet_stop: %v", err)
 	} else {
-		log.Printf("Bet stop for event %s: market_status=%d, groups=%s", 
+		logger.Printf("Bet stop for event %s: market_status=%d, groups=%s", 
 			eventID, betStop.MarketStatus, betStop.Groups)
 	}
 
 	if err := c.messageStore.SaveBetStop(eventID, *productID, timestamp, xmlContent); err != nil {
-		log.Printf("Failed to save bet stop: %v", err)
+		logger.Errorf("Failed to save bet stop: %v", err)
 	}
 
 	c.messageStore.UpdateTrackedEvent(eventID)
@@ -464,15 +464,15 @@ func (c *AMQPConsumer) handleBetSettlement(eventID string, productID *int, xmlCo
 
 	var settlement BetSettlement
 	if err := xml.Unmarshal([]byte(xmlContent), &settlement); err != nil {
-		log.Printf("Failed to parse bet_settlement: %v", err)
+		logger.Errorf("Failed to parse bet_settlement: %v", err)
 	} else {
 		marketsCount := len(settlement.Outcomes.Markets)
-		log.Printf("Bet settlement for event %s: %d markets, certainty=%d", 
+		logger.Printf("Bet settlement for event %s: %d markets, certainty=%d", 
 			eventID, marketsCount, settlement.Certainty)
 	}
 
 	if err := c.messageStore.SaveBetSettlement(eventID, *productID, timestamp, xmlContent); err != nil {
-		log.Printf("Failed to save bet settlement: %v", err)
+		logger.Errorf("Failed to save bet settlement: %v", err)
 	}
 
 	c.messageStore.UpdateTrackedEvent(eventID)
@@ -482,8 +482,8 @@ func (c *AMQPConsumer) getBookmakerInfo() (bookmakerId, virtualHost string, err 
 	// 调用Betradar API获取bookmaker_id
 	// API端点: GET /users/whoami.xml
 	url := c.config.APIBaseURL + "/users/whoami.xml"
-	log.Printf("Calling API: %s", url)
-	log.Printf("Token length: %d characters", len(c.config.AccessToken))
+	logger.Printf("Calling API: %s", url)
+	logger.Printf("Token length: %d characters", len(c.config.AccessToken))
 	
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -492,7 +492,7 @@ func (c *AMQPConsumer) getBookmakerInfo() (bookmakerId, virtualHost string, err 
 
 	// 添加认证头
 	req.Header.Set("x-access-token", c.config.AccessToken)
-	log.Printf("Request headers: %v", req.Header)
+	logger.Printf("Request headers: %v", req.Header)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)

@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"encoding/xml"
 	"fmt"
-	"log"
+	"uof-service/logger"
 )
 
 // OddsParser 赔率解析器
@@ -47,8 +47,8 @@ func (p *OddsParser) ParseAndStoreOdds(xmlData []byte, productID int) error {
 		return fmt.Errorf("failed to parse odds_change XML: %w", err)
 	}
 	
-	log.Printf("[OddsParser] Parsing odds_change for event: %s, markets: %d, producer: %d", 
-		oddsChange.EventID, len(oddsChange.Markets), productID)
+		logger.Printf("[OddsParser] Parsing odds_change for event: %s, markets: %d, producer: %d", 
+			oddsChange.EventID, len(oddsChange.Markets), productID)
 	
 	// 开始事务
 	tx, err := p.db.Begin()
@@ -60,8 +60,8 @@ func (p *OddsParser) ParseAndStoreOdds(xmlData []byte, productID int) error {
 	// 存储每个盘口
 	for _, market := range oddsChange.Markets {
 		if err := p.storeMarket(tx, oddsChange.EventID, market, oddsChange.Timestamp, productID); err != nil {
-			log.Printf("[OddsParser] Failed to store market %s: %v", market.ID, err)
-			continue
+				logger.Errorf("[OddsParser] Failed to store market %s: %v", market.ID, err)
+				continue
 		}
 	}
 	
@@ -70,7 +70,7 @@ func (p *OddsParser) ParseAndStoreOdds(xmlData []byte, productID int) error {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 	
-	log.Printf("[OddsParser] Successfully stored odds for event: %s", oddsChange.EventID)
+		logger.Printf("[OddsParser] Successfully stored odds for event: %s", oddsChange.EventID)
 	return nil
 }
 
@@ -101,9 +101,9 @@ func (p *OddsParser) storeMarket(tx *sql.Tx, eventID string, market MarketData, 
 	
 	// 2. 存储每个结果的赔率
 	for _, outcome := range market.Outcomes {
-		if err := p.storeOdds(tx, marketPK, eventID, outcome, timestamp); err != nil {
-			log.Printf("[OddsParser] Failed to store odds for outcome %s: %v", outcome.ID, err)
-		}
+			if err := p.storeOdds(tx, marketPK, eventID, outcome, timestamp); err != nil {
+				logger.Errorf("[OddsParser] Failed to store odds for outcome %s: %v", outcome.ID, err)
+			}
 	}
 	
 	return nil
@@ -172,9 +172,9 @@ func (p *OddsParser) storeOdds(tx *sql.Tx, marketPK int, eventID string, outcome
 			timestamp,
 		)
 		
-		if err != nil {
-			log.Printf("[OddsParser] Failed to insert odds history: %v", err)
-		}
+			if err != nil {
+				logger.Errorf("[OddsParser] Failed to insert odds history: %v", err)
+			}
 	} else if !oldOdds.Valid {
 		// 新赔率
 		historyQuery := `
@@ -269,10 +269,10 @@ func (p *OddsParser) GetMarketOdds(eventID, marketID string) ([]OddsDetail, erro
 			&odds.Timestamp,
 			&odds.UpdatedAt,
 		)
-		if err != nil {
-			log.Printf("[OddsParser] Failed to scan odds: %v", err)
-			continue
-		}
+			if err != nil {
+				logger.Errorf("[OddsParser] Failed to scan odds: %v", err)
+				continue
+			}
 		oddsList = append(oddsList, odds)
 	}
 	
@@ -311,10 +311,10 @@ func (p *OddsParser) GetOddsHistory(eventID, marketID, outcomeID string, limit i
 			&history.Timestamp,
 			&history.CreatedAt,
 		)
-		if err != nil {
-			log.Printf("[OddsParser] Failed to scan odds history: %v", err)
-			continue
-		}
+			if err != nil {
+				logger.Errorf("[OddsParser] Failed to scan odds history: %v", err)
+				continue
+			}
 		historyList = append(historyList, history)
 	}
 	
@@ -382,10 +382,10 @@ func (p *OddsParser) GetEventMarkets(eventID string) ([]MarketInfo, error) {
 			&market.OddsCount,
 			&market.UpdatedAt,
 		)
-		if err != nil {
-			log.Printf("[OddsParser] Failed to scan market: %v", err)
-			continue
-		}
+			if err != nil {
+				logger.Errorf("[OddsParser] Failed to scan market: %v", err)
+				continue
+			}
 		
 		if specifiers.Valid {
 			market.Specifiers = specifiers.String
