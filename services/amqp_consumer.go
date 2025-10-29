@@ -44,7 +44,7 @@ func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster Messag
 	
 	// 初始化解析器
 	srnMappingService := NewSRNMappingService(cfg.UOFAPIToken, cfg.APIBaseURL, store.db)
-	fixtureParser := NewFixtureParser(store.db, srnMappingService)
+	fixtureParser := NewFixtureParser(store.db, srnMappingService, cfg.APIBaseURL, cfg.AccessToken)
 	oddsChangeParser := NewOddsChangeParser(store.db)
 	oddsParser := NewOddsParser(store.db)
 	fixtureService := NewFixtureService(cfg.UOFAPIToken, cfg.APIBaseURL)

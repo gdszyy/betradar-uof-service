@@ -4,7 +4,9 @@ import (
 	"database/sql"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"time"
 )
 
@@ -13,6 +15,8 @@ type FixtureParser struct {
 	db               *sql.DB
 	srnMappingService *SRNMappingService
 	logger           *log.Logger
+	apiBaseURL       string
+	accessToken      string
 }
 
 // FixtureMessage Fixture 消息结构
@@ -50,11 +54,13 @@ type FixtureCompetitor struct {
 }
 
 // NewFixtureParser 创建 Fixture 解析器
-func NewFixtureParser(db *sql.DB, srnMappingService *SRNMappingService) *FixtureParser {
+func NewFixtureParser(db *sql.DB, srnMappingService *SRNMappingService, apiBaseURL, accessToken string) *FixtureParser {
 	return &FixtureParser{
 		db:               db,
 		srnMappingService: srnMappingService,
 		logger:           log.New(log.Writer(), "[FixtureParser] ", log.LstdFlags),
+		apiBaseURL:       apiBaseURL,
+		accessToken:      accessToken,
 	}
 }
 
@@ -165,6 +171,7 @@ func (p *FixtureParser) ParseFixtureChange(eventID string, xmlContent string) er
 		StartTime    int64 `xml:"start_time,attr"`
 		NextLiveTime int64 `xml:"next_live_time,attr"`
 		ChangeType   int   `xml:"change_type,attr"`
+		ProductID    int   `xml:"product,attr"`
 	}
 
 	var fixtureChange FixtureChange
@@ -172,23 +179,80 @@ func (p *FixtureParser) ParseFixtureChange(eventID string, xmlContent string) er
 		return fmt.Errorf("failed to parse fixture_change: %w", err)
 	}
 
-	p.logger.Printf("Parsing fixture_change for event: %s", eventID)
+	p.logger.Printf("Parsing fixture_change for event: %s (change_type=%d)", eventID, fixtureChange.ChangeType)
 
-	// 更新 schedule_time
-	if fixtureChange.StartTime > 0 {
-		scheduleTime := time.UnixMilli(fixtureChange.StartTime)
-		query := `
-			UPDATE tracked_events 
-			SET schedule_time = $1, updated_at = $2
-			WHERE event_id = $3
-		`
-		if _, err := p.db.Exec(query, scheduleTime, time.Now(), eventID); err != nil {
-			return fmt.Errorf("failed to update schedule_time: %w", err)
-		}
-
-		p.logger.Printf("Updated schedule_time for event %s: %s", eventID, scheduleTime.Format(time.RFC3339))
+	// 特殊处理: change_type=5 表示 live coverage 被取消
+	if fixtureChange.ChangeType == 5 {
+		p.logger.Printf("⚠️  Live coverage dropped for event %s (change_type=5)", eventID)
+		// 更新状态标记
+		query := `UPDATE tracked_events SET match_status = 'coverage_dropped', updated_at = $1 WHERE event_id = $2`
+		p.db.Exec(query, time.Now(), eventID)
 	}
 
+	// 官方建议: 无论 change_type 是什么,都应该调用 Fixture API 获取完整信息
+	// 这样可以确保所有属性都是最新的
+	if err := p.fetchAndUpdateFixture(eventID); err != nil {
+		p.logger.Printf("⚠️  Failed to fetch fixture from API: %v", err)
+		
+		// 如果 API 调用失败,回退到只更新 start_time
+		if fixtureChange.StartTime > 0 {
+			scheduleTime := time.UnixMilli(fixtureChange.StartTime)
+			query := `UPDATE tracked_events SET schedule_time = $1, updated_at = $2 WHERE event_id = $3`
+			if _, err := p.db.Exec(query, scheduleTime, time.Now(), eventID); err != nil {
+				return fmt.Errorf("failed to update schedule_time: %w", err)
+			}
+			p.logger.Printf("Updated schedule_time for event %s: %s", eventID, scheduleTime.Format(time.RFC3339))
+		}
+		return nil
+	}
+
+	p.logger.Printf("✅ Successfully updated fixture from API for event %s", eventID)
+	return nil
+}
+
+
+
+// fetchAndUpdateFixture 从 API 获取完整的 Fixture 信息并更新
+func (p *FixtureParser) fetchAndUpdateFixture(eventID string) error {
+	// 构造 API URL
+	url := fmt.Sprintf("%s/sports/en/sports_events/%s/fixture.xml", p.apiBaseURL, eventID)
+	p.logger.Printf("📥 Fetching fixture from API: %s", url)
+	
+	// 创建 HTTP 请求
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	
+	// 添加认证 header
+	req.Header.Set("x-access-token", p.accessToken)
+	
+	// 发送请求
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+	
+	// 检查响应状态
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+	
+	// 读取响应体
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+	
+	// 解析并存储 Fixture 数据
+	if err := p.ParseAndStore(string(body)); err != nil {
+		return fmt.Errorf("failed to parse and store fixture: %w", err)
+	}
+	
+	p.logger.Printf("✅ Successfully fetched and updated fixture for event %s", eventID)
 	return nil
 }
 
