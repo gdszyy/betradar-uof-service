@@ -58,7 +58,7 @@ func NewFixtureParser(db *sql.DB, srnMappingService *SRNMappingService, apiBaseU
 	return &FixtureParser{
 		db:               db,
 		srnMappingService: srnMappingService,
-		logger:           log.New(log.Writer(), "[FixtureParser] ", log.LstdFlags),
+		logger:           log.New(log.Writer(), "", log.LstdFlags),
 		apiBaseURL:       apiBaseURL,
 		accessToken:      accessToken,
 	}

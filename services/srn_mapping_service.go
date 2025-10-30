@@ -43,7 +43,7 @@ func NewSRNMappingService(apiToken, apiBaseURL string, db *sql.DB) *SRNMappingSe
 		apiBaseURL: apiBaseURL,
 		db:         db,
 		cache:      make(map[string]string),
-		logger:     log.New(log.Writer(), "[SRNMapping] ", log.LstdFlags),
+		logger:     log.New(log.Writer(), "", log.LstdFlags),
 	}
 }
 

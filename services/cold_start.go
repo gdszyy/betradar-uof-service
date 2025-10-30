@@ -81,7 +81,7 @@ func NewColdStart(cfg *config.Config, db *sql.DB, larkNotifier *LarkNotifier) *C
 		db:           db,
 		client:       &http.Client{Timeout: 30 * time.Second},
 		larkNotifier: larkNotifier,
-		logger:       log.New(log.Writer(), "[ColdStart] ", log.LstdFlags),
+		logger:       log.New(log.Writer(), "", log.LstdFlags),
 	}
 }
 

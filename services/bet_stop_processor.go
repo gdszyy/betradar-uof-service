@@ -27,7 +27,7 @@ type BetStopMessage struct {
 func NewBetStopProcessor(db *sql.DB) *BetStopProcessor {
 	return &BetStopProcessor{
 		db:     db,
-		logger: log.New(log.Writer(), "[BetStopProcessor] ", log.LstdFlags),
+		logger: log.New(log.Writer(), "", log.LstdFlags),
 	}
 }
 

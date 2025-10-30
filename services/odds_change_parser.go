@@ -98,7 +98,7 @@ type Outcome struct {
 func NewOddsChangeParser(db *sql.DB) *OddsChangeParser {
 	return &OddsChangeParser{
 		db:     db,
-		logger: log.New(log.Writer(), "[OddsChangeParser] ", log.LstdFlags),
+		logger: log.New(log.Writer(), "", log.LstdFlags),
 	}
 }
 

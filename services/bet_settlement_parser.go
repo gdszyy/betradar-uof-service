@@ -45,7 +45,7 @@ type SettlementOutcome struct {
 func NewBetSettlementParser(db *sql.DB) *BetSettlementParser {
 	return &BetSettlementParser{
 		db:     db,
-		logger: log.New(log.Writer(), "[BetSettlementParser] ", log.LstdFlags),
+		logger: log.New(log.Writer(), "", log.LstdFlags),
 	}
 }
 
