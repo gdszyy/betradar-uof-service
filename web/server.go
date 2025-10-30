@@ -34,6 +34,7 @@ type Server struct {
 	marketDescService   *services.MarketDescriptionsService
 	subscriptionSync    *services.SubscriptionSyncService
 	messageHistoryService *services.MessageHistoryService
+	marketQueryService  *services.MarketQueryService
 	httpServer          *http.Server
 	upgrader            websocket.Upgrader
 }
@@ -67,6 +68,7 @@ func NewServer(cfg *config.Config, db *sql.DB, hub *Hub, larkNotifier *services.
 			marketDescService: services.NewMarketDescriptionsService(cfg.AccessToken, cfg.APIBaseURL),
 			subscriptionSync:  services.NewSubscriptionSyncService(db, cfg.AccessToken, cfg.APIBaseURL, cfg.SubscriptionSyncIntervalMinutes),
 			messageHistoryService: services.NewMessageHistoryService(db),
+			marketQueryService: services.NewMarketQueryService(db),
 			upgrader: websocket.Upgrader{
 				ReadBufferSize:  1024,
 				WriteBufferSize: 1024,
@@ -150,6 +152,10 @@ func (s *Server) Start() error {
 	messageHistoryHandler := NewMessageHistoryHandler(s.messageHistoryService)
 	api.HandleFunc("/messages/recent", messageHistoryHandler.GetRecentMessages).Methods("GET")
 	api.HandleFunc("/events/{event_id}/messages", messageHistoryHandler.GetEventMessages).Methods("GET")
+	
+	// 市场查询API
+	marketQueryHandler := NewMarketQueryHandler(s.marketQueryService)
+	api.HandleFunc("/events/{event_id}/markets", marketQueryHandler.GetEventMarkets).Methods("GET")
 	
 	// Pre-match API
 	api.HandleFunc("/prematch/trigger", s.handleTriggerPrematchBooking).Methods("POST")
