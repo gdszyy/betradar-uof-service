@@ -32,6 +32,7 @@ type AMQPConsumer struct {
 	oddsChangeParser     *OddsChangeParser
 	oddsParser           *OddsParser
 	betSettlementParser  *BetSettlementParser
+	betStopProcessor     *BetStopProcessor
 	srnMappingService    *SRNMappingService
 	fixtureService       *FixtureService
 	conn                 *amqp.Connection
@@ -49,6 +50,7 @@ func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster Messag
 	oddsChangeParser := NewOddsChangeParser(store.db)
 	oddsParser := NewOddsParser(store.db)
 	betSettlementParser := NewBetSettlementParser(store.db)
+	betStopProcessor := NewBetStopProcessor(store.db)
 	fixtureService := NewFixtureService(cfg.UOFAPIToken, cfg.APIBaseURL)
 	
 	// 从数据库加载 SRN mapping 缓存
@@ -67,6 +69,7 @@ func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster Messag
 			oddsChangeParser:     oddsChangeParser,
 			oddsParser:           oddsParser,
 			betSettlementParser:  betSettlementParser,
+			betStopProcessor:     betStopProcessor,
 			srnMappingService:    srnMappingService,
 			fixtureService:       fixtureService,
 			done:                 make(chan bool),
@@ -434,22 +437,16 @@ func (c *AMQPConsumer) handleBetStop(eventID string, productID *int, xmlContent 
 		return
 	}
 
-	// 解析bet_stop消息
-	type BetStop struct {
-		MarketStatus int    `xml:"market_status,attr"`
-		Groups       string `xml:"groups,attr"`
+	logger.Printf("Bet stop for event %s (producer %d)", eventID, *productID)
+
+	// 使用 BetStopProcessor 处理并更新 market status
+	if err := c.betStopProcessor.ProcessBetStop(xmlContent); err != nil {
+		logger.Errorf("Failed to process bet stop: %v", err)
 	}
 
-	var betStop BetStop
-	if err := xml.Unmarshal([]byte(xmlContent), &betStop); err != nil {
-		logger.Errorf("Failed to parse bet_stop: %v", err)
-	} else {
-		logger.Printf("Bet stop for event %s: market_status=%d, groups=%s", 
-			eventID, betStop.MarketStatus, betStop.Groups)
-	}
-
+	// 仍然保存 XML 原文到 bet_stops 表 (备份)
 	if err := c.messageStore.SaveBetStop(eventID, *productID, timestamp, xmlContent); err != nil {
-		logger.Errorf("Failed to save bet stop: %v", err)
+		logger.Errorf("Failed to save bet stop XML: %v", err)
 	}
 
 	c.messageStore.UpdateTrackedEvent(eventID)
