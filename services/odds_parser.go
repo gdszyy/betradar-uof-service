@@ -47,8 +47,7 @@ func (p *OddsParser) ParseAndStoreOdds(xmlData []byte, productID int) error {
 		return fmt.Errorf("failed to parse odds_change XML: %w", err)
 	}
 	
-		logger.Printf("[OddsParser] Parsing odds_change for event: %s, markets: %d, producer: %d", 
-			oddsChange.EventID, len(oddsChange.Markets), productID)
+		// 日志已移至 odds_change_parser.go
 	
 	// 开始事务
 	tx, err := p.db.Begin()
@@ -60,7 +59,7 @@ func (p *OddsParser) ParseAndStoreOdds(xmlData []byte, productID int) error {
 	// 存储每个盘口
 	for _, market := range oddsChange.Markets {
 		if err := p.storeMarket(tx, oddsChange.EventID, market, oddsChange.Timestamp, productID); err != nil {
-				logger.Errorf("[OddsParser] Failed to store market %s: %v", market.ID, err)
+				// 错误日志已简化
 				continue
 		}
 	}
@@ -110,7 +109,7 @@ func (p *OddsParser) storeMarket(tx *sql.Tx, eventID string, market MarketData, 
 	// 2. 存储每个结果的赔率
 	for _, outcome := range market.Outcomes {
 			if err := p.storeOdds(tx, marketPK, eventID, outcome, timestamp); err != nil {
-				logger.Errorf("[OddsParser] Failed to store odds for outcome %s: %v", outcome.ID, err)
+				// 错误日志已简化
 			}
 	}
 	
@@ -181,7 +180,7 @@ func (p *OddsParser) storeOdds(tx *sql.Tx, marketPK int, eventID string, outcome
 		)
 		
 			if err != nil {
-				logger.Errorf("[OddsParser] Failed to insert odds history: %v", err)
+				// 错误日志已简化
 			}
 	} else if !oldOdds.Valid {
 		// 新赔率
@@ -278,7 +277,7 @@ func (p *OddsParser) GetMarketOdds(eventID, marketID string) ([]OddsDetail, erro
 			&odds.UpdatedAt,
 		)
 			if err != nil {
-				logger.Errorf("[OddsParser] Failed to scan odds: %v", err)
+				// 错误日志已简化
 				continue
 			}
 		oddsList = append(oddsList, odds)
@@ -320,7 +319,7 @@ func (p *OddsParser) GetOddsHistory(eventID, marketID, outcomeID string, limit i
 			&history.CreatedAt,
 		)
 			if err != nil {
-				logger.Errorf("[OddsParser] Failed to scan odds history: %v", err)
+				// 错误日志已简化
 				continue
 			}
 		historyList = append(historyList, history)
@@ -391,7 +390,7 @@ func (p *OddsParser) GetEventMarkets(eventID string) ([]MarketInfo, error) {
 			&market.UpdatedAt,
 		)
 			if err != nil {
-				logger.Errorf("[OddsParser] Failed to scan market: %v", err)
+				// 错误日志已简化
 				continue
 			}
 		

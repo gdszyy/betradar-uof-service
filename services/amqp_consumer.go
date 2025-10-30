@@ -437,7 +437,7 @@ func (c *AMQPConsumer) handleBetStop(eventID string, productID *int, xmlContent 
 		return
 	}
 
-	logger.Printf("Bet stop for event %s (producer %d)", eventID, *productID)
+	// 日志在 BetStopProcessor 中输出
 
 	// 使用 BetStopProcessor 处理并更新 market status
 	if err := c.betStopProcessor.ProcessBetStop(xmlContent); err != nil {
@@ -457,7 +457,7 @@ func (c *AMQPConsumer) handleBetSettlement(eventID string, productID *int, xmlCo
 		return
 	}
 
-	logger.Printf("Bet settlement for event %s (producer %d)", eventID, *productID)
+	// 日志在 BetSettlementParser 中输出
 
 	// 使用 BetSettlementParser 解析并存储
 	if err := c.betSettlementParser.ParseAndStore(xmlContent); err != nil {
@@ -559,8 +559,7 @@ func (c *AMQPConsumer) handleBetCancel(eventID string, productID *int, xmlConten
 			return
 		}
 
-		marketsCount := len(betCancel.Markets)
-		logger.Printf("Bet cancel for event %s: %d markets cancelled", eventID, marketsCount)
+		logger.Printf("[bet_cancel] 比赛 %s: %d个市场取消投注", eventID, len(betCancel.Markets))
 
 	// 存储到数据库（使用通用的SaveMessage已经存储了，这里可以添加额外处理）
 	c.messageStore.UpdateTrackedEvent(eventID)
@@ -572,7 +571,7 @@ func (c *AMQPConsumer) handleFixture(eventID string, productID *int, xmlContent 
 		return
 	}
 	
-		logger.Printf("Processing fixture for event: %s", eventID)
+		// 日志在 FixtureParser 中输出
 		
 		// 使用 FixtureParser 解析完整的 fixture 消息
 		if err := c.fixtureParser.ParseAndStore(xmlContent); err != nil {
@@ -620,7 +619,7 @@ func (c *AMQPConsumer) handleRollbackBetSettlement(eventID string, productID *in
 		return
 	}
 
-	logger.Printf("Rollback bet settlement for event %s", eventID)
+	logger.Printf("[rollback_bet_settlement] 比赛 %s 的结算已撤销", eventID)
 	c.messageStore.UpdateTrackedEvent(eventID)
 }
 
@@ -630,7 +629,7 @@ func (c *AMQPConsumer) handleRollbackBetCancel(eventID string, productID *int, x
 		return
 	}
 
-	logger.Printf("Rollback bet cancel for event %s", eventID)
+	logger.Printf("[rollback_bet_cancel] 比赛 %s 的取消已撤销", eventID)
 	c.messageStore.UpdateTrackedEvent(eventID)
 }
 
