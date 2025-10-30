@@ -39,7 +39,7 @@ type Server struct {
 	upgrader            websocket.Upgrader
 }
 
-func NewServer(cfg *config.Config, db *sql.DB, hub *Hub, larkNotifier *services.LarkNotifier) *Server {
+func NewServer(cfg *config.Config, db *sql.DB, hub *Hub, larkNotifier *services.LarkNotifier, marketDescService *services.MarketDescriptionsService) *Server {
 	// 创建Replay客户端(如果access token可用)
 	var replayClient *services.ReplayClient
 	if cfg.AccessToken != "" {
@@ -65,7 +65,7 @@ func NewServer(cfg *config.Config, db *sql.DB, hub *Hub, larkNotifier *services.
 			autoBooking:       autoBooking,
 			autoBookingController: autoBookingController,
 			producerMonitor:   services.NewProducerMonitor(db, larkNotifier, cfg.ProducerCheckIntervalSeconds, cfg.ProducerDownThresholdSeconds),
-			marketDescService: services.NewMarketDescriptionsService(cfg.AccessToken, cfg.APIBaseURL),
+			marketDescService: marketDescService,
 			subscriptionSync:  services.NewSubscriptionSyncService(db, cfg.AccessToken, cfg.APIBaseURL, cfg.SubscriptionSyncIntervalMinutes),
 			messageHistoryService: services.NewMessageHistoryService(db),
 			marketQueryService: services.NewMarketQueryService(db),
@@ -181,6 +181,12 @@ func (s *Server) Start() error {
 	// Producer 监控API
 	api.HandleFunc("/producer/status", s.handleGetProducerStatus).Methods("GET")
 	api.HandleFunc("/producer/bet-acceptance", s.handleGetBetAcceptance).Methods("GET")
+	
+	// Market Descriptions API
+	marketDescHandler := NewMarketDescriptionsHandler(s.marketDescService)
+	api.HandleFunc("/market-descriptions/status", marketDescHandler.HandleGetStatus).Methods("GET")
+	api.HandleFunc("/market-descriptions/refresh", marketDescHandler.HandleForceRefresh).Methods("POST")
+	api.HandleFunc("/market-descriptions/bulk-update", marketDescHandler.HandleBulkUpdate).Methods("POST")
 	
 	// 数据清理 API
 	api.HandleFunc("/cleanup/stats", s.handleGetTableStats).Methods("GET")

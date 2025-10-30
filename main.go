@@ -44,6 +44,15 @@ func main() {
 	// 创建消息存储服务
 	messageStore := services.NewMessageStore(db)
 	
+	// 创建 Market Descriptions 服务
+	marketDescService := services.NewMarketDescriptionsService(cfg.AccessToken, cfg.APIBaseURL)
+	marketDescService.SetDatabase(db) // 注入数据库连接 (可选)
+	if err := marketDescService.Start(); err != nil {
+		logger.Errorf("[MarketDescService] ⚠️  Failed to start: %v", err)
+	} else {
+		logger.Println("[MarketDescService] ✅ Market descriptions service started")
+	}
+	
 	// 创建 Producer 监控服务
 	producerMonitor := services.NewProducerMonitor(db, larkNotifier, cfg.ProducerCheckIntervalSeconds, cfg.ProducerDownThresholdSeconds)
 	go producerMonitor.Start()
@@ -72,7 +81,7 @@ func main() {
 	logger.Println("AMQP consumer started")
 
 	// 启动Web服务器
-	server := web.NewServer(cfg, db, wsHub, larkNotifier)
+	server := web.NewServer(cfg, db, wsHub, larkNotifier, marketDescService)
 	
 	go func() {
 		if err := server.Start(); err != nil {
