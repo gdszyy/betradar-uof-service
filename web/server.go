@@ -33,6 +33,7 @@ type Server struct {
 	producerMonitor     *services.ProducerMonitor
 	marketDescService   *services.MarketDescriptionsService
 	subscriptionSync    *services.SubscriptionSyncService
+	messageHistoryService *services.MessageHistoryService
 	httpServer          *http.Server
 	upgrader            websocket.Upgrader
 }
@@ -51,28 +52,29 @@ func NewServer(cfg *config.Config, db *sql.DB, hub *Hub, larkNotifier *services.
 	autoBooking := services.NewAutoBookingService(cfg, db, larkNotifier)
 	autoBookingController := services.NewAutoBookingController(cfg, autoBooking)
 	
-	return &Server{
-		config:          cfg,
-		db:              db,
-		wsHub:           hub,
-		messageStore:    services.NewMessageStore(db),
-		recoveryManager: services.NewRecoveryManager(cfg, services.NewMessageStore(db)),
-		srMapper:        services.NewSRMapper(),
-		replayClient:    replayClient,
-		larkNotifier:      larkNotifier,
-		autoBooking:       autoBooking,
-		autoBookingController: autoBookingController,
-		producerMonitor:   services.NewProducerMonitor(db, larkNotifier, cfg.ProducerCheckIntervalSeconds, cfg.ProducerDownThresholdSeconds),
-		marketDescService: services.NewMarketDescriptionsService(cfg.AccessToken, cfg.APIBaseURL),
-		subscriptionSync:  services.NewSubscriptionSyncService(db, cfg.AccessToken, cfg.APIBaseURL, cfg.SubscriptionSyncIntervalMinutes),
-		upgrader: websocket.Upgrader{
-			ReadBufferSize:  1024,
-			WriteBufferSize: 1024,
-			CheckOrigin: func(r *http.Request) bool {
-				return true // 允许所有来源(生产环境需要限制)
+		return &Server{
+			config:          cfg,
+			db:              db,
+			wsHub:           hub,
+			messageStore:    services.NewMessageStore(db),
+			recoveryManager: services.NewRecoveryManager(cfg, services.NewMessageStore(db)),
+			srMapper:        services.NewSRMapper(),
+			replayClient:    replayClient,
+			larkNotifier:      larkNotifier,
+			autoBooking:       autoBooking,
+			autoBookingController: autoBookingController,
+			producerMonitor:   services.NewProducerMonitor(db, larkNotifier, cfg.ProducerCheckIntervalSeconds, cfg.ProducerDownThresholdSeconds),
+			marketDescService: services.NewMarketDescriptionsService(cfg.AccessToken, cfg.APIBaseURL),
+			subscriptionSync:  services.NewSubscriptionSyncService(db, cfg.AccessToken, cfg.APIBaseURL, cfg.SubscriptionSyncIntervalMinutes),
+			messageHistoryService: services.NewMessageHistoryService(db),
+			upgrader: websocket.Upgrader{
+				ReadBufferSize:  1024,
+				WriteBufferSize: 1024,
+				CheckOrigin: func(r *http.Request) bool {
+					return true // 允许所有来源(生产环境需要限制)
+				},
 			},
-		},
-	}
+		}
 }
 
 func (s *Server) Start() error {
@@ -109,7 +111,6 @@ func (s *Server) Start() error {
 	api.HandleFunc("/events", s.handleGetEnhancedEvents).Methods("GET")
 	// 旧版 API 保留为 /events/simple
 	api.HandleFunc("/events/simple", s.handleGetTrackedEvents).Methods("GET")
-	api.HandleFunc("/events/{event_id}/messages", s.handleGetEventMessages).Methods("GET")
 	api.HandleFunc("/stats", s.handleGetStats).Methods("GET")
 	
 	// 恢复API
@@ -144,6 +145,11 @@ func (s *Server) Start() error {
 	api.HandleFunc("/auto-booking/enable", autoBookingHandler.Enable).Methods("POST")
 	api.HandleFunc("/auto-booking/disable", autoBookingHandler.Disable).Methods("POST")
 	api.HandleFunc("/auto-booking/interval", autoBookingHandler.SetInterval).Methods("POST")
+	
+	// 消息历史API
+	messageHistoryHandler := NewMessageHistoryHandler(s.messageHistoryService)
+	api.HandleFunc("/messages/recent", messageHistoryHandler.GetRecentMessages).Methods("GET")
+	api.HandleFunc("/events/{event_id}/messages", messageHistoryHandler.GetEventMessages).Methods("GET")
 	
 	// Pre-match API
 	api.HandleFunc("/prematch/trigger", s.handleTriggerPrematchBooking).Methods("POST")
