@@ -123,72 +123,7 @@ func Migrate(db *sql.DB) error {
 			`CREATE INDEX IF NOT EXISTS idx_recovery_status_product_id ON recovery_status(product_id)`,
 			`CREATE INDEX IF NOT EXISTS idx_recovery_status_status ON recovery_status(status)`,
 			
-			// Live Data 事件表
-			`CREATE TABLE IF NOT EXISTS ld_events (
-				id BIGSERIAL PRIMARY KEY,
-				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				uuid VARCHAR(36) UNIQUE,
-				event_id VARCHAR(50),
-				match_id VARCHAR(50) NOT NULL,
-				sport_id INTEGER,
-				type INTEGER NOT NULL,
-				type_name VARCHAR(100),
-				info TEXT,
-				side VARCHAR(10),
-				mtime VARCHAR(10),
-				stime BIGINT,
-				match_status VARCHAR(20),
-				t1_score INTEGER DEFAULT 0,
-				t2_score INTEGER DEFAULT 0,
-				player1 VARCHAR(100),
-				player2 VARCHAR(100),
-				extra_info TEXT,
-				is_important BOOLEAN DEFAULT false
-			)`,
-			`CREATE INDEX IF NOT EXISTS idx_ld_events_uuid ON ld_events(uuid)`,
-			`CREATE INDEX IF NOT EXISTS idx_ld_events_match_id ON ld_events(match_id)`,
-			`CREATE INDEX IF NOT EXISTS idx_ld_events_type ON ld_events(type)`,
-			`CREATE INDEX IF NOT EXISTS idx_ld_events_stime ON ld_events(stime)`,
-			`CREATE INDEX IF NOT EXISTS idx_ld_events_is_important ON ld_events(is_important)`,
-			
-			// Live Data 比赛表
-			`CREATE TABLE IF NOT EXISTS ld_matches (
-				id BIGSERIAL PRIMARY KEY,
-				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				match_id VARCHAR(50) UNIQUE NOT NULL,
-				sport_id INTEGER,
-				t1_id VARCHAR(50),
-				t2_id VARCHAR(50),
-				t1_name VARCHAR(200),
-				t2_name VARCHAR(200),
-				match_status VARCHAR(20),
-				match_time VARCHAR(10),
-				t1_score INTEGER DEFAULT 0,
-				t2_score INTEGER DEFAULT 0,
-				match_date VARCHAR(20),
-				start_time VARCHAR(20),
-				coverage_type VARCHAR(50),
-				device_id VARCHAR(50),
-				subscribed BOOLEAN DEFAULT false,
-				last_event_at TIMESTAMP
-			)`,
-			`CREATE INDEX IF NOT EXISTS idx_ld_matches_match_id ON ld_matches(match_id)`,
-			`CREATE INDEX IF NOT EXISTS idx_ld_matches_sport_id ON ld_matches(sport_id)`,
-			`CREATE INDEX IF NOT EXISTS idx_ld_matches_status ON ld_matches(match_status)`,
-			`CREATE INDEX IF NOT EXISTS idx_ld_matches_subscribed ON ld_matches(subscribed)`,
-			
-			// Live Data 阵容表
-			`CREATE TABLE IF NOT EXISTS ld_lineups (
-				id BIGSERIAL PRIMARY KEY,
-				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-				match_id VARCHAR(50) NOT NULL,
-				team1_players TEXT,
-				team2_players TEXT
-			)`,
-			`CREATE INDEX IF NOT EXISTS idx_ld_lineups_match_id ON ld_lineups(match_id)`,
-			
+
 			// 静态数据表 - Sports
 			`CREATE TABLE IF NOT EXISTS sports (
 				id VARCHAR(50) PRIMARY KEY,

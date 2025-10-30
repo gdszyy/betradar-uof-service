@@ -450,22 +450,12 @@ func (s *MarketDescriptionsService) UpdateExistingMarkets() (int, int, error) {
 	}
 	defer tx.Rollback()
 	
-	// 更新 markets 表
-	marketStmt, err := tx.Prepare(`
-		UPDATE markets
-		SET market_name = $1
-		WHERE market_id = $2 AND specifiers = $3
-	`)
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed to prepare market update: %w", err)
-	}
-	defer marketStmt.Close()
-	
-	// 查询所有需要更新的 markets
+	// 更新 markets 表 (分批处理)
 	marketRows, err := tx.Query(`
-		SELECT DISTINCT market_id, specifiers, home_team_name, away_team_name
+		SELECT id, market_id, specifiers, COALESCE(home_team_name, ''), COALESCE(away_team_name, '')
 		FROM markets
 		WHERE market_name IS NULL OR market_name = ''
+		LIMIT 10000
 	`)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to query markets: %w", err)
@@ -474,45 +464,35 @@ func (s *MarketDescriptionsService) UpdateExistingMarkets() (int, int, error) {
 	
 	updatedMarkets := 0
 	for marketRows.Next() {
-		var marketID, specifiers string
-		var homeTeamName, awayTeamName sql.NullString
+		var id int
+		var marketID, specifiers, homeTeamName, awayTeamName string
 		
-		if err := marketRows.Scan(&marketID, &specifiers, &homeTeamName, &awayTeamName); err != nil {
+		if err := marketRows.Scan(&id, &marketID, &specifiers, &homeTeamName, &awayTeamName); err != nil {
 			continue
 		}
 		
 		ctx := &ReplacementContext{
-			HomeTeamName: homeTeamName.String,
-			AwayTeamName: awayTeamName.String,
+			HomeTeamName: homeTeamName,
+			AwayTeamName: awayTeamName,
 			Specifiers:   specifiers,
 		}
 		
 		marketName := s.GetMarketName(marketID, specifiers, ctx)
 		
-		if _, err := marketStmt.Exec(marketName, marketID, specifiers); err != nil {
+		_, err := tx.Exec(`UPDATE markets SET market_name = $1 WHERE id = $2`, marketName, id)
+		if err != nil {
 			logger.Printf("[MarketDescService] ⚠️  Failed to update market %s: %v", marketID, err)
 			continue
 		}
 		updatedMarkets++
 	}
 	
-	// 更新 outcomes 表
-	outcomeStmt, err := tx.Prepare(`
-		UPDATE outcomes
-		SET outcome_name = $1
-		WHERE market_id = $2 AND outcome_id = $3 AND specifiers = $4
-	`)
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed to prepare outcome update: %w", err)
-	}
-	defer outcomeStmt.Close()
-	
-	// 查询所有需要更新的 outcomes
+	// 更新 outcomes 表 (分批处理)
 	outcomeRows, err := tx.Query(`
-		SELECT DISTINCT o.market_id, o.outcome_id, o.specifiers, m.home_team_name, m.away_team_name
-		FROM outcomes o
-		LEFT JOIN markets m ON o.event_id = m.event_id AND o.market_id = m.market_id AND o.specifiers = m.specifiers
-		WHERE o.outcome_name IS NULL OR o.outcome_name = ''
+		SELECT id, market_id, outcome_id, specifiers
+		FROM outcomes
+		WHERE outcome_name IS NULL OR outcome_name = ''
+		LIMIT 50000
 	`)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to query outcomes: %w", err)
@@ -521,22 +501,22 @@ func (s *MarketDescriptionsService) UpdateExistingMarkets() (int, int, error) {
 	
 	updatedOutcomes := 0
 	for outcomeRows.Next() {
+		var id int
 		var marketID, outcomeID, specifiers string
-		var homeTeamName, awayTeamName sql.NullString
 		
-		if err := outcomeRows.Scan(&marketID, &outcomeID, &specifiers, &homeTeamName, &awayTeamName); err != nil {
+		if err := outcomeRows.Scan(&id, &marketID, &outcomeID, &specifiers); err != nil {
 			continue
 		}
 		
+		// 大部分 outcome 名称不需要 team name
 		ctx := &ReplacementContext{
-			HomeTeamName: homeTeamName.String,
-			AwayTeamName: awayTeamName.String,
-			Specifiers:   specifiers,
+			Specifiers: specifiers,
 		}
 		
 		outcomeName := s.GetOutcomeName(marketID, outcomeID, specifiers, ctx)
 		
-		if _, err := outcomeStmt.Exec(outcomeName, marketID, outcomeID, specifiers); err != nil {
+		_, err := tx.Exec(`UPDATE outcomes SET outcome_name = $1 WHERE id = $2`, outcomeName, id)
+		if err != nil {
 			logger.Printf("[MarketDescService] ⚠️  Failed to update outcome %s/%s: %v", marketID, outcomeID, err)
 			continue
 		}
