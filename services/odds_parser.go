@@ -349,7 +349,7 @@ type OddsHistoryInfo struct {
 }
 
 // GetEventMarkets 获取比赛的所有盘口
-func (p *OddsParser) GetEventMarkets(eventID string) ([]MarketInfo, error) {
+func (p *OddsParser) GetEventMarkets(eventID string) ([]OddsMarketInfo, error) {
 	query := `
 		SELECT 
 			m.id,
@@ -373,9 +373,9 @@ func (p *OddsParser) GetEventMarkets(eventID string) ([]MarketInfo, error) {
 	}
 	defer rows.Close()
 	
-	var markets []MarketInfo
+	var markets []OddsMarketInfo
 	for rows.Next() {
-		var market MarketInfo
+		var market OddsMarketInfo
 		var specifiers sql.NullString
 		var marketName sql.NullString
 		
@@ -409,8 +409,8 @@ func (p *OddsParser) GetEventMarkets(eventID string) ([]MarketInfo, error) {
 	return markets, nil
 }
 
-// MarketInfo 盘口信息
-type MarketInfo struct {
+// OddsMarketInfo 盘口信息 (用于 odds_parser)
+type OddsMarketInfo struct {
 	ID          int    `json:"id"`
 	MarketID    string `json:"market_id"`
 	MarketType  string `json:"market_type"`

@@ -54,7 +54,9 @@ func (p *BetStopProcessor) updateMarketStatus(betStop BetStopMessage) error {
 	// 根据 Betradar 文档:
 	// - bet_stop 通常表示市场暂停 (suspended)
 	// - market_status 如果存在,使用该值
-	targetStatus := 2 // 默认: 2 = suspended
+	// Market Status 枚举:
+	//   1 = Active, -1 = Suspended, 0 = Inactive, -3 = Settled, -4 = Cancelled, -2 = Handed over
+	targetStatus := -1 // 默认: -1 = Suspended
 
 	if betStop.MarketStatus != nil {
 		targetStatus = *betStop.MarketStatus

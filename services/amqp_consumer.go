@@ -31,10 +31,13 @@ type AMQPConsumer struct {
 	fixtureParser        *FixtureParser
 	oddsChangeParser     *OddsChangeParser
 	oddsParser           *OddsParser
-	betSettlementParser  *BetSettlementParser
-	betStopProcessor     *BetStopProcessor
-	srnMappingService    *SRNMappingService
-	fixtureService       *FixtureService
+	betSettlementParser         *BetSettlementParser
+	betStopProcessor            *BetStopProcessor
+	betCancelProcessor          *BetCancelProcessor
+	rollbackBetSettlementProc   *RollbackBetSettlementProcessor
+	rollbackBetCancelProc       *RollbackBetCancelProcessor
+	srnMappingService           *SRNMappingService
+	fixtureService              *FixtureService
 	conn                 *amqp.Connection
 	channel              *amqp.Channel
 	done                 chan bool
@@ -51,6 +54,9 @@ func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster Messag
 	oddsParser := NewOddsParser(store.db)
 	betSettlementParser := NewBetSettlementParser(store.db)
 	betStopProcessor := NewBetStopProcessor(store.db)
+	betCancelProcessor := NewBetCancelProcessor(store.db)
+	rollbackBetSettlementProc := NewRollbackBetSettlementProcessor(store.db)
+	rollbackBetCancelProc := NewRollbackBetCancelProcessor(store.db)
 	fixtureService := NewFixtureService(cfg.UOFAPIToken, cfg.APIBaseURL)
 	
 	// 从数据库加载 SRN mapping 缓存
@@ -67,11 +73,14 @@ func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster Messag
 			statsTracker:         statsTracker,
 			fixtureParser:        fixtureParser,
 			oddsChangeParser:     oddsChangeParser,
-			oddsParser:           oddsParser,
-			betSettlementParser:  betSettlementParser,
-			betStopProcessor:     betStopProcessor,
-			srnMappingService:    srnMappingService,
-			fixtureService:       fixtureService,
+		oddsParser:                 oddsParser,
+		betSettlementParser:        betSettlementParser,
+		betStopProcessor:           betStopProcessor,
+		betCancelProcessor:         betCancelProcessor,
+		rollbackBetSettlementProc:  rollbackBetSettlementProc,
+		rollbackBetCancelProc:      rollbackBetCancelProc,
+		srnMappingService:          srnMappingService,
+		fixtureService:             fixtureService,
 			done:                 make(chan bool),
 		}
 }
@@ -544,24 +553,13 @@ func (c *AMQPConsumer) handleBetCancel(eventID string, productID *int, xmlConten
 		return
 	}
 
-	// 解析bet_cancel消息
-	type BetCancel struct {
-		StartTime int64  `xml:"start_time,attr"`
-		EndTime   int64  `xml:"end_time,attr"`
-		Markets   []struct {
-			ID string `xml:"id,attr"`
-		} `xml:"market"`
+	// 日志在 BetCancelProcessor 中输出
+
+	// 使用 BetCancelProcessor 处理并更新 market status
+	if err := c.betCancelProcessor.ProcessBetCancel(xmlContent); err != nil {
+		logger.Errorf("Failed to process bet cancel: %v", err)
 	}
 
-	var betCancel BetCancel
-		if err := xml.Unmarshal([]byte(xmlContent), &betCancel); err != nil {
-			logger.Errorf("Failed to parse bet_cancel: %v", err)
-			return
-		}
-
-		logger.Printf("[bet_cancel] 比赛 %s: %d个市场取消投注", eventID, len(betCancel.Markets))
-
-	// 存储到数据库（使用通用的SaveMessage已经存储了，这里可以添加额外处理）
 	c.messageStore.UpdateTrackedEvent(eventID)
 }
 
@@ -619,7 +617,13 @@ func (c *AMQPConsumer) handleRollbackBetSettlement(eventID string, productID *in
 		return
 	}
 
-	logger.Printf("[rollback_bet_settlement] 比赛 %s 的结算已撤销", eventID)
+	// 日志在 RollbackBetSettlementProcessor 中输出
+
+	// 使用 RollbackBetSettlementProcessor 处理并恢复 market status
+	if err := c.rollbackBetSettlementProc.ProcessRollbackBetSettlement(xmlContent); err != nil {
+		logger.Errorf("Failed to process rollback bet settlement: %v", err)
+	}
+
 	c.messageStore.UpdateTrackedEvent(eventID)
 }
 
@@ -629,7 +633,13 @@ func (c *AMQPConsumer) handleRollbackBetCancel(eventID string, productID *int, x
 		return
 	}
 
-	logger.Printf("[rollback_bet_cancel] 比赛 %s 的取消已撤销", eventID)
+	// 日志在 RollbackBetCancelProcessor 中输出
+
+	// 使用 RollbackBetCancelProcessor 处理并恢复 market status
+	if err := c.rollbackBetCancelProc.ProcessRollbackBetCancel(xmlContent); err != nil {
+		logger.Errorf("Failed to process rollback bet cancel: %v", err)
+	}
+
 	c.messageStore.UpdateTrackedEvent(eventID)
 }
 

@@ -112,7 +112,19 @@ func (p *BetSettlementParser) ParseAndStore(xmlContent string) error {
 				return fmt.Errorf("failed to insert bet_settlement: %w", err)
 			}
 
-			// 详细日志已移除
+				// 详细日志已移除
+			}
+		}
+
+		// 更新当前 market 的 status 为 -3 (Settled)
+		updateQuery := `
+			UPDATE markets 
+			SET status = -3, updated_at = NOW()
+			WHERE event_id = $1 AND market_id = $2 AND specifiers = $3
+		`
+		_, err := tx.Exec(updateQuery, settlement.EventID, market.ID, market.Specifiers)
+		if err != nil {
+			p.logger.Printf("Warning: failed to update market status to settled: %v", err)
 		}
 	}
 
