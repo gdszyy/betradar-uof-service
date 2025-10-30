@@ -15,6 +15,7 @@ type MessageHistoryService struct {
 // MessageHistoryItem 消息历史项
 type MessageHistoryItem struct {
 	Timestamp   time.Time `json:"timestamp"`
+	EventID     string    `json:"event_id,omitempty"`
 	MessageType string    `json:"message_type"`
 	Description string    `json:"description"`
 	XML         string    `json:"xml"`
@@ -22,7 +23,7 @@ type MessageHistoryItem struct {
 
 // MessageHistoryResponse 消息历史响应
 type MessageHistoryResponse struct {
-	EventID  string               `json:"event_id"`
+	EventID  string               `json:"event_id,omitempty"`
 	Total    int                  `json:"total"`
 	Messages []MessageHistoryItem `json:"messages"`
 }
@@ -32,143 +33,113 @@ func NewMessageHistoryService(db *sql.DB) *MessageHistoryService {
 	return &MessageHistoryService{db: db}
 }
 
+// GetRecentMessages 获取最近的 UOF 消息(不限定比赛)
+func (s *MessageHistoryService) GetRecentMessages(limit int, messageType string) (*MessageHistoryResponse, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	query := `
+		SELECT message_type, event_id, xml_content, received_at
+		FROM uof_messages
+		WHERE message_type != 'alive'
+	`
+	
+	// 如果指定了消息类型,添加过滤条件
+	if messageType != "" {
+		query += ` AND message_type = $1`
+	}
+	
+	query += ` ORDER BY received_at DESC LIMIT `
+	if messageType != "" {
+		query += `$2`
+	} else {
+		query += `$1`
+	}
+
+	var rows *sql.Rows
+	var err error
+	
+	if messageType != "" {
+		rows, err = s.db.Query(query, messageType, limit)
+	} else {
+		rows, err = s.db.Query(query, limit)
+	}
+	
+	if err != nil {
+		return nil, fmt.Errorf("failed to query uof_messages: %w", err)
+	}
+	defer rows.Close()
+
+	messages := []MessageHistoryItem{}
+	for rows.Next() {
+		var msgType, eventID, xmlContent string
+		var receivedAt time.Time
+		
+		if err := rows.Scan(&msgType, &eventID, &xmlContent, &receivedAt); err != nil {
+			continue
+		}
+
+		description := s.generateDescription(msgType, eventID, xmlContent)
+		messages = append(messages, MessageHistoryItem{
+			Timestamp:   receivedAt,
+			EventID:     eventID,
+			MessageType: msgType,
+			Description: description,
+			XML:         xmlContent,
+		})
+	}
+
+	return &MessageHistoryResponse{
+		EventID:  "", // 不限定比赛
+		Total:    len(messages),
+		Messages: messages,
+	}, nil
+}
+
 // GetEventMessages 获取比赛的最近消息
 func (s *MessageHistoryService) GetEventMessages(eventID string, limit int) (*MessageHistoryResponse, error) {
 	if limit <= 0 {
 		limit = 5
 	}
 	if limit > 100 {
-		limit = 100 // 最多返回 100 条
+		limit = 100
 	}
+
+	query := `
+		SELECT message_type, xml_content, received_at
+		FROM uof_messages
+		WHERE event_id = $1 AND message_type != 'alive'
+		ORDER BY received_at DESC
+		LIMIT $2
+	`
+	
+	rows, err := s.db.Query(query, eventID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query uof_messages: %w", err)
+	}
+	defer rows.Close()
 
 	messages := []MessageHistoryItem{}
-
-	// 1. 从 odds_changes 表获取消息
-	oddsQuery := `
-		SELECT timestamp, xml_content
-		FROM odds_changes
-		WHERE event_id = $1
-		ORDER BY timestamp DESC
-		LIMIT $2
-	`
-	rows, err := s.db.Query(oddsQuery, eventID, limit)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query odds_changes: %w", err)
-	}
-	defer rows.Close()
-
 	for rows.Next() {
-		var timestamp time.Time
-		var xmlContent string
-		if err := rows.Scan(&timestamp, &xmlContent); err != nil {
+		var msgType, xmlContent string
+		var receivedAt time.Time
+		
+		if err := rows.Scan(&msgType, &xmlContent, &receivedAt); err != nil {
 			continue
 		}
 
-		description := s.generateOddsChangeDescription(eventID, xmlContent)
+		description := s.generateDescription(msgType, eventID, xmlContent)
 		messages = append(messages, MessageHistoryItem{
-			Timestamp:   timestamp,
-			MessageType: "odds_change",
+			Timestamp:   receivedAt,
+			EventID:     eventID,
+			MessageType: msgType,
 			Description: description,
 			XML:         xmlContent,
 		})
-	}
-
-	// 2. 从 bet_stops 表获取消息
-	betStopQuery := `
-		SELECT timestamp, xml_content
-		FROM bet_stops
-		WHERE event_id = $1
-		ORDER BY timestamp DESC
-		LIMIT $2
-	`
-	rows, err = s.db.Query(betStopQuery, eventID, limit)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query bet_stops: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var timestamp time.Time
-		var xmlContent string
-		if err := rows.Scan(&timestamp, &xmlContent); err != nil {
-			continue
-		}
-
-		description := s.generateBetStopDescription(eventID, xmlContent)
-		messages = append(messages, MessageHistoryItem{
-			Timestamp:   timestamp,
-			MessageType: "bet_stop",
-			Description: description,
-			XML:         xmlContent,
-		})
-	}
-
-	// 3. 从 bet_settlements 表获取消息
-	settlementQuery := `
-		SELECT timestamp, xml_content
-		FROM bet_settlements
-		WHERE event_id = $1
-		ORDER BY timestamp DESC
-		LIMIT $2
-	`
-	rows, err = s.db.Query(settlementQuery, eventID, limit)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query bet_settlements: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var timestamp time.Time
-		var xmlContent string
-		if err := rows.Scan(&timestamp, &xmlContent); err != nil {
-			continue
-		}
-
-		description := s.generateBetSettlementDescription(eventID, xmlContent)
-		messages = append(messages, MessageHistoryItem{
-			Timestamp:   timestamp,
-			MessageType: "bet_settlement",
-			Description: description,
-			XML:         xmlContent,
-		})
-	}
-
-	// 4. 从 fixture_changes 表获取消息
-	fixtureQuery := `
-		SELECT timestamp, xml_content
-		FROM fixture_changes
-		WHERE event_id = $1
-		ORDER BY timestamp DESC
-		LIMIT $2
-	`
-	rows, err = s.db.Query(fixtureQuery, eventID, limit)
-	if err != nil {
-		// fixture_changes 表可能不存在,忽略错误
-	} else {
-		defer rows.Close()
-		for rows.Next() {
-			var timestamp time.Time
-			var xmlContent string
-			if err := rows.Scan(&timestamp, &xmlContent); err != nil {
-				continue
-			}
-
-			description := s.generateFixtureChangeDescription(eventID, xmlContent)
-			messages = append(messages, MessageHistoryItem{
-				Timestamp:   timestamp,
-				MessageType: "fixture_change",
-				Description: description,
-				XML:         xmlContent,
-			})
-		}
-	}
-
-	// 按时间倒序排序
-	sortMessagesByTimestamp(messages)
-
-	// 只返回 limit 条
-	if len(messages) > limit {
-		messages = messages[:limit]
 	}
 
 	return &MessageHistoryResponse{
@@ -176,6 +147,28 @@ func (s *MessageHistoryService) GetEventMessages(eventID string, limit int) (*Me
 		Total:    len(messages),
 		Messages: messages,
 	}, nil
+}
+
+// generateDescription 生成消息的自然语言描述
+func (s *MessageHistoryService) generateDescription(msgType, eventID, xmlContent string) string {
+	switch msgType {
+	case "odds_change":
+		return s.generateOddsChangeDescription(eventID, xmlContent)
+	case "bet_stop":
+		return s.generateBetStopDescription(eventID, xmlContent)
+	case "bet_settlement":
+		return s.generateBetSettlementDescription(eventID, xmlContent)
+	case "fixture_change":
+		return s.generateFixtureChangeDescription(eventID, xmlContent)
+	case "bet_cancel":
+		return s.generateBetCancelDescription(eventID, xmlContent)
+	case "rollback_bet_settlement":
+		return fmt.Sprintf("比赛 %s 的结算已撤销", eventID)
+	case "rollback_bet_cancel":
+		return fmt.Sprintf("比赛 %s 的取消已撤销", eventID)
+	default:
+		return fmt.Sprintf("比赛 %s 的 %s 消息", eventID, msgType)
+	}
 }
 
 // generateOddsChangeDescription 生成 odds_change 的自然语言描述
@@ -300,202 +293,19 @@ func (s *MessageHistoryService) generateFixtureChangeDescription(eventID, xmlCon
 	return fmt.Sprintf("比赛 %s 的赛事信息已更新", eventID)
 }
 
-// GetRecentMessages 获取最近的 UOF 消息(不限定比赛)
-func (s *MessageHistoryService) GetRecentMessages(limit int, messageType string) (*MessageHistoryResponse, error) {
-	if limit <= 0 {
-		limit = 10
-	}
-	if limit > 100 {
-		limit = 100
-	}
-
-	messages := []MessageHistoryItem{}
-
-	// 根据 messageType 查询不同的表
-	if messageType == "" || messageType == "odds_change" {
-		if err := s.fetchRecentOddsChanges(&messages, limit); err != nil {
-			return nil, err
-		}
+// generateBetCancelDescription 生成 bet_cancel 的自然语言描述
+func (s *MessageHistoryService) generateBetCancelDescription(eventID, xmlContent string) string {
+	type BetCancel struct {
+		Markets []struct {
+			ID string `xml:"id,attr"`
+		} `xml:"market"`
 	}
 
-	if messageType == "" || messageType == "bet_stop" {
-		if err := s.fetchRecentBetStops(&messages, limit); err != nil {
-			return nil, err
-		}
+	var betCancel BetCancel
+	if err := xml.Unmarshal([]byte(xmlContent), &betCancel); err != nil {
+		return fmt.Sprintf("比赛 %s 的投注已取消", eventID)
 	}
 
-	if messageType == "" || messageType == "bet_settlement" {
-		if err := s.fetchRecentBetSettlements(&messages, limit); err != nil {
-			return nil, err
-		}
-	}
-
-	if messageType == "" || messageType == "fixture_change" {
-		if err := s.fetchRecentFixtureChanges(&messages, limit); err != nil {
-			// fixture_changes 表可能不存在,忽略错误
-		}
-	}
-
-	// 按时间倒序排序
-	sortMessagesByTimestamp(messages)
-
-	// 只返回 limit 条
-	if len(messages) > limit {
-		messages = messages[:limit]
-	}
-
-	return &MessageHistoryResponse{
-		EventID:  "", // 不限定比赛
-		Total:    len(messages),
-		Messages: messages,
-	}, nil
-}
-
-// fetchRecentOddsChanges 获取最近的 odds_change 消息
-func (s *MessageHistoryService) fetchRecentOddsChanges(messages *[]MessageHistoryItem, limit int) error {
-	query := `
-		SELECT event_id, timestamp, xml_content
-		FROM odds_changes
-		ORDER BY timestamp DESC
-		LIMIT $1
-	`
-	rows, err := s.db.Query(query, limit)
-	if err != nil {
-		return fmt.Errorf("failed to query odds_changes: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var eventID string
-		var timestamp time.Time
-		var xmlContent string
-		if err := rows.Scan(&eventID, &timestamp, &xmlContent); err != nil {
-			continue
-		}
-
-		description := s.generateOddsChangeDescription(eventID, xmlContent)
-		*messages = append(*messages, MessageHistoryItem{
-			Timestamp:   timestamp,
-			MessageType: "odds_change",
-			Description: description,
-			XML:         xmlContent,
-		})
-	}
-
-	return nil
-}
-
-// fetchRecentBetStops 获取最近的 bet_stop 消息
-func (s *MessageHistoryService) fetchRecentBetStops(messages *[]MessageHistoryItem, limit int) error {
-	query := `
-		SELECT event_id, timestamp, xml_content
-		FROM bet_stops
-		ORDER BY timestamp DESC
-		LIMIT $1
-	`
-	rows, err := s.db.Query(query, limit)
-	if err != nil {
-		return fmt.Errorf("failed to query bet_stops: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var eventID string
-		var timestamp time.Time
-		var xmlContent string
-		if err := rows.Scan(&eventID, &timestamp, &xmlContent); err != nil {
-			continue
-		}
-
-		description := s.generateBetStopDescription(eventID, xmlContent)
-		*messages = append(*messages, MessageHistoryItem{
-			Timestamp:   timestamp,
-			MessageType: "bet_stop",
-			Description: description,
-			XML:         xmlContent,
-		})
-	}
-
-	return nil
-}
-
-// fetchRecentBetSettlements 获取最近的 bet_settlement 消息
-func (s *MessageHistoryService) fetchRecentBetSettlements(messages *[]MessageHistoryItem, limit int) error {
-	query := `
-		SELECT event_id, timestamp, xml_content
-		FROM bet_settlements
-		ORDER BY timestamp DESC
-		LIMIT $1
-	`
-	rows, err := s.db.Query(query, limit)
-	if err != nil {
-		return fmt.Errorf("failed to query bet_settlements: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var eventID string
-		var timestamp time.Time
-		var xmlContent string
-		if err := rows.Scan(&eventID, &timestamp, &xmlContent); err != nil {
-			continue
-		}
-
-		description := s.generateBetSettlementDescription(eventID, xmlContent)
-		*messages = append(*messages, MessageHistoryItem{
-			Timestamp:   timestamp,
-			MessageType: "bet_settlement",
-			Description: description,
-			XML:         xmlContent,
-		})
-	}
-
-	return nil
-}
-
-// fetchRecentFixtureChanges 获取最近的 fixture_change 消息
-func (s *MessageHistoryService) fetchRecentFixtureChanges(messages *[]MessageHistoryItem, limit int) error {
-	query := `
-		SELECT event_id, timestamp, xml_content
-		FROM fixture_changes
-		ORDER BY timestamp DESC
-		LIMIT $1
-	`
-	rows, err := s.db.Query(query, limit)
-	if err != nil {
-		return fmt.Errorf("failed to query fixture_changes: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var eventID string
-		var timestamp time.Time
-		var xmlContent string
-		if err := rows.Scan(&eventID, &timestamp, &xmlContent); err != nil {
-			continue
-		}
-
-		description := s.generateFixtureChangeDescription(eventID, xmlContent)
-		*messages = append(*messages, MessageHistoryItem{
-			Timestamp:   timestamp,
-			MessageType: "fixture_change",
-			Description: description,
-			XML:         xmlContent,
-		})
-	}
-
-	return nil
-}
-
-// sortMessagesByTimestamp 按时间戳倒序排序消息
-func sortMessagesByTimestamp(messages []MessageHistoryItem) {
-	// 简单的冒泡排序
-	for i := 0; i < len(messages); i++ {
-		for j := i + 1; j < len(messages); j++ {
-			if messages[i].Timestamp.Before(messages[j].Timestamp) {
-				messages[i], messages[j] = messages[j], messages[i]
-			}
-		}
-	}
+	return fmt.Sprintf("比赛 %s: %d个市场取消投注", eventID, len(betCancel.Markets))
 }
 
