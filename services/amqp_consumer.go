@@ -648,22 +648,20 @@ func (c *AMQPConsumer) handleSnapshotComplete(xmlContent string) {
 		return
 	}
 
-		logger.Printf("✅ Snapshot complete: product=%d, request_id=%d, timestamp=%d", snapshot.Product, snapshot.RequestID, snapshot.Timestamp)
-		
-		// 更新恢复状态
-		if snapshot.RequestID > 0 {
-			if err := c.messageStore.UpdateRecoveryCompleted(snapshot.RequestID, snapshot.Product, snapshot.Timestamp); err != nil {
-				logger.Printf("Failed to update recovery status: %v", err)
-				if c.notifier != nil {
-					c.notifier.NotifyError("Recovery", fmt.Sprintf("Failed to update recovery status: %v", err))
-				}
-			} else {
-				logger.Printf("Recovery request %d for product %d marked as completed", snapshot.RequestID, snapshot.Product)
-				if c.notifier != nil {
-					c.notifier.NotifyRecoveryComplete(snapshot.Product, int64(snapshot.RequestID))
-				}
+	// 更新恢复状态
+	if snapshot.RequestID > 0 {
+		if err := c.messageStore.UpdateRecoveryCompleted(snapshot.RequestID, snapshot.Product, snapshot.Timestamp); err != nil {
+			logger.Printf("Failed to update recovery status: %v", err)
+			if c.notifier != nil {
+				c.notifier.NotifyError("Recovery", fmt.Sprintf("Failed to update recovery status: %v", err))
+			}
+		} else {
+			logger.Printf("[snapshot_complete] Producer %d 的数据恢复已完成 (request_id=%d)", snapshot.Product, snapshot.RequestID)
+			if c.notifier != nil {
+				c.notifier.NotifyRecoveryComplete(snapshot.Product, int64(snapshot.RequestID))
 			}
 		}
+	}
 }
 
 
