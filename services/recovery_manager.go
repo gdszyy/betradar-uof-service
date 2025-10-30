@@ -1,10 +1,11 @@
 package services
 
 import (
-"uof-service/logger"
+	"uof-service/logger"
 	"bytes"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"time"
 
@@ -20,13 +21,16 @@ type RecoveryManager struct {
 }
 
 func NewRecoveryManager(cfg *config.Config, store *MessageStore) *RecoveryManager {
+	// 生成随机 node_id (1-9999) 避免多实例冲突
+	randomNodeID := rand.Intn(9999) + 1
+	
 	return &RecoveryManager{
 		config:           cfg,
 		client:           &http.Client{
 			Timeout: 30 * time.Second,
 		},
 		messageStore:     store,
-		nodeID:           1, // 默认节点ID为1，可以通过环境变量配置
+		nodeID:           randomNodeID,
 		requestIDCounter: int(time.Now().Unix()), // 使用当前时间戳作为起始ID
 	}
 }

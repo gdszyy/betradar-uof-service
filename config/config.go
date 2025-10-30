@@ -132,7 +132,7 @@ func Load() *Config {
 		
 		// Producer 监控配置
 		ProducerCheckIntervalSeconds: getEnvInt("PRODUCER_CHECK_INTERVAL_SECONDS", 60),   // 默认每 60 秒检查一次
-		ProducerDownThresholdSeconds: getEnvInt("PRODUCER_DOWN_THRESHOLD_SECONDS", 180), // 默认 180 秒（3分钟）不响应才告警
+		ProducerDownThresholdSeconds: getEnvInt("PRODUCER_DOWN_THRESHOLD_SECONDS", 10),  // 默认 10 秒不响应才告警 (alive 消息间隔)
 		
 		// 订阅同步配置
 		SubscriptionSyncIntervalMinutes: getEnvInt("SUBSCRIPTION_SYNC_INTERVAL_MINUTES", 5), // 默认每 5 分钟同步一次
