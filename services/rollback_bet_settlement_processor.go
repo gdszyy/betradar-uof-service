@@ -1,6 +1,7 @@
 package services
 
 import (
+"os"
 	"database/sql"
 	"encoding/xml"
 	"fmt"
@@ -29,7 +30,7 @@ type RollbackBetSettlementMessage struct {
 func NewRollbackBetSettlementProcessor(db *sql.DB) *RollbackBetSettlementProcessor {
 	return &RollbackBetSettlementProcessor{
 		db:     db,
-		logger: log.New(log.Writer(), "", log.LstdFlags),
+		logger: log.New(os.Stdout, "", log.LstdFlags),
 	}
 }
 

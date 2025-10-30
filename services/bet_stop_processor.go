@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"log"
+	"os"
 )
 
 // BetStopProcessor Bet Stop 消息处理器
@@ -27,7 +28,7 @@ type BetStopMessage struct {
 func NewBetStopProcessor(db *sql.DB) *BetStopProcessor {
 	return &BetStopProcessor{
 		db:     db,
-		logger: log.New(log.Writer(), "", log.LstdFlags),
+		logger: log.New(os.Stdout, "", log.LstdFlags),
 	}
 }
 

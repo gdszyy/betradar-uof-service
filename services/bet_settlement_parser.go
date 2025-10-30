@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"log"
+	"os"
 )
 
 // BetSettlementParser Bet Settlement 消息解析器
@@ -45,7 +46,7 @@ type SettlementOutcome struct {
 func NewBetSettlementParser(db *sql.DB) *BetSettlementParser {
 	return &BetSettlementParser{
 		db:     db,
-		logger: log.New(log.Writer(), "", log.LstdFlags),
+		logger: log.New(os.Stdout, "", log.LstdFlags),
 	}
 }
 

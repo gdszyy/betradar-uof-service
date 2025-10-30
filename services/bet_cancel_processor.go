@@ -1,6 +1,7 @@
 package services
 
 import (
+"os"
 "database/sql"
 "encoding/xml"
 "fmt"
@@ -33,7 +34,7 @@ VoidReason *int   `xml:"void_reason,attr"`
 func NewBetCancelProcessor(db *sql.DB) *BetCancelProcessor {
 return &BetCancelProcessor{
 db:     db,
-logger: log.New(log.Writer(), "", log.LstdFlags),
+logger: log.New(os.Stdout, "", log.LstdFlags),
 }
 }
 

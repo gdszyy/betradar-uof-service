@@ -1,6 +1,7 @@
 package services
 
 import (
+"os"
 	"database/sql"
 	"encoding/xml"
 	"fmt"
@@ -29,7 +30,7 @@ type RollbackBetCancelMessage struct {
 func NewRollbackBetCancelProcessor(db *sql.DB) *RollbackBetCancelProcessor {
 	return &RollbackBetCancelProcessor{
 		db:     db,
-		logger: log.New(log.Writer(), "", log.LstdFlags),
+		logger: log.New(os.Stdout, "", log.LstdFlags),
 	}
 }
 

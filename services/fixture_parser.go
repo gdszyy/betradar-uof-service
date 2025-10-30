@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -58,7 +59,7 @@ func NewFixtureParser(db *sql.DB, srnMappingService *SRNMappingService, apiBaseU
 	return &FixtureParser{
 		db:               db,
 		srnMappingService: srnMappingService,
-		logger:           log.New(log.Writer(), "", log.LstdFlags),
+		logger:           log.New(os.Stdout, "", log.LstdFlags),
 		apiBaseURL:       apiBaseURL,
 		accessToken:      accessToken,
 	}

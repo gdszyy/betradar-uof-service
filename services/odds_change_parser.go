@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 )
@@ -99,7 +100,7 @@ type Outcome struct {
 func NewOddsChangeParser(db *sql.DB) *OddsChangeParser {
 	return &OddsChangeParser{
 		db:     db,
-		logger: log.New(log.Writer(), "", log.LstdFlags),
+		logger: log.New(os.Stdout, "", log.LstdFlags),
 	}
 }
 
