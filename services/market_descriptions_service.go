@@ -81,7 +81,8 @@ func (s *MarketDescriptionsService) Start() error {
 	
 	// 如果有数据库,优先从数据库加载
 	if s.db != nil {
-		if err := s.loadFromDatabase(); err == nil {
+		err := s.loadFromDatabase()
+		if err == nil {
 			logger.Printf("[MarketDescService] ✅ Loaded %d markets from database cache", len(s.markets))
 			
 			// 启动定期刷新 (每24小时)
