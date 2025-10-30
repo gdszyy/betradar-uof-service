@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -166,20 +167,38 @@ func (p *OddsChangeParser) ParseAndStore(xmlContent string) error {
 		outcomeCount += len(market.Outcomes)
 	}
 	
-	// 格式化比分
-	scoreText := ""
+	// 格式化日志
+	logParts := []string{
+		fmt.Sprintf("%d个市场", marketCount),
+		fmt.Sprintf("%d个结果", outcomeCount),
+	}
+	
+	// 添加比分
 	if homeScore != nil && awayScore != nil {
-		scoreText = fmt.Sprintf(", 比分 %d-%d", *homeScore, *awayScore)
+		logParts = append(logParts, fmt.Sprintf("比分 %d-%d", *homeScore, *awayScore))
 	}
 	
-	// 格式化状态
-	statusText := ""
+	// 添加比赛阶段
 	if matchStatus != "" {
-		statusText = fmt.Sprintf(", 状态: %s", matchStatus)
+		matchStatusNames := map[string]string{
+			"0": "未开始",
+			"1": "上半场",
+			"2": "中场",
+			"3": "下半场",
+			"4": "加时",
+			"5": "点球",
+			"6": "已结束",
+			"7": "已取消",
+		}
+		if name, ok := matchStatusNames[matchStatus]; ok {
+			logParts = append(logParts, name)
+		} else {
+			logParts = append(logParts, fmt.Sprintf("阶段%s", matchStatus))
+		}
 	}
 	
-	p.logger.Printf("[odds_change] 比赛 %s: %d个市场, %d个结果%s%s",
-		oddsChange.EventID, marketCount, outcomeCount, scoreText, statusText)
+	p.logger.Printf("[odds_change] 比赛 %s: %s",
+		oddsChange.EventID, strings.Join(logParts, ", "))
 
 	return nil
 }

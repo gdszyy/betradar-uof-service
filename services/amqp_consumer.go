@@ -402,8 +402,7 @@ func (c *AMQPConsumer) handleOddsChange(eventID string, productID *int, xmlConte
 	}
 
 	marketsCount := len(oddsChange.Odds.Markets)
-	logger.Printf("Odds change for event %s: %d markets, status=%s", 
-		eventID, marketsCount, oddsChange.SportEventStatus.Status)
+	// 日志在 OddsChangeParser 中输出
 
 	if err := c.messageStore.SaveOddsChange(eventID, *productID, timestamp, xmlContent, marketsCount); err != nil {
 		logger.Printf("Failed to save odds change: %v", err)
