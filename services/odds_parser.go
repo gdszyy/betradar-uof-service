@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/xml"
 	"fmt"
-	"uof-service/logger"
 )
 
 // OddsParser 赔率解析器
