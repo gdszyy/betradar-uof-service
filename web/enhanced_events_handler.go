@@ -452,7 +452,7 @@ func (s *Server) getMarketName(marketID string, homeTeamName string, awayTeamNam
 			AwayTeamName: awayTeamName,
 			Specifiers:   specifiers,
 		}
-		name := s.marketDescService.GetMarketName(marketID, ctx)
+			name := s.marketDescService.GetMarketName(marketID, specifiers, &ctx)
 		// 如果不是默认的 "Market X" 格式,说明找到了
 		if name != "Market "+marketID {
 			return name
@@ -496,7 +496,7 @@ func (s *Server) getOutcomeName(marketID string, outcomeID string, homeTeamName 
 			AwayTeamName: awayTeamName,
 			Specifiers:   specifiers,
 		}
-		name := s.marketDescService.GetOutcomeName(marketID, outcomeID, ctx)
+			name := s.marketDescService.GetOutcomeName(marketID, outcomeID, specifiers, &ctx)
 		// 如果不是默认的 "Outcome X" 格式,说明找到了
 		if name != "Outcome "+outcomeID {
 			return name
