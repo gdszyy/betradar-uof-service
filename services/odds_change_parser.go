@@ -109,7 +109,7 @@ func (p *OddsChangeParser) ParseAndStore(xmlContent string) error {
 		return fmt.Errorf("failed to parse odds_change message: %w", err)
 	}
 
-	p.logger.Printf("Parsing odds_change for event: %s", oddsChange.EventID)
+	// 日志在处理完成后输出
 
 	// 提取比分和状态信息
 	var homeScore, awayScore *int
@@ -128,8 +128,7 @@ func (p *OddsChangeParser) ParseAndStore(xmlContent string) error {
 			matchTime = ses.Clock.MatchTime
 		}
 
-		p.logger.Printf("Extracted from sport_event_status: score=%v-%v, status=%s, match_status=%s, time=%s",
-			formatScore(homeScore), formatScore(awayScore), status, matchStatus, matchTime)
+		// 提取日志已移除
 	}
 
 	// 提取主客队信息
@@ -160,12 +159,27 @@ func (p *OddsChangeParser) ParseAndStore(xmlContent string) error {
 		return fmt.Errorf("failed to store odds_change data: %w", err)
 	}
 
-	p.logger.Printf("Stored odds_change data for event %s: %v-%v, status=%s, time=%s",
-		oddsChange.EventID,
-		formatScore(homeScore),
-		formatScore(awayScore),
-		matchStatus,
-		matchTime)
+	// 统计市场和结果数量
+	marketCount := len(oddsChange.Odds.Markets)
+	outcomeCount := 0
+	for _, market := range oddsChange.Odds.Markets {
+		outcomeCount += len(market.Outcomes)
+	}
+	
+	// 格式化比分
+	scoreText := ""
+	if homeScore != nil && awayScore != nil {
+		scoreText = fmt.Sprintf(", 比分 %d-%d", *homeScore, *awayScore)
+	}
+	
+	// 格式化状态
+	statusText := ""
+	if matchStatus != "" {
+		statusText = fmt.Sprintf(", 状态: %s", matchStatus)
+	}
+	
+	p.logger.Printf("[odds_change] 比赛 %s: %d个市场, %d个结果%s%s",
+		oddsChange.EventID, marketCount, outcomeCount, scoreText, statusText)
 
 	return nil
 }

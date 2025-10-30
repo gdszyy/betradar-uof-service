@@ -38,8 +38,7 @@ func (p *BetStopProcessor) ProcessBetStop(xmlContent string) error {
 		return fmt.Errorf("failed to parse bet_stop message: %w", err)
 	}
 
-	p.logger.Printf("Processing bet_stop for event: %s (groups=%s, market_status=%v)",
-		betStop.EventID, betStop.Groups, betStop.MarketStatus)
+	// 日志在更新后输出
 
 	// 根据 groups 更新 market status
 	if err := p.updateMarketStatus(betStop); err != nil {
@@ -75,8 +74,8 @@ func (p *BetStopProcessor) updateMarketStatus(betStop BetStopMessage) error {
 		}
 
 		rowsAffected, _ := result.RowsAffected()
-		p.logger.Printf("✅ Updated %d markets to status=%d for event %s (groups=all)",
-			rowsAffected, targetStatus, betStop.EventID)
+		p.logger.Printf("[bet_stop] 比赛 %s 的所有市场已暂停 (%d个市场)",
+			betStop.EventID, rowsAffected)
 
 	} else {
 		// 更新特定市场组
@@ -96,8 +95,8 @@ func (p *BetStopProcessor) updateMarketStatus(betStop BetStopMessage) error {
 		}
 
 		rowsAffected, _ := result.RowsAffected()
-		p.logger.Printf("✅ Updated %d markets to status=%d for event %s (groups=%s)",
-			rowsAffected, targetStatus, betStop.EventID, betStop.Groups)
+		p.logger.Printf("[bet_stop] 比赛 %s 的市场组 %s 已暂停 (%d个市场)",
+			betStop.EventID, betStop.Groups, rowsAffected)
 	}
 
 	return nil

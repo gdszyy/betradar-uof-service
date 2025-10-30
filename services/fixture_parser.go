@@ -179,11 +179,11 @@ func (p *FixtureParser) ParseFixtureChange(eventID string, xmlContent string) er
 		return fmt.Errorf("failed to parse fixture_change: %w", err)
 	}
 
-	p.logger.Printf("Parsing fixture_change for event: %s (change_type=%d)", eventID, fixtureChange.ChangeType)
+	// 日志在处理完成后输出
 
 	// 特殊处理: change_type=5 表示 live coverage 被取消
 	if fixtureChange.ChangeType == 5 {
-		p.logger.Printf("⚠️  Live coverage dropped for event %s (change_type=5)", eventID)
+		p.logger.Printf("[fixture_change] 比赛 %s 的直播覆盖已取消", eventID)
 		// 更新状态标记
 		query := `UPDATE tracked_events SET match_status = 'coverage_dropped', updated_at = $1 WHERE event_id = $2`
 		p.db.Exec(query, time.Now(), eventID)
@@ -192,7 +192,7 @@ func (p *FixtureParser) ParseFixtureChange(eventID string, xmlContent string) er
 	// 官方建议: 无论 change_type 是什么,都应该调用 Fixture API 获取完整信息
 	// 这样可以确保所有属性都是最新的
 	if err := p.fetchAndUpdateFixture(eventID); err != nil {
-		p.logger.Printf("⚠️  Failed to fetch fixture from API: %v", err)
+		// API 失败日志已简化
 		
 		// 如果 API 调用失败,回退到只更新 start_time
 		if fixtureChange.StartTime > 0 {
@@ -201,12 +201,12 @@ func (p *FixtureParser) ParseFixtureChange(eventID string, xmlContent string) er
 			if _, err := p.db.Exec(query, scheduleTime, time.Now(), eventID); err != nil {
 				return fmt.Errorf("failed to update schedule_time: %w", err)
 			}
-			p.logger.Printf("Updated schedule_time for event %s: %s", eventID, scheduleTime.Format(time.RFC3339))
+			p.logger.Printf("[fixture_change] 比赛 %s 的开赛时间变更为 %s", eventID, scheduleTime.Format("2006-01-02 15:04"))
 		}
 		return nil
 	}
 
-	p.logger.Printf("✅ Successfully updated fixture from API for event %s", eventID)
+	p.logger.Printf("[fixture_change] 比赛 %s 的赛事信息已更新", eventID)
 	return nil
 }
 
@@ -216,7 +216,7 @@ func (p *FixtureParser) ParseFixtureChange(eventID string, xmlContent string) er
 func (p *FixtureParser) fetchAndUpdateFixture(eventID string) error {
 	// 构造 API URL
 	url := fmt.Sprintf("%s/sports/en/sports_events/%s/fixture.xml", p.apiBaseURL, eventID)
-	p.logger.Printf("📥 Fetching fixture from API: %s", url)
+	// API 请求日志已简化
 	
 	// 创建 HTTP 请求
 	req, err := http.NewRequest("GET", url, nil)
@@ -252,7 +252,7 @@ func (p *FixtureParser) fetchAndUpdateFixture(eventID string) error {
 		return fmt.Errorf("failed to parse and store fixture: %w", err)
 	}
 	
-	p.logger.Printf("✅ Successfully fetched and updated fixture for event %s", eventID)
+	// 成功日志在上层输出
 	return nil
 }
 

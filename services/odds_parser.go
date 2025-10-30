@@ -70,8 +70,16 @@ func (p *OddsParser) ParseAndStoreOdds(xmlData []byte, productID int) error {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 	
-		logger.Printf("[OddsParser] Successfully stored odds for event: %s", oddsChange.EventID)
-	return nil
+		// 统计市场和结果数量
+		marketCount := len(oddsChange.Markets)
+		outcomeCount := 0
+		for _, market := range oddsChange.Markets {
+			outcomeCount += len(market.Outcomes)
+		}
+		
+		logger.Printf("[odds_change] 比赛 %s 的赔率已更新: %d个市场, %d个结果", 
+			oddsChange.EventID, marketCount, outcomeCount)
+		return nil
 }
 
 // storeMarket 存储盘口数据

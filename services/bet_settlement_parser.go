@@ -56,8 +56,7 @@ func (p *BetSettlementParser) ParseAndStore(xmlContent string) error {
 		return fmt.Errorf("failed to parse bet_settlement message: %w", err)
 	}
 
-	p.logger.Printf("Parsing bet_settlement for event: %s (certainty=%d, markets=%d)",
-		settlement.EventID, settlement.Certainty, len(settlement.Outcomes.Markets))
+	// 日志在处理完成后输出
 
 	// 开始事务
 	tx, err := p.db.Begin()
@@ -113,8 +112,7 @@ func (p *BetSettlementParser) ParseAndStore(xmlContent string) error {
 				return fmt.Errorf("failed to insert bet_settlement: %w", err)
 			}
 
-			p.logger.Printf("Stored settlement: event=%s, market=%s, specifiers=%s, outcome=%s, result=%d, void_factor=%v",
-				settlement.EventID, market.ID, market.Specifiers, outcome.ID, outcome.Result, finalVoidFactor)
+			// 详细日志已移除
 		}
 	}
 
@@ -123,8 +121,27 @@ func (p *BetSettlementParser) ParseAndStore(xmlContent string) error {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	p.logger.Printf("Successfully stored bet_settlement for event %s: %d markets",
-		settlement.EventID, len(settlement.Outcomes.Markets))
+	// 统计结算结果数量
+	outcomeCount := 0
+	for _, market := range settlement.Outcomes.Markets {
+		outcomeCount += len(market.Outcomes)
+	}
+	
+	// 确定结算类型
+	certaintyText := ""
+	switch settlement.Certainty {
+	case 1:
+		certaintyText = "低确定性"
+	case 2:
+		certaintyText = "高确定性"
+	case 3:
+		certaintyText = "最高确定性"
+	default:
+		certaintyText = fmt.Sprintf("certainty=%d", settlement.Certainty)
+	}
+	
+	p.logger.Printf("[bet_settlement] 比赛 %s 的 %d个市场已结算: %d个结果 (%s)",
+		settlement.EventID, len(settlement.Outcomes.Markets), outcomeCount, certaintyText)
 
 	return nil
 }
