@@ -117,11 +117,11 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 			args = append(args, sportID)
 		}
 		
-		// 添加 search 过滤 (队伍名称)
+		// 添加 search 过滤 (event_id 精确匹配或队伍名称模糊匹配)
 		if search != "" {
 			searchPattern := "%" + search + "%"
-			whereClauses = append(whereClauses, "(te.home_team_name ILIKE $"+fmt.Sprintf("%d", len(args)+1)+" OR te.away_team_name ILIKE $"+fmt.Sprintf("%d", len(args)+2)+")")
-			args = append(args, searchPattern, searchPattern)
+			whereClauses = append(whereClauses, "(te.event_id = $"+fmt.Sprintf("%d", len(args)+1)+" OR te.home_team_name ILIKE $"+fmt.Sprintf("%d", len(args)+2)+" OR te.away_team_name ILIKE $"+fmt.Sprintf("%d", len(args)+3)+")")
+			args = append(args, search, searchPattern, searchPattern)
 		}
 		
 		// 添加 is_ended 过滤 (排除已结束的比赛)
