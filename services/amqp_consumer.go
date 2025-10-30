@@ -598,10 +598,7 @@ func (c *AMQPConsumer) handleFixtureChange(eventID string, productID *int, xmlCo
 			return
 		}
 
-		if fixtureChange.StartTime > 0 {
-			startTimeStr := time.UnixMilli(fixtureChange.StartTime).Format(time.RFC3339)
-			logger.Printf("Fixture change for event %s: new start time %s", eventID, startTimeStr)
-		}
+	// 日志在 FixtureParser 中输出
 
 	c.messageStore.UpdateTrackedEvent(eventID)
 	
