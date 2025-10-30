@@ -111,9 +111,6 @@ func (p *BetSettlementParser) ParseAndStore(xmlContent string) error {
 			if err != nil {
 				return fmt.Errorf("failed to insert bet_settlement: %w", err)
 			}
-
-				// 详细日志已移除
-			}
 		}
 
 		// 更新当前 market 的 status 为 -3 (Settled)
