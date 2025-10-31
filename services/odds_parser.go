@@ -79,11 +79,15 @@ func (p *OddsParser) ParseAndStoreOdds(xmlData []byte, productID int) error {
 // storeMarket 存储盘口数据
 func (p *OddsParser) storeMarket(tx *sql.Tx, eventID string, market MarketData, timestamp int64, productID int) error {
 	// 1. 插入或更新盘口
+	// 注意: markets 表没有 timestamp 字段,我们使用 updated_at 来判断
+	// 但这不是最优方案,理想情况下应该添加 timestamp 字段
 	marketQuery := `
 		INSERT INTO markets (event_id, market_id, market_type, specifiers, status, producer_id, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, NOW())
 		ON CONFLICT (event_id, market_id, specifiers) DO UPDATE
-		SET status = EXCLUDED.status, producer_id = EXCLUDED.producer_id, updated_at = NOW()
+		SET status = EXCLUDED.status, 
+		    producer_id = EXCLUDED.producer_id, 
+		    updated_at = NOW()
 		RETURNING id
 	`
 	
@@ -145,12 +149,31 @@ func (p *OddsParser) storeOdds(tx *sql.Tx, marketPK int, eventID string, marketI
 		INSERT INTO odds (market_id, event_id, outcome_id, outcome_name, odds_value, probability, active, timestamp, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
 		ON CONFLICT (market_id, outcome_id) DO UPDATE
-		SET odds_value = EXCLUDED.odds_value,
-		    outcome_name = EXCLUDED.outcome_name,
-		    probability = EXCLUDED.probability,
-		    active = EXCLUDED.active,
-		    timestamp = EXCLUDED.timestamp,
-		    updated_at = NOW()
+		SET 
+		    odds_value = CASE 
+		        WHEN EXCLUDED.timestamp > odds.timestamp THEN EXCLUDED.odds_value
+		        ELSE odds.odds_value
+		    END,
+		    outcome_name = CASE 
+		        WHEN EXCLUDED.timestamp > odds.timestamp THEN EXCLUDED.outcome_name
+		        ELSE odds.outcome_name
+		    END,
+		    probability = CASE 
+		        WHEN EXCLUDED.timestamp > odds.timestamp THEN EXCLUDED.probability
+		        ELSE odds.probability
+		    END,
+		    active = CASE 
+		        WHEN EXCLUDED.timestamp > odds.timestamp THEN EXCLUDED.active
+		        ELSE odds.active
+		    END,
+		    timestamp = CASE 
+		        WHEN EXCLUDED.timestamp > odds.timestamp THEN EXCLUDED.timestamp
+		        ELSE odds.timestamp
+		    END,
+		    updated_at = CASE 
+		        WHEN EXCLUDED.timestamp > odds.timestamp THEN NOW()
+		        ELSE odds.updated_at
+		    END
 	`
 	
 	_, err := tx.Exec(oddsQuery,
