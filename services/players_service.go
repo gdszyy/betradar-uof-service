@@ -109,10 +109,58 @@ func (s *PlayersService) GetPlayerName(playerID string) string {
 		return name
 	}
 	
-	// 如果缓存中没有，说明预加载失败或者该球员信息不在预加载范围内
-	// 此时不应该再有动态加载，直接返回默认值
-	logger.Printf("[PlayersService] ⚠️  Player %s not found in cache. Preload might have failed or player is out of scope.", playerID)
-	return fmt.Sprintf("Player %s", strings.TrimPrefix(playerID, "sr:player:"))
+		// 如果缓存中没有，说明预加载失败或者该球员信息不在预加载范围内
+	// 缓存未命中，尝试从 API 动态加载
+	
+	// 动态加载应该使用 loadPlayerFromAPI 的逻辑，但需要返回 PlayerProfile
+	// 重新实现动态加载逻辑，避免 loadPlayerFromAPI 的副作用
+	
+	playerIDNum := strings.TrimPrefix(playerID, "sr:player:")
+	
+	// 构造 URL: /v1/sports/en/players/{player_id}/profile.xml
+	apiBase := strings.TrimSuffix(s.apiBaseURL, "/v1")
+	url := fmt.Sprintf("%s/v1/sports/en/players/%s/profile.xml", apiBase, playerID)
+	
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		logger.Printf("[PlayersService] ⚠️  Failed to create request for dynamic load of %s: %v", playerID, err)
+		return fmt.Sprintf("Player %s", playerIDNum)
+	}
+	
+	req.Header.Set("x-access-token", s.token)
+	
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.Printf("[PlayersService] ⚠️  Failed to fetch player profile for %s: %v", playerID, err)
+		return fmt.Sprintf("Player %s", playerIDNum)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		logger.Printf("[PlayersService] ⚠️  API returned status %d for dynamic load of %s", resp.StatusCode, playerID)
+		return fmt.Sprintf("Player %s", playerIDNum)
+	}
+	
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		logger.Printf("[PlayersService] ⚠️  Failed to read response body for %s: %v", playerID, err)
+		return fmt.Sprintf("Player %s", playerIDNum)
+	}
+	
+	var profile PlayerProfileResponse
+	if err := xml.Unmarshal(body, &profile); err != nil {
+		logger.Printf("[PlayersService] ⚠️  Failed to parse XML for %s: %v", playerID, err)
+		return fmt.Sprintf("Player %s", playerIDNum)
+	}
+	
+	// 动态加载成功，保存到数据库和缓存
+	if err := s.savePlayer(&profile.Player); err != nil {
+		logger.Printf("[PlayersService] ⚠️  Failed to save dynamically loaded player %s: %v", playerID, err)
+	}
+	
+	logger.Printf("[PlayersService] ✅ Dynamically loaded player %s: %s", playerID, profile.Player.Name)
+	return profile.Player.Name
 }
 
 // loadPlayerFromAPI 从 API 加载球员信息
