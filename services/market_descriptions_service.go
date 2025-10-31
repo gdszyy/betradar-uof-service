@@ -336,7 +336,9 @@ func (s *MarketDescriptionsService) saveToDatabase() error {
 
 // loadMarketDescriptions 从 API 加载市场描述
 func (s *MarketDescriptionsService) loadMarketDescriptions() error {
-	url := fmt.Sprintf("%s/v1/descriptions/en/markets.xml?include_mappings=true", s.apiBaseURL)
+	// 构造 URL,如果 apiBaseURL 已经包含 /v1 则不重复添加
+	apiBase := strings.TrimSuffix(s.apiBaseURL, "/v1")
+	url := fmt.Sprintf("%s/v1/descriptions/en/markets.xml?include_mappings=true", apiBase)
 	
 	logger.Printf("[MarketDescService] Fetching market descriptions from: %s", url)
 	
@@ -730,7 +732,9 @@ func (s *MarketDescriptionsService) parseURNOutcome(outcomeID string) string {
 
 // loadVariantDescription 从 API 加载 variant 描述
 func (s *MarketDescriptionsService) loadVariantDescription(marketID string, variant string) error {
-	apiURL := fmt.Sprintf("%s/v1/descriptions/en/markets/%s/variants/%s", s.apiBaseURL, marketID, variant)
+	// 构造 URL,如果 apiBaseURL 已经包含 /v1 则不重复添加
+	apiBase := strings.TrimSuffix(s.apiBaseURL, "/v1")
+	apiURL := fmt.Sprintf("%s/v1/descriptions/en/markets/%s/variants/%s", apiBase, marketID, variant)
 	
 	logger.Printf("[MarketDescService] Calling Variant API: %s", apiURL)
 	
