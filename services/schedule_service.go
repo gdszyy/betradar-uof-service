@@ -54,11 +54,11 @@ func NewScheduleService(db *sql.DB, accessToken, apiBaseURL string) *ScheduleSer
 func (s *ScheduleService) Start() error {
 	logger.Println("[Schedule] Starting schedule service...")
 
-	// 启动时立即执行一次
-	if err := s.FetchUpcomingSchedule(); err != nil {
-		logger.Errorf("[Schedule] ❌ Failed to fetch upcoming schedule: %v", err)
-		return err
-	}
+		// 启动时立即执行一次
+		if _, err := s.FetchUpcomingSchedule(); err != nil {
+			logger.Errorf("[Schedule] ❌ Failed to fetch upcoming schedule: %v", err)
+			return err
+		}
 
 	// 每天凌晨 1 点执行一次
 	go s.scheduleDailyFetch()
