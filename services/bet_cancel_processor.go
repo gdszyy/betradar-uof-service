@@ -58,11 +58,11 @@ for _, market := range betCancel.Market {
 query := `
 INSERT INTO bet_cancels (
 event_id, producer_id, timestamp,
-market_id, specifiers, void_reason,
+sr_market_id, specifiers, void_reason,
 start_time, end_time, superceded_by,
 created_at
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-ON CONFLICT (event_id, market_id, specifiers, producer_id) 
+ON CONFLICT (event_id, sr_market_id, specifiers, producer_id) 
 DO UPDATE SET
 void_reason = EXCLUDED.void_reason,
 start_time = EXCLUDED.start_time,
@@ -92,7 +92,7 @@ return fmt.Errorf("failed to insert bet_cancel: %w", err)
 updateQuery := `
 UPDATE markets 
 SET status = -4, updated_at = NOW()
-WHERE event_id = $1 AND market_id = $2 AND specifiers = $3
+WHERE event_id = $1 AND sr_market_id = $2 AND specifiers = $3
 `
 _, err = tx.Exec(updateQuery, betCancel.EventID, market.ID, market.Specifiers)
 if err != nil {

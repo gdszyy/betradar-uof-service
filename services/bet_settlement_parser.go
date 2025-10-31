@@ -80,13 +80,13 @@ func (p *BetSettlementParser) ParseAndStore(xmlContent string) error {
 
 			// 存储到数据库
 			query := `
-				INSERT INTO bet_settlements (
-					event_id, producer_id, timestamp, certainty,
-					market_id, specifiers, void_factor,
+			INSERT INTO bet_settlements (
+				event_id, producer_id, timestamp, certainty,
+				sr_market_id, specifiers, void_factor,
 					outcome_id, result, dead_heat_factor,
 					created_at
 				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-				ON CONFLICT (event_id, market_id, specifiers, outcome_id, producer_id) 
+				ON CONFLICT (event_id, sr_market_id, specifiers, outcome_id, producer_id) 
 				DO UPDATE SET
 					certainty = EXCLUDED.certainty,
 					void_factor = EXCLUDED.void_factor,
@@ -118,7 +118,7 @@ func (p *BetSettlementParser) ParseAndStore(xmlContent string) error {
 		updateQuery := `
 			UPDATE markets 
 			SET status = -3, updated_at = NOW()
-			WHERE event_id = $1 AND market_id = $2 AND specifiers = $3
+			WHERE event_id = $1 AND sr_market_id = $2 AND specifiers = $3
 		`
 		_, err := tx.Exec(updateQuery, settlement.EventID, market.ID, market.Specifiers)
 		if err != nil {

@@ -79,7 +79,7 @@ type BetSettlementSummary struct {
 // MarketSummary 盘口概要
 type MarketSummary struct {
 	ID         int64     `json:"id"`
-	MarketID   int       `json:"market_id"`
+	MarketID   int       `json:"sr_market_id"`
 	MarketName string    `json:"market_name"`
 	Specifiers string    `json:"specifiers"`
 	Status     string    `json:"status"`
@@ -436,12 +436,12 @@ func (s *Server) getBetSettlementsSummary(eventID string) ([]BetSettlementSummar
 // getMarketsSummary 获取盘口概要
 func (s *Server) getMarketsSummary(eventID string) ([]MarketSummary, error) {
 	query := `
-		SELECT m.id, m.market_id, m.market_name, m.specifiers, m.status,
-		       COUNT(o.id) as odds_count, m.created_at, m.updated_at
-		FROM markets m
-		LEFT JOIN odds o ON o.market_id = m.id
-		WHERE m.event_id = $1
-		GROUP BY m.id, m.market_id, m.market_name, m.specifiers, m.status,
+	SELECT m.id, m.sr_market_id, m.market_name, m.specifiers, m.status,
+	       COUNT(o.id) as odds_count, m.created_at, m.updated_at
+	FROM markets m
+	LEFT JOIN odds o ON o.market_id = m.id
+	WHERE m.event_id = $1
+	GROUP BY m.id, m.sr_market_id, m.market_name, m.specifiers, m.status,
 		         m.created_at, m.updated_at
 		ORDER BY m.created_at DESC
 		LIMIT 100
@@ -570,11 +570,11 @@ func (s *Server) getOddsChangeDetail(id int64) (*RecordDetail, error) {
 
 	// 获取关联的 markets 和 odds
 	marketsQuery := `
-		SELECT m.id, m.market_id, m.market_name, m.specifiers, m.status,
-		       o.id as odd_id, o.outcome_id, o.outcome_name, o.odds_value, o.active, o.probabilities
-		FROM markets m
-		LEFT JOIN odds o ON o.market_id = m.id
-		WHERE m.odds_change_id = $1
+	SELECT m.id, m.sr_market_id, m.market_name, m.specifiers, m.status,
+	       o.id as odd_id, o.outcome_id, o.outcome_name, o.odds_value, o.active, o.probabilities
+	FROM markets m
+	LEFT JOIN odds o ON o.market_id = m.id
+	WHERE m.odds_change_id = $1
 		ORDER BY m.id, o.id
 	`
 
@@ -608,7 +608,7 @@ func (s *Server) getOddsChangeDetail(id int64) (*RecordDetail, error) {
 		if _, exists := marketsMap[marketID]; !exists {
 			marketsMap[marketID] = map[string]interface{}{
 				"id":          marketID,
-				"market_id":   marketIDNum,
+				"sr_market_id":   marketIDNum,
 				"market_name": marketName,
 				"specifiers":  "",
 				"status":      "",
@@ -756,12 +756,12 @@ func (s *Server) getBetSettlementDetail(id int64) (*RecordDetail, error) {
 // getMarketDetail 获取盘口详情
 func (s *Server) getMarketDetail(id int64) (*RecordDetail, error) {
 	query := `
-		SELECT m.id, m.event_id, m.market_id, m.market_name, m.specifiers,
-		       m.status, m.favourite, m.created_at, m.updated_at,
-		       o.id as odd_id, o.outcome_id, o.outcome_name, o.odds_value,
-		       o.active, o.probabilities
-		FROM markets m
-		LEFT JOIN odds o ON o.market_id = m.id
+	SELECT m.id, m.event_id, m.sr_market_id, m.market_name, m.specifiers,
+	       m.status, m.favourite, m.created_at, m.updated_at,
+	       o.id as odd_id, o.outcome_id, o.outcome_name, o.odds_value,
+	       o.active, o.probabilities
+	FROM markets m
+	LEFT JOIN odds o ON o.market_id = m.id
 		WHERE m.id = $1
 		ORDER BY o.id
 	`
@@ -773,9 +773,9 @@ func (s *Server) getMarketDetail(id int64) (*RecordDetail, error) {
 	defer rows.Close()
 
 	var detail struct {
-		ID         int64                    `json:"id"`
-		EventID    string                   `json:"event_id"`
-		MarketID   int                      `json:"market_id"`
+	ID         int64                    `json:"id"`
+	EventID    string                   `json:"event_id"`
+	MarketID   int                      `json:"sr_market_id"`
 		MarketName string                   `json:"market_name"`
 		Specifiers string                   `json:"specifiers"`
 		Status     string                   `json:"status"`

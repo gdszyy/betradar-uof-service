@@ -55,7 +55,7 @@ type EnhancedEvent struct {
 
 // MarketInfo 盘口信息
 type MarketInfo struct {
-	MarketID       string        `json:"market_id"`
+	MarketID       string        `json:"sr_market_id"`
 	MarketName     string        `json:"market_name"`
 	Specifiers     string        `json:"specifiers,omitempty"`
 	Status         string        `json:"status"`
@@ -338,8 +338,8 @@ func (s *Server) getEventMarkets(eventID string) ([]MarketInfo, error) {
 // getEventMarketsWithProducer 获取赛事的盘口信息 (按 producer 过滤)
 func (s *Server) getEventMarketsWithProducer(eventID string, producer string, homeTeamName string, awayTeamName string) ([]MarketInfo, error) {
 	query := `
-		SELECT DISTINCT ON (market_id, specifiers)
-			id, market_id, specifiers, status, producer_id, updated_at
+		SELECT DISTINCT ON (sr_market_id, specifiers)
+			id, sr_market_id, specifiers, status, producer_id, updated_at
 		FROM markets
 		WHERE event_id = $1
 	`
@@ -352,7 +352,7 @@ func (s *Server) getEventMarketsWithProducer(eventID string, producer string, ho
 		args = append(args, producer)
 	}
 	
-	query += " ORDER BY market_id, specifiers, updated_at DESC"
+	query += " ORDER BY sr_market_id, specifiers, updated_at DESC"
 	
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
