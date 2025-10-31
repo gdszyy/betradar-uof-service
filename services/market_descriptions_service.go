@@ -196,12 +196,39 @@ func (s *MarketDescriptionsService) loadFromDatabase() error {
 		outcomeCount++
 	}
 	
+	// 加载 mappings
+	mappingRows, err := s.db.Query(`
+		SELECT market_id, outcome_id, product_outcome_name
+		FROM mapping_outcomes
+		ORDER BY market_id, outcome_id
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to query mappings: %w", err)
+	}
+	defer mappingRows.Close()
+	
+	mappingCount := 0
+	for mappingRows.Next() {
+		var marketID, outcomeID, productOutcomeName string
+		
+		if err := mappingRows.Scan(&marketID, &outcomeID, &productOutcomeName); err != nil {
+			continue
+		}
+		
+		if s.mappings[marketID] == nil {
+			s.mappings[marketID] = make(map[string]string)
+		}
+		
+		s.mappings[marketID][outcomeID] = productOutcomeName
+		mappingCount++
+	}
+	
 	if marketCount == 0 {
 		return fmt.Errorf("no markets found in database")
 	}
 	
 	s.lastUpdated = time.Now()
-	logger.Printf("[MarketDescService] Loaded %d markets and %d outcomes from database", marketCount, outcomeCount)
+	logger.Printf("[MarketDescService] Loaded %d markets, %d outcomes, and %d mappings from database", marketCount, outcomeCount, mappingCount)
 	
 	return nil
 }
@@ -222,6 +249,9 @@ func (s *MarketDescriptionsService) saveToDatabase() error {
 	defer tx.Rollback()
 	
 	// 清空旧数据
+	if _, err := tx.Exec("DELETE FROM mapping_outcomes"); err != nil {
+		return fmt.Errorf("failed to clear mapping_outcomes: %w", err)
+	}
 	if _, err := tx.Exec("DELETE FROM outcome_descriptions"); err != nil {
 		return fmt.Errorf("failed to clear outcomes: %w", err)
 	}
@@ -270,11 +300,35 @@ func (s *MarketDescriptionsService) saveToDatabase() error {
 		}
 	}
 	
+	// 插入 mappings
+	mappingStmt, err := tx.Prepare(`
+		INSERT INTO mapping_outcomes (market_id, outcome_id, product_outcome_name, product_id, sport_id)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (market_id, outcome_id) DO UPDATE
+		SET product_outcome_name = EXCLUDED.product_outcome_name
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare mapping statement: %w", err)
+	}
+	defer mappingStmt.Close()
+	
+	mappingCount := 0
+	for marketID, outcomes := range s.mappings {
+		for outcomeID, productOutcomeName := range outcomes {
+			// product_id 和 sport_id 暂时留空,因为我们只存储了 outcome_id -> name 的映射
+			if _, err := mappingStmt.Exec(marketID, outcomeID, productOutcomeName, nil, nil); err != nil {
+				logger.Printf("[MarketDescService] ⚠️  Failed to insert mapping %s/%s: %v", marketID, outcomeID, err)
+				continue
+			}
+			mappingCount++
+		}
+	}
+	
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 	
-	logger.Printf("[MarketDescService] ✅ Saved %d markets and %d outcomes to database", marketCount, outcomeCount)
+	logger.Printf("[MarketDescService] ✅ Saved %d markets, %d outcomes, and %d mappings to database", marketCount, outcomeCount, mappingCount)
 	return nil
 }
 
@@ -413,6 +467,37 @@ func (s *MarketDescriptionsService) GetOutcomeName(marketID string, outcomeID st
 	if mappings, ok := s.mappings[marketID]; ok {
 		if productOutcomeName, ok := mappings[outcomeID]; ok {
 			return productOutcomeName
+		}
+	}
+	
+	// 如果 mappings 中没有,且 outcomeID 是 URN 格式,尝试动态加载 variant
+	if strings.HasPrefix(outcomeID, "sr:") && specifiers != "" {
+		// 提取 variant 从 specifiers
+		// 例如: variant=sr:winning_margin_no_draw_any_team:31+
+		pairs := strings.Split(specifiers, "|")
+		for _, pair := range pairs {
+			parts := strings.Split(pair, "=")
+			if len(parts) == 2 && parts[0] == "variant" {
+				variant := parts[1]
+				
+				// 解锁以调用 loadVariantDescription
+				s.mu.RUnlock()
+				err := s.loadVariantDescription(marketID, variant)
+				s.mu.RLock()
+				
+				if err == nil {
+					// 重新查询 mappings
+					if mappings, ok := s.mappings[marketID]; ok {
+						if productOutcomeName, ok := mappings[outcomeID]; ok {
+							return productOutcomeName
+						}
+					}
+				} else {
+					logger.Printf("[MarketDescService] ⚠️  Failed to load variant %s for market %s: %v", variant, marketID, err)
+				}
+				
+				break
+			}
 		}
 	}
 	
@@ -630,5 +715,104 @@ func (s *MarketDescriptionsService) parseURNOutcome(outcomeID string) string {
 		// 通用处理: 类型名 + 说明符
 		return fmt.Sprintf("%s: %s", typeName, specifier)
 	}
+}
+
+
+
+// loadVariantDescription 从 API 加载 variant 描述
+func (s *MarketDescriptionsService) loadVariantDescription(marketID string, variant string) error {
+	url := fmt.Sprintf("%s/v1/descriptions/en/markets/%s/variants/%s.xml", s.apiBaseURL, marketID, variant)
+	
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	
+	req.Header.Set("x-access-token", s.accessToken)
+	
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to fetch variant description: %w", err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+	
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+	
+	// 解析 XML
+	type VariantOutcome struct {
+		ID   string `xml:"id,attr"`
+		Name string `xml:"name,attr"`
+	}
+	
+	type VariantMappingOutcome struct {
+		OutcomeID          string `xml:"outcome_id,attr"`
+		ProductOutcomeName string `xml:"product_outcome_name,attr"`
+	}
+	
+	type VariantMapping struct {
+		Outcomes []VariantMappingOutcome `xml:"mapping_outcome"`
+	}
+	
+	type Variant struct {
+		ID       string            `xml:"id,attr"`
+		Outcomes []VariantOutcome `xml:"outcomes>outcome"`
+		Mappings []VariantMapping `xml:"mappings>mapping"`
+	}
+	
+	type VariantDescriptions struct {
+		Variant Variant `xml:"variant"`
+	}
+	
+	var variantDesc VariantDescriptions
+	if err := xml.Unmarshal(body, &variantDesc); err != nil {
+		return fmt.Errorf("failed to parse XML: %w", err)
+	}
+	
+	// 存储到内存
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	// 初始化 mappings
+	if s.mappings[marketID] == nil {
+		s.mappings[marketID] = make(map[string]string)
+	}
+	
+	// 存储 mappings
+	mappingCount := 0
+	for _, mapping := range variantDesc.Variant.Mappings {
+		for _, outcome := range mapping.Outcomes {
+			s.mappings[marketID][outcome.OutcomeID] = outcome.ProductOutcomeName
+			mappingCount++
+		}
+	}
+	
+	// 存储到数据库
+	if s.db != nil {
+		for _, mapping := range variantDesc.Variant.Mappings {
+			for _, outcome := range mapping.Outcomes {
+				_, err := s.db.Exec(`
+					INSERT INTO mapping_outcomes (market_id, outcome_id, product_outcome_name)
+					VALUES ($1, $2, $3)
+					ON CONFLICT (market_id, outcome_id) DO UPDATE
+					SET product_outcome_name = EXCLUDED.product_outcome_name
+				`, marketID, outcome.OutcomeID, outcome.ProductOutcomeName)
+				if err != nil {
+					logger.Printf("[MarketDescService] ⚠️  Failed to save variant outcome %s/%s: %v", marketID, outcome.OutcomeID, err)
+				}
+			}
+		}
+	}
+	
+	logger.Printf("[MarketDescService] ✅ Loaded variant %s for market %s: %d mappings", variant, marketID, mappingCount)
+	
+	return nil
 }
 
