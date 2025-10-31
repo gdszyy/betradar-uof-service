@@ -169,140 +169,37 @@ func (s *ScheduleService) FetchSportEventSummary(eventID string) ([]PlayerInfo, 
 
 	logger.Printf("[Schedule] ✅ Fetched %d players for event %s", len(players), eventID)
 
-	return players, nil
-}					Name string `xml:"name,attr"`
-				} `xml:"sport"`
-				Category struct {
-					ID          string `xml:"id,attr"`
-					Name        string `xml:"name,attr"`
-					CountryCode string `xml:"country_code,attr"`
-				} `xml:"category"`
-			} `xml:"tournament"`
-			Competitors []struct {
-				ID         string `xml:"id,attr"`
-				Name       string `xml:"name,attr"`
-				Qualifier  string `xml:"qualifier,attr"`
-			} `xml:"competitors>competitor"`
-		} `xml:"sport_event"`
+		return players, nil
 	}
-
-	if err := xml.Unmarshal(body, &schedule); err != nil {
-		return fmt.Errorf("failed to parse XML: %w", err)
-	}
-
-	logger.Printf("[Schedule] 📊 Found %d scheduled events", len(schedule.SportEvents))
-
-	// 存储到数据库
-	tx, err := s.db.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	count := 0
-	for _, event := range schedule.SportEvents {
-		// 解析时间
-		var scheduledTime *time.Time
-		if event.Scheduled != "" {
-			if t, err := time.Parse(time.RFC3339, event.Scheduled); err == nil {
-				scheduledTime = &t
-			}
+	
+	// scheduleDailyFetch 每天定时执行
+	func (s *ScheduleService) scheduleDailyFetch() {
+		// 计算到下一个凌晨 1 点的时间
+		now := time.Now()
+		nextRun := time.Date(now.Year(), now.Month(), now.Day(), 1, 0, 0, 0, now.Location())
+		if now.After(nextRun) {
+			// 如果已经过了今天的 1 点，设置为明天 1 点
+			nextRun = nextRun.Add(24 * time.Hour)
 		}
-
-		// 获取主客队信息
-		var homeTeamID, homeTeamName, awayTeamID, awayTeamName string
-		for _, competitor := range event.Competitors {
-			if competitor.Qualifier == "home" {
-				homeTeamID = competitor.ID
-				homeTeamName = competitor.Name
-			} else if competitor.Qualifier == "away" {
-				awayTeamID = competitor.ID
-				awayTeamName = competitor.Name
-			}
-		}
-
-		_, err := tx.Exec(`
-			INSERT INTO scheduled_events (
-				event_id, sport_id, sport_name, category_id, category_name,
-				tournament_id, tournament_name, home_team_id, home_team_name,
-				away_team_id, away_team_name, scheduled_time, status, live_odds, updated_at
-			)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
-			ON CONFLICT (event_id) DO UPDATE SET
-				sport_id = EXCLUDED.sport_id,
-				sport_name = EXCLUDED.sport_name,
-				category_id = EXCLUDED.category_id,
-				category_name = EXCLUDED.category_name,
-				tournament_id = EXCLUDED.tournament_id,
-				tournament_name = EXCLUDED.tournament_name,
-				home_team_id = EXCLUDED.home_team_id,
-				home_team_name = EXCLUDED.home_team_name,
-				away_team_id = EXCLUDED.away_team_id,
-				away_team_name = EXCLUDED.away_team_name,
-				scheduled_time = EXCLUDED.scheduled_time,
-				status = EXCLUDED.status,
-				live_odds = EXCLUDED.live_odds,
-				updated_at = NOW()
-		`,
-			event.ID,
-			event.Tournament.Sport.ID,
-			event.Tournament.Sport.Name,
-			event.Tournament.Category.ID,
-			event.Tournament.Category.Name,
-			event.Tournament.ID,
-			event.Tournament.Name,
-			homeTeamID,
-			homeTeamName,
-			awayTeamID,
-			awayTeamName,
-			scheduledTime,
-			event.Status,
-			event.LiveOdds,
-		)
-
-		if err != nil {
-			logger.Errorf("[Schedule] ⚠️  Failed to insert event %s: %v", event.ID, err)
-			continue
-		}
-		count++
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	logger.Printf("[Schedule] ✅ Stored %d scheduled events", count)
-	return nil
-}
-
-// scheduleDailyFetch 每天定时执行
-func (s *ScheduleService) scheduleDailyFetch() {
-	// 计算到下一个凌晨 1 点的时间
-	now := time.Now()
-	nextRun := time.Date(now.Year(), now.Month(), now.Day(), 1, 0, 0, 0, now.Location())
-	if now.After(nextRun) {
-		// 如果已经过了今天的 1 点，设置为明天 1 点
-		nextRun = nextRun.Add(24 * time.Hour)
-	}
-
-	// 等待到第一次执行时间
-	initialDelay := time.Until(nextRun)
-	logger.Printf("[Schedule] Next fetch scheduled at %s (in %s)", nextRun.Format("2006-01-02 15:04:05"), initialDelay.Round(time.Minute))
-	time.Sleep(initialDelay)
-
-	// 执行第一次
-	if err := s.FetchUpcomingSchedule(); err != nil {
-		logger.Errorf("[Schedule] ❌ Daily fetch failed: %v", err)
-	}
-
-	// 之后每 24 小时执行一次
-	ticker := time.NewTicker(24 * time.Hour)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		if err := s.FetchUpcomingSchedule(); err != nil {
+	
+		// 等待到第一次执行时间
+		initialDelay := time.Until(nextRun)
+		logger.Printf("[Schedule] Next fetch scheduled at %s (in %s)", nextRun.Format("2006-01-02 15:04:05"), initialDelay.Round(time.Minute))
+		time.Sleep(initialDelay)
+	
+		// 执行第一次
+		if _, err := s.FetchUpcomingSchedule(); err != nil {
 			logger.Errorf("[Schedule] ❌ Daily fetch failed: %v", err)
 		}
+	
+		// 之后每 24 小时执行一次
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+	
+		for range ticker.C {
+			if _, err := s.FetchUpcomingSchedule(); err != nil {
+				logger.Errorf("[Schedule] ❌ Daily fetch failed: %v", err)
+			}
+		}
 	}
-}
-
+	
