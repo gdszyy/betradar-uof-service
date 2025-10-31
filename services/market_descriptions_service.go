@@ -7,10 +7,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
-
+	
 	"uof-service/logger"
 )
 
@@ -730,9 +731,11 @@ func (s *MarketDescriptionsService) parseURNOutcome(outcomeID string) string {
 
 // loadVariantDescription 从 API 加载 variant 描述
 func (s *MarketDescriptionsService) loadVariantDescription(marketID string, variant string) error {
-	url := fmt.Sprintf("%s/v1/descriptions/en/markets/%s/variants/%s", s.apiBaseURL, marketID, variant)
+	apiURL := fmt.Sprintf("%s/v1/descriptions/en/markets/%s/variants/%s", s.apiBaseURL, marketID, variant)
 	
-	req, err := http.NewRequest("GET", url, nil)
+	logger.Printf("[MarketDescService] Calling Variant API: %s", apiURL)
+	
+	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
