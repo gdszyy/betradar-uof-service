@@ -44,9 +44,18 @@ func main() {
 	// 创建消息存储服务
 	messageStore := services.NewMessageStore(db)
 	
+	// 创建 Players 服务
+	playersService := services.NewPlayersService(cfg.AccessToken, cfg.APIBaseURL, db)
+	if err := playersService.Start(); err != nil {
+		logger.Errorf("[PlayersService] ⚠️  Failed to start: %v", err)
+	} else {
+		logger.Println("[PlayersService] ✅ Players service started")
+	}
+	
 	// 创建 Market Descriptions 服务
 	marketDescService := services.NewMarketDescriptionsService(cfg.AccessToken, cfg.APIBaseURL)
 	marketDescService.SetDatabase(db) // 注入数据库连接 (可选)
+	marketDescService.SetPlayersService(playersService) // 注入球员服务 (可选)
 	if err := marketDescService.Start(); err != nil {
 		logger.Errorf("[MarketDescService] ⚠️  Failed to start: %v", err)
 	} else {

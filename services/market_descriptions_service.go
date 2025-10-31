@@ -23,14 +23,15 @@ type ReplacementContext struct {
 
 // MarketDescriptionsService 市场描述服务
 type MarketDescriptionsService struct {
-	token       string
-	apiBaseURL  string
-	db          *sql.DB // 可选的数据库连接
-	markets     map[string]*MarketDescription
-	outcomes    map[string]map[string]*OutcomeDescription // marketID -> outcomeID -> outcome
-	mappings    map[string]map[string]string              // marketID -> outcomeID (URN) -> product_outcome_name
-	mu          sync.RWMutex
-	lastUpdated time.Time
+	token          string
+	apiBaseURL     string
+	db             *sql.DB // 可选的数据库连接
+	playersService *PlayersService // 球员信息服务
+	markets        map[string]*MarketDescription
+	outcomes       map[string]map[string]*OutcomeDescription // marketID -> outcomeID -> outcome
+	mappings       map[string]map[string]string              // marketID -> outcomeID (URN) -> product_outcome_name
+	mu             sync.RWMutex
+	lastUpdated    time.Time
 }
 
 // MarketDescription 市场描述
@@ -92,6 +93,11 @@ func NewMarketDescriptionsService(token string, apiBaseURL string) *MarketDescri
 // SetDatabase 设置数据库连接 (可选)
 func (s *MarketDescriptionsService) SetDatabase(db *sql.DB) {
 	s.db = db
+}
+
+// SetPlayersService 设置球员信息服务 (可选)
+func (s *MarketDescriptionsService) SetPlayersService(playersService *PlayersService) {
+	s.playersService = playersService
 }
 
 // Start 启动服务并加载市场描述
@@ -715,8 +721,11 @@ func (s *MarketDescriptionsService) parseURNOutcome(outcomeID string) string {
 	// 处理特殊情况
 	switch outcomeType {
 	case "player":
-		// sr:player:123456 -> "Player 123456"
-		// 注意: 球员名称需要从 Fixture API 或 Live Data 获取
+		// sr:player:123456 -> 球员名称
+		// 从 PlayersService 查询球员名称
+		if s.playersService != nil {
+			return s.playersService.GetPlayerName(outcomeID)
+		}
 		return fmt.Sprintf("Player %s", specifier)
 	case "point_range":
 		return fmt.Sprintf("Point Range: %s", specifier)
