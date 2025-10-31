@@ -395,6 +395,12 @@ func (s *MarketDescriptionsService) GetOutcomeName(marketID string, outcomeID st
 		// 2. outcome 是动态生成的,需要根据 specifiers 解析
 		// 3. outcome_id 本身就是错误的
 		logger.Printf("[⚠️  MarketDescService] Outcome not found in API data: marketID=%s, outcomeID=%s, specifiers=%s", marketID, outcomeID, specifiers)
+		
+		// 尝试解析 URN 格式的 outcome_id
+		if parsedName := s.parseURNOutcome(outcomeID); parsedName != "" {
+			return parsedName
+		}
+		
 		return fmt.Sprintf("Outcome %s", outcomeID)
 	}
 	
@@ -540,5 +546,50 @@ func (s *MarketDescriptionsService) UpdateExistingMarkets() (int, int, error) {
 	logger.Printf("[MarketDescService] ✅ Bulk update completed: %d markets, %d outcomes updated", updatedMarkets, updatedOutcomes)
 	
 	return updatedMarkets, updatedOutcomes, nil
+}
+
+
+// parseURNOutcome 解析 URN 格式的 outcome_id
+// 例如: sr:point_range:6+:1124 -> "Point Range: 6+"
+// 例如: sr:exact_goals:2+:87 -> "Exact Goals: 2+"
+// 例如: sr:goal_range:7+:1342 -> "Goal Range: 7+"
+// 例如: sr:correct_score:max:6:1320 -> "Correct Score: max 6"
+func (s *MarketDescriptionsService) parseURNOutcome(outcomeID string) string {
+	// 检查是否是 URN 格式
+	if !strings.HasPrefix(outcomeID, "sr:") {
+		return ""
+	}
+	
+	// 分割 URN: sr:{type}:{specifier}:{id}
+	parts := strings.Split(outcomeID, ":")
+	if len(parts) < 3 {
+		return ""
+	}
+	
+	// 提取类型和说明符
+	outcomeType := parts[1]
+	specifier := parts[2]
+	
+	// 将下划线替换为空格,并转换为标题格式
+	typeName := strings.Title(strings.ReplaceAll(outcomeType, "_", " "))
+	
+	// 处理特殊情况
+	switch outcomeType {
+	case "point_range":
+		return fmt.Sprintf("Point Range: %s", specifier)
+	case "exact_goals":
+		return fmt.Sprintf("Exact Goals: %s", specifier)
+	case "goal_range":
+		return fmt.Sprintf("Goal Range: %s", specifier)
+	case "correct_score":
+		// sr:correct_score:max:6:1320 -> "Correct Score: max 6"
+		if len(parts) >= 4 {
+			return fmt.Sprintf("Correct Score: %s %s", specifier, parts[3])
+		}
+		return fmt.Sprintf("Correct Score: %s", specifier)
+	default:
+		// 通用处理: 类型名 + 说明符
+		return fmt.Sprintf("%s: %s", typeName, specifier)
+	}
 }
 
