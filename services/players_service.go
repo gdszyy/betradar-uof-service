@@ -27,6 +27,12 @@ type PlayerProfileResponse struct {
 	Player  PlayerProfile `xml:"player"`
 }
 
+// PlayerInfo 球员信息 (从 Fixture API 中提取)
+type PlayerInfo struct {
+	ID   string
+	Name string
+}
+
 // PlayersService 球员信息服务
 type PlayersService struct {
 	db          *sql.DB
@@ -103,31 +109,26 @@ func (s *PlayersService) GetPlayerName(playerID string) string {
 		return name
 	}
 	
-	// 如果缓存中没有,尝试从 API 加载
-	if err := s.loadPlayerFromAPI(playerID); err != nil {
-		logger.Printf("[PlayersService] ⚠️  Failed to load player %s from API: %v", playerID, err)
-		return fmt.Sprintf("Player %s", strings.TrimPrefix(playerID, "sr:player:"))
-	}
-	
-	// 重新查询
-	s.mu.RLock()
-	name, ok = s.players[playerID]
-	s.mu.RUnlock()
-	
-	if ok {
-		return name
-	}
-	
+	// 如果缓存中没有，说明预加载失败或者该球员信息不在预加载范围内
+	// 此时不应该再有动态加载，直接返回默认值
+	logger.Printf("[PlayersService] ⚠️  Player %s not found in cache. Preload might have failed or player is out of scope.", playerID)
 	return fmt.Sprintf("Player %s", strings.TrimPrefix(playerID, "sr:player:"))
 }
 
 // loadPlayerFromAPI 从 API 加载球员信息
+// 该方法现在只在 PreloadPlayers 中使用
 func (s *PlayersService) loadPlayerFromAPI(playerID string) error {
+	// 检查是否已经存在,避免重复加载
+	s.mu.RLock()
+	_, ok := s.players[playerID]
+	s.mu.RUnlock()
+	if ok {
+		return nil
+	}
+	
 	// 构造 URL: /v1/sports/en/players/{player_id}/profile.xml
 	apiBase := strings.TrimSuffix(s.apiBaseURL, "/v1")
 	url := fmt.Sprintf("%s/v1/sports/en/players/%s/profile.xml", apiBase, playerID)
-	
-	logger.Printf("[PlayersService] Fetching player profile from: %s", url)
 	
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -165,9 +166,7 @@ func (s *PlayersService) loadPlayerFromAPI(playerID string) error {
 	logger.Printf("[PlayersService] ✅ Loaded player: %s (%s)", profile.Player.Name, playerID)
 	
 	return nil
-}
-
-// savePlayer 保存球员信息到数据库和缓存
+}// savePlayer 保存球员信息到数据库和缓存
 func (s *PlayersService) savePlayer(player *PlayerProfile) error {
 	// 解析出生日期
 	var dateOfBirth *time.Time
@@ -198,6 +197,52 @@ func (s *PlayersService) savePlayer(player *PlayerProfile) error {
 	s.mu.Unlock()
 	
 	return nil
+}
+
+// PreloadPlayers 批量预加载球员信息
+func (s *PlayersService) PreloadPlayers(players []PlayerInfo) {
+	// 使用 goroutine 并发加载球员信息
+	var wg sync.WaitGroup
+	
+	// 使用 channel 限制并发数
+	concurrencyLimit := 10
+	semaphore := make(chan struct{}, concurrencyLimit)
+	
+	for _, player := range players {
+		// 检查是否已存在,避免重复 API 调用
+		s.mu.RLock()
+		_, ok := s.players[player.ID]
+		s.mu.RUnlock()
+		
+		if ok {
+			continue
+		}
+		
+		wg.Add(1)
+		semaphore <- struct{}{}
+		
+		go func(playerID string) {
+			defer wg.Done()
+			defer func() { <-semaphore }()
+			
+			// 检查是否已存在,避免并发冲突
+			s.mu.RLock()
+			_, ok := s.players[playerID]
+			s.mu.RUnlock()
+			
+			if ok {
+				return
+			}
+			
+			// 尝试从 API 加载
+			if err := s.loadPlayerFromAPI(playerID); err != nil {
+				logger.Printf("[PlayersService] ⚠️  Failed to preload player %s from API: %v", playerID, err)
+			}
+		}(player.ID)
+	}
+	
+	wg.Wait()
+	logger.Printf("[PlayersService] ✅ Preload finished. Total players: %d", len(s.players))
 }
 
 // GetStatus 获取服务状态

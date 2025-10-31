@@ -13,6 +13,45 @@ import (
 	"uof-service/web"
 )
 
+func PreloadPlayers(playersService *services.PlayersService, scheduleService *services.ScheduleService) error {
+	logger.Println("[PlayersService] 📥 Starting player preload...")
+	
+	// 1. 获取未来 3 天的比赛列表
+	eventIDs, err := scheduleService.FetchUpcomingSchedule()
+	if err != nil {
+		return fmt.Errorf("failed to fetch upcoming schedule: %w", err)
+	}
+	
+	// 2. 遍历比赛,获取阵容信息
+	var allPlayers []services.PlayerInfo
+	for _, eventID := range eventIDs {
+		players, err := scheduleService.FetchSportEventSummary(eventID)
+		if err != nil {
+			logger.Printf("[PlayersService] ⚠️  Failed to fetch summary for event %s: %v", eventID, err)
+			continue
+		}
+		allPlayers = append(allPlayers, players...)
+	}
+	
+	// 3. 批量预加载球员信息
+	playersService.PreloadPlayers(allPlayers)
+	
+	logger.Printf("[PlayersService] ✅ Player preload finished. Total unique players found: %d", len(allPlayers))
+	return nil
+}
+
+func schedulePlayerPreload(playersService *services.PlayersService, scheduleService *services.ScheduleService) {
+	// 定时更新球员信息 (例如每 6 小时一次)
+	ticker := time.NewTicker(6 * time.Hour)
+	defer ticker.Stop()
+	
+	for range ticker.C {
+		if err := PreloadPlayers(playersService, scheduleService); err != nil {
+			logger.Errorf("[PlayersService] ❌ Failed to run scheduled player preload: %v", err)
+		}
+	}
+}
+
 func main() {
 	logger.Println("Starting Betradar UOF Service...")
 
@@ -48,8 +87,24 @@ func main() {
 	playersService := services.NewPlayersService(cfg.AccessToken, cfg.APIBaseURL, db)
 	if err := playersService.Start(); err != nil {
 		logger.Errorf("[PlayersService] ⚠️  Failed to start: %v", err)
+	}
+	
+	// 创建 Schedule 服务
+	scheduleService := services.NewScheduleService(db, cfg.AccessToken, cfg.APIBaseURL)
+	
+	// 启动时立即执行一次球员信息预加载
+	if err := s.PreloadPlayers(playersService, scheduleService); err != nil {
+		logger.Errorf("[PlayersService] ⚠️  Failed to preload players: %v", err)
+	}
+	
+	// 定时更新球员信息 (例如每 6 小时一次)
+	go s.schedulePlayerPreload(playersService, scheduleService)
+	
+	// 启动 Schedule 服务
+	if err := scheduleService.Start(); err != nil {
+		logger.Errorf("[Schedule] ⚠️  Failed to start: %v", err)
 	} else {
-		logger.Println("[PlayersService] ✅ Players service started")
+		logger.Println("[Schedule] ✅ Schedule service started")
 	}
 	
 	// 创建 Market Descriptions 服务

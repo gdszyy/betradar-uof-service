@@ -18,6 +18,28 @@ type ScheduleService struct {
 	client      *http.Client
 }
 
+// TournamentScheduleResponse API 响应
+type TournamentScheduleResponse struct {
+	XMLName xml.Name `xml:"tournament_schedule"`
+	SportEvents []struct {
+		ID string `xml:"id,attr"`
+	} `xml:"sport_event"`
+}
+
+// SportEventSummaryResponse API 响应
+type SportEventSummaryResponse struct {
+	XMLName xml.Name `xml:"sport_event_summary"`
+	SportEvent struct {
+		ID string `xml:"id,attr"`
+	} `xml:"sport_event"`
+	Lineups struct {
+		Players []struct {
+			ID string `xml:"id,attr"`
+			Name string `xml:"name,attr"`
+		} `xml:"player"`
+	} `xml:"lineups"`
+}
+
 // NewScheduleService 创建赛程服务
 func NewScheduleService(db *sql.DB, accessToken, apiBaseURL string) *ScheduleService {
 	return &ScheduleService{
@@ -46,48 +68,109 @@ func (s *ScheduleService) Start() error {
 }
 
 // FetchUpcomingSchedule 获取未来 3 天的赛程
-func (s *ScheduleService) FetchUpcomingSchedule() error {
+func (s *ScheduleService) FetchUpcomingSchedule() ([]string, error) {
 	today := time.Now().Format("2006-01-02")
+	// 注意: Schedule API 在 staging 环境下可能不可用,但我们保留代码
 	url := fmt.Sprintf("%s/sports/en/schedules/schedule.xml?start=%s&limit=3", s.apiBaseURL, today)
 
 	logger.Printf("[Schedule] 📥 Fetching upcoming schedule from: %s", url)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("x-access-token", s.accessToken)
 
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
+		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to read response: %w", err)
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	// 解析 XML
 	var schedule struct {
 		SportEvents []struct {
-			ID        string `xml:"id,attr"`
-			Scheduled string `xml:"scheduled,attr"`
-			Status    string `xml:"status,attr"`
-			LiveOdds  string `xml:"liveodds,attr"`
-			Tournament struct {
-				ID   string `xml:"id,attr"`
-				Name string `xml:"name,attr"`
-				Sport struct {
-					ID   string `xml:"id,attr"`
-					Name string `xml:"name,attr"`
+			ID string `xml:"id,attr"`
+		} `xml:"sport_event"`
+	} `xml:"schedule"`
+
+	if err := xml.Unmarshal(body, &schedule); err != nil {
+		return nil, fmt.Errorf("failed to parse XML: %w", err)
+	}
+
+	eventIDs := make([]string, len(schedule.SportEvents))
+	for i, event := range schedule.SportEvents {
+		eventIDs[i] = event.ID
+	}
+
+	logger.Printf("[Schedule] ✅ Fetched %d sport events", len(eventIDs))
+
+	return eventIDs, nil
+}
+
+// FetchSportEventSummary 获取比赛阵容信息
+func (s *ScheduleService) FetchSportEventSummary(eventID string) ([]PlayerInfo, error) {
+	// 构造 URL: /v1/sports/en/sport_events/{event_id}/summary.xml
+	url := fmt.Sprintf("%s/sports/en/sport_events/%s/summary.xml", s.apiBaseURL, eventID)
+
+	logger.Printf("[Schedule] 📥 Fetching summary for event: %s", eventID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("x-access-token", s.accessToken)
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		// 404 可能是因为比赛没有阵容信息,不作为错误处理
+		if resp.StatusCode == http.StatusNotFound {
+			logger.Printf("[Schedule] ⚠️  Summary not found for event %s (404)", eventID)
+			return nil, nil
+		}
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var summary SportEventSummaryResponse
+	if err := xml.Unmarshal(body, &summary); err != nil {
+		return nil, fmt.Errorf("failed to parse XML for event %s: %w", eventID, err)
+	}
+
+	players := make([]PlayerInfo, len(summary.Lineups.Players))
+	for i, p := range summary.Lineups.Players {
+		players[i] = PlayerInfo{
+			ID:   fmt.Sprintf("sr:player:%s", p.ID), // 补全 URN
+			Name: p.Name,
+		}
+	}
+
+	logger.Printf("[Schedule] ✅ Fetched %d players for event %s", len(players), eventID)
+
+	return players, nil
+}					Name string `xml:"name,attr"`
 				} `xml:"sport"`
 				Category struct {
 					ID          string `xml:"id,attr"`
