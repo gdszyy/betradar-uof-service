@@ -397,7 +397,14 @@ func (s *MarketDescriptionsService) loadMarketDescriptions() error {
 	s.lastUpdated = time.Now()
 	s.mu.Unlock()
 	
+	// 统计 mappings 数量
+	totalMappings := 0
+	for _, outcomes := range s.mappings {
+		totalMappings += len(outcomes)
+	}
+	
 	logger.Printf("[MarketDescService] ✅ Loaded %d market descriptions from API", len(s.markets))
+	logger.Printf("[MarketDescService] ✅ Parsed %d total mapping outcomes", totalMappings)
 	
 	// 保存到数据库 (如果可用)
 	if err := s.saveToDatabase(); err != nil {
