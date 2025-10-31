@@ -98,17 +98,17 @@ func main() {
 			logger.Errorf("[PlayersService] ⚠️  Failed to preload players: %v", err)
 		}
 		
-		// 定时更新球员信息 (例如每 6 小时一次)
-		go schedulePlayerPreload(playersService, scheduleService)
-	
-	// 启动 Schedule 服务
-	if err := scheduleService.Start(); err != nil {
-		logger.Errorf("[Schedule] ⚠️  Failed to start: %v", err)
-	} else {
-		logger.Println("[Schedule] ✅ Schedule service started")
-	}
-	
-	// 创建 Market Descriptions 服务
+			// 定时更新球员信息 (例如每 6 小时一次)
+			go schedulePlayerPreload(playersService, scheduleService)
+		
+		// 启动 Schedule 服务
+		if err := scheduleService.Start(); err != nil {
+			logger.Errorf("[Schedule] ⚠️  Failed to start: %v", err)
+		} else {
+			logger.Println("[Schedule] ✅ Schedule service started")
+		}
+		
+		// 创建 Market Descriptions 服务
 	marketDescService := services.NewMarketDescriptionsService(cfg.AccessToken, cfg.APIBaseURL)
 	marketDescService.SetDatabase(db) // 注入数据库连接 (可选)
 	marketDescService.SetPlayersService(playersService) // 注入球员服务 (可选)
@@ -183,13 +183,7 @@ func main() {
 		logger.Println("[StaticData] ✅ Static data service started (weekly refresh)")
 	}
 	
-	// 启动赛程服务 (每天凌晨 1 点执行一次)
-	scheduleService := services.NewScheduleService(db, cfg.AccessToken, cfg.APIBaseURL)
-	if err := scheduleService.Start(); err != nil {
-		logger.Errorf("[Schedule] ⚠️  Failed to start: %v", err)
-	} else {
-		logger.Println("[Schedule] ✅ Schedule service started (daily at 1:00 AM)")
-	}
+
 	
 	// 启动订阅清理服务 (每小时执行一次)
 	subscriptionCleanup := services.NewSubscriptionCleanupService(cfg, db, larkNotifier)
