@@ -22,7 +22,7 @@ func (s *Server) handleGetEventMarkets(w http.ResponseWriter, r *http.Request) {
 	
 	log.Printf("[API] Getting markets for event: %s", eventID)
 	
-	oddsParser := services.NewOddsParser(s.db)
+	oddsParser := services.NewOddsParser(s.db, s.marketDescService)
 	markets, err := oddsParser.GetEventMarkets(eventID)
 	if err != nil {
 		log.Printf("[API] Error querying markets: %v", err)
@@ -56,7 +56,7 @@ func (s *Server) handleGetMarketOdds(w http.ResponseWriter, r *http.Request) {
 	
 	log.Printf("[API] Getting odds for event: %s, market: %s", eventID, marketID)
 	
-	oddsParser := services.NewOddsParser(s.db)
+	oddsParser := services.NewOddsParser(s.db, s.marketDescService)
 	odds, err := oddsParser.GetMarketOdds(eventID, marketID)
 	if err != nil {
 		log.Printf("[API] Error querying odds: %v", err)
@@ -105,7 +105,7 @@ func (s *Server) handleGetOddsHistory(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[API] Getting odds history for event: %s, market: %s, outcome: %s, limit: %d", 
 		eventID, marketID, outcomeID, limit)
 	
-	oddsParser := services.NewOddsParser(s.db)
+	oddsParser := services.NewOddsParser(s.db, s.marketDescService)
 	history, err := oddsParser.GetOddsHistory(eventID, marketID, outcomeID, limit)
 	if err != nil {
 		log.Printf("[API] Error querying odds history: %v", err)
@@ -171,7 +171,7 @@ func (s *Server) handleGetAllBookedMarketsOdds(w http.ResponseWriter, r *http.Re
 	log.Printf("[API] Found %d active events", len(eventIDs))
 	
 	// 2. 获取每个比赛的盘口和赔率
-	oddsParser := services.NewOddsParser(s.db)
+	oddsParser := services.NewOddsParser(s.db, s.marketDescService)
 	var eventsData []map[string]interface{}
 	
 	for _, eventID := range eventIDs {
