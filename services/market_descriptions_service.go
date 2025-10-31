@@ -342,6 +342,8 @@ func (s *MarketDescriptionsService) GetMarketName(marketID string, specifiers st
 	
 	market, ok := s.markets[marketID]
 	if !ok {
+		// 记录警告: market 不存在于 API 数据中
+		logger.Printf("[⚠️  MarketDescService] Market not found in API data: marketID=%s", marketID)
 		return fmt.Sprintf("Market %s", marketID)
 	}
 	
@@ -380,54 +382,20 @@ func (s *MarketDescriptionsService) GetOutcomeName(marketID string, outcomeID st
 	
 	outcomes, ok := s.outcomes[marketID]
 	if !ok {
+		// 记录警告: market 不存在于 API 数据中
+		logger.Printf("[⚠️  MarketDescService] Market not found in API data: marketID=%s, outcomeID=%s", marketID, outcomeID)
 		return fmt.Sprintf("Outcome %s", outcomeID)
 	}
 	
 	outcome, ok := outcomes[outcomeID]
 	if !ok {
-		// Fallback: 尝试根据常见的 outcome ID 返回友好名称
-		switch outcomeID {
-		case "1":
-			return "Home"
-		case "2":
-			return "Away"
-		case "X":
-			return "Draw"
-		case "12":
-			return "Home or Away"
-		case "1X":
-			return "Home or Draw"
-		case "2X":
-			return "Away or Draw"
-		case "over":
-			return "Over"
-		case "under":
-			return "Under"
-		case "yes":
-			return "Yes"
-		case "no":
-			return "No"
-		case "13":
-			// 13 通常表示 Over/Under 类型
-			if strings.Contains(specifiers, "total=") {
-				return "Over"
-			}
-			return "Outcome 13"
-		case "14":
-			if strings.Contains(specifiers, "total=") {
-				return "Under"
-			}
-			return "Outcome 14"
-		default:
-			// 处理 sr:point_range 类型
-			if strings.HasPrefix(outcomeID, "sr:point_range:") {
-				parts := strings.Split(outcomeID, ":")
-				if len(parts) >= 3 {
-					return fmt.Sprintf("Point Range: %s", parts[2])
-				}
-			}
-			return fmt.Sprintf("Outcome %s", outcomeID)
-		}
+		// 记录警告: outcome 不存在于 API 数据中
+		// 这可能说明:
+		// 1. API 数据不完整
+		// 2. outcome 是动态生成的,需要根据 specifiers 解析
+		// 3. outcome_id 本身就是错误的
+		logger.Printf("[⚠️  MarketDescService] Outcome not found in API data: marketID=%s, outcomeID=%s, specifiers=%s", marketID, outcomeID, specifiers)
+		return fmt.Sprintf("Outcome %s", outcomeID)
 	}
 	
 	name := outcome.Name
