@@ -301,6 +301,8 @@ func (s *MarketDescriptionsService) saveToDatabase() error {
 	}
 	
 	// 插入 mappings
+	logger.Printf("[MarketDescService] Preparing to save %d markets with mappings", len(s.mappings))
+	
 	mappingStmt, err := tx.Prepare(`
 		INSERT INTO mapping_outcomes (market_id, outcome_id, product_outcome_name, product_id, sport_id)
 		VALUES ($1, $2, $3, $4, $5)
