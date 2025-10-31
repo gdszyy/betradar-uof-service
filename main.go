@@ -1,17 +1,18 @@
 package main
 
 import (
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
-
-	"uof-service/config"
-	"uof-service/database"
-	"uof-service/logger"
-	"uof-service/services"
-	"uof-service/web"
-)
+		"fmt"
+		"os"
+		"os/signal"
+		"syscall"
+		"time"
+	
+		"uof-service/config"
+		"uof-service/database"
+		"uof-service/logger"
+		"uof-service/services"
+		"uof-service/web"
+	)
 
 func PreloadPlayers(playersService *services.PlayersService, scheduleService *services.ScheduleService) error {
 	logger.Println("[PlayersService] 📥 Starting player preload...")
@@ -92,13 +93,13 @@ func main() {
 	// 创建 Schedule 服务
 	scheduleService := services.NewScheduleService(db, cfg.AccessToken, cfg.APIBaseURL)
 	
-	// 启动时立即执行一次球员信息预加载
-	if err := s.PreloadPlayers(playersService, scheduleService); err != nil {
-		logger.Errorf("[PlayersService] ⚠️  Failed to preload players: %v", err)
-	}
-	
-	// 定时更新球员信息 (例如每 6 小时一次)
-	go s.schedulePlayerPreload(playersService, scheduleService)
+		// 启动时立即执行一次球员信息预加载
+		if err := PreloadPlayers(playersService, scheduleService); err != nil {
+			logger.Errorf("[PlayersService] ⚠️  Failed to preload players: %v", err)
+		}
+		
+		// 定时更新球员信息 (例如每 6 小时一次)
+		go schedulePlayerPreload(playersService, scheduleService)
 	
 	// 启动 Schedule 服务
 	if err := scheduleService.Start(); err != nil {
