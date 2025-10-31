@@ -99,11 +99,7 @@ func (s *ScheduleService) FetchUpcomingSchedule() ([]string, error) {
 	}
 
 	// 解析 XML
-	var schedule struct {
-		SportEvents []struct {
-			ID string `xml:"id,attr"`
-		} `xml:"sport_event"`
-	} `xml:"schedule"`
+	var schedule TournamentScheduleResponse
 
 	if err := xml.Unmarshal(body, &schedule); err != nil {
 		return nil, fmt.Errorf("failed to parse XML: %w", err)
