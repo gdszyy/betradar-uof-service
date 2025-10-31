@@ -528,13 +528,17 @@ func (s *MarketDescriptionsService) GetOutcomeName(marketID string, outcomeID st
 	
 	outcome, ok := outcomes[outcomeID]
 	if !ok {
-		// 记录警告: outcome 不存在于 API 数据中
-		logger.Printf("[⚠️  MarketDescService] Outcome not found in API data: marketID=%s, outcomeID=%s, specifiers=%s", marketID, outcomeID, specifiers)
-		
 		// 尝试解析 URN 格式的 outcome_id
 		if parsedName := s.parseURNOutcome(outcomeID); parsedName != "" {
+			// 对于 player markets,不记录警告,因为这是预期行为
+			if !strings.HasPrefix(outcomeID, "sr:player:") {
+				logger.Printf("[⚠️  MarketDescService] Outcome not found in API data: marketID=%s, outcomeID=%s, specifiers=%s", marketID, outcomeID, specifiers)
+			}
 			return parsedName
 		}
+		
+		// 记录警告: outcome 不存在于 API 数据中
+		logger.Printf("[⚠️  MarketDescService] Outcome not found in API data: marketID=%s, outcomeID=%s, specifiers=%s", marketID, outcomeID, specifiers)
 		
 		return fmt.Sprintf("Outcome %s", outcomeID)
 	}
@@ -710,6 +714,10 @@ func (s *MarketDescriptionsService) parseURNOutcome(outcomeID string) string {
 	
 	// 处理特殊情况
 	switch outcomeType {
+	case "player":
+		// sr:player:123456 -> "Player 123456"
+		// 注意: 球员名称需要从 Fixture API 或 Live Data 获取
+		return fmt.Sprintf("Player %s", specifier)
 	case "point_range":
 		return fmt.Sprintf("Point Range: %s", specifier)
 	case "exact_goals":
