@@ -28,6 +28,7 @@ type MarketDescriptionsService struct {
 	db          *sql.DB // 可选的数据库连接
 	markets     map[string]*MarketDescription
 	outcomes    map[string]map[string]*OutcomeDescription // marketID -> outcomeID -> outcome
+	mappings    map[string]map[string]string              // marketID -> outcomeID (URN) -> product_outcome_name
 	mu          sync.RWMutex
 	lastUpdated time.Time
 }
@@ -39,6 +40,7 @@ type MarketDescription struct {
 	Groups     string                   `xml:"groups,attr"`
 	Outcomes   []OutcomeDescription     `xml:"outcomes>outcome"`
 	Specifiers []SpecifierDescription   `xml:"specifiers>specifier"`
+	Mappings   []Mapping                `xml:"mappings>mapping"`
 }
 
 // OutcomeDescription 结果描述
@@ -51,6 +53,22 @@ type OutcomeDescription struct {
 type SpecifierDescription struct {
 	Name string `xml:"name,attr"`
 	Type string `xml:"type,attr"`
+}
+
+// Mapping 映射关系
+type Mapping struct {
+	ProductID  string           `xml:"product_id,attr"`
+	ProductIDs string           `xml:"product_ids,attr"`
+	SportID    string           `xml:"sport_id,attr"`
+	MarketID   string           `xml:"market_id,attr"`
+	Outcomes   []MappingOutcome `xml:"mapping_outcome"`
+}
+
+// MappingOutcome 映射结果
+type MappingOutcome struct {
+	OutcomeID        string `xml:"outcome_id,attr"`
+	ProductOutcomeID string `xml:"product_outcome_id,attr"`
+	ProductOutcomeName string `xml:"product_outcome_name,attr"`
 }
 
 // MarketDescriptionsResponse API响应
@@ -67,6 +85,7 @@ func NewMarketDescriptionsService(token string, apiBaseURL string) *MarketDescri
 		apiBaseURL: apiBaseURL,
 		markets:    make(map[string]*MarketDescription),
 		outcomes:   make(map[string]map[string]*OutcomeDescription),
+		mappings:   make(map[string]map[string]string),
 	}
 }
 
@@ -261,7 +280,7 @@ func (s *MarketDescriptionsService) saveToDatabase() error {
 
 // loadMarketDescriptions 从 API 加载市场描述
 func (s *MarketDescriptionsService) loadMarketDescriptions() error {
-	url := fmt.Sprintf("%s/descriptions/en/markets.xml", s.apiBaseURL)
+	url := fmt.Sprintf("%s/v1/descriptions/en/markets.xml?include_mappings=true", s.apiBaseURL)
 	
 	logger.Printf("[MarketDescService] Fetching market descriptions from: %s", url)
 	
@@ -296,6 +315,7 @@ func (s *MarketDescriptionsService) loadMarketDescriptions() error {
 	s.mu.Lock()
 	s.markets = make(map[string]*MarketDescription)
 	s.outcomes = make(map[string]map[string]*OutcomeDescription)
+	s.mappings = make(map[string]map[string]string)
 	
 	for i := range response.Markets {
 		market := &response.Markets[i]
@@ -306,6 +326,15 @@ func (s *MarketDescriptionsService) loadMarketDescriptions() error {
 		for j := range market.Outcomes {
 			outcome := &market.Outcomes[j]
 			s.outcomes[market.ID][outcome.ID] = outcome
+		}
+		
+		// 索引 mappings
+		s.mappings[market.ID] = make(map[string]string)
+		for _, mapping := range market.Mappings {
+			for _, mappingOutcome := range mapping.Outcomes {
+				// 使用 URN 作为 key
+				s.mappings[market.ID][mappingOutcome.OutcomeID] = mappingOutcome.ProductOutcomeName
+			}
 		}
 	}
 	
@@ -380,6 +409,14 @@ func (s *MarketDescriptionsService) GetOutcomeName(marketID string, outcomeID st
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	
+	// 优先从 mappings 中查询 (处理 URN 格式的 outcome_id)
+	if mappings, ok := s.mappings[marketID]; ok {
+		if productOutcomeName, ok := mappings[outcomeID]; ok {
+			return productOutcomeName
+		}
+	}
+	
+	// 如果 mappings 中没有,尝试从 outcomes 中查询 (处理简单的 outcome_id)
 	outcomes, ok := s.outcomes[marketID]
 	if !ok {
 		// 记录警告: market 不存在于 API 数据中
@@ -393,25 +430,10 @@ func (s *MarketDescriptionsService) GetOutcomeName(marketID string, outcomeID st
 		return fmt.Sprintf("Outcome %s", outcomeID)
 	}
 	
-	// 如果 outcome_id 是 URN 格式,提取最后的 ID 部分进行查询
-	// 例如: sr:correct_score:max:6:1330 -> 1330
-	actualOutcomeID := outcomeID
-	if strings.HasPrefix(outcomeID, "sr:") {
-		parts := strings.Split(outcomeID, ":")
-		if len(parts) >= 2 {
-			// 最后一部分是真实的 outcome ID
-			actualOutcomeID = parts[len(parts)-1]
-		}
-	}
-	
-	outcome, ok := outcomes[actualOutcomeID]
+	outcome, ok := outcomes[outcomeID]
 	if !ok {
 		// 记录警告: outcome 不存在于 API 数据中
-		// 这可能说明:
-		// 1. API 数据不完整
-		// 2. outcome 是动态生成的,需要根据 specifiers 解析
-		// 3. outcome_id 本身就是错误的
-		logger.Printf("[⚠️  MarketDescService] Outcome not found in API data: marketID=%s, outcomeID=%s (actualID=%s), specifiers=%s", marketID, outcomeID, actualOutcomeID, specifiers)
+		logger.Printf("[⚠️  MarketDescService] Outcome not found in API data: marketID=%s, outcomeID=%s, specifiers=%s", marketID, outcomeID, specifiers)
 		
 		// 尝试解析 URN 格式的 outcome_id
 		if parsedName := s.parseURNOutcome(outcomeID); parsedName != "" {

@@ -114,21 +114,10 @@ func (p *OddsParser) storeMarket(tx *sql.Tx, eventID string, market MarketData, 
 
 // storeOdds 存储赔率
 func (p *OddsParser) storeOdds(tx *sql.Tx, marketPK int, eventID string, marketID string, specifiers string, outcome OutcomeData, timestamp int64) error {
-	// 从 URN 中提取真实的 outcome ID
-	// 例如: sr:exact_goals:3+:90 -> 90
-	actualOutcomeID := outcome.ID
-	if strings.HasPrefix(outcome.ID, "sr:") {
-		parts := strings.Split(outcome.ID, ":")
-		if len(parts) >= 2 {
-			// 最后一部分是真实的 outcome ID
-			actualOutcomeID = parts[len(parts)-1]
-		}
-	}
-	
 	// 查询旧赔率
 	var oldOdds sql.NullFloat64
 	oldOddsQuery := `SELECT odds_value FROM odds WHERE market_id = $1 AND outcome_id = $2`
-	tx.QueryRow(oldOddsQuery, marketPK, actualOutcomeID).Scan(&oldOdds)
+	tx.QueryRow(oldOddsQuery, marketPK, outcome.ID).Scan(&oldOdds)
 	
 	// 计算隐含概率
 	probability := 0.0
@@ -142,14 +131,14 @@ func (p *OddsParser) storeOdds(tx *sql.Tx, marketPK int, eventID string, marketI
 	tx.QueryRow(teamQuery, marketPK).Scan(&homeTeamName, &awayTeamName)
 	
 	// 使用 MarketDescriptionsService 获取 outcome 名称
-	outcomeName := p.getOutcomeName(actualOutcomeID) // fallback
+	outcomeName := p.getOutcomeName(outcome.ID) // fallback
 	if p.marketDescService != nil {
 		ctx := &ReplacementContext{
 			HomeTeamName: homeTeamName.String,
 			AwayTeamName: awayTeamName.String,
 			Specifiers:   specifiers,
 		}
-		outcomeName = p.marketDescService.GetOutcomeName(marketID, actualOutcomeID, specifiers, ctx)
+		outcomeName = p.marketDescService.GetOutcomeName(marketID, outcome.ID, specifiers, ctx)
 	}
 	
 	// 插入或更新当前赔率
@@ -168,7 +157,7 @@ func (p *OddsParser) storeOdds(tx *sql.Tx, marketPK int, eventID string, marketI
 	_, err := tx.Exec(oddsQuery,
 		marketPK,
 		eventID,
-		actualOutcomeID,  // 使用提取后的 ID
+		outcome.ID,  // 使用完整的 URN
 		outcomeName,
 		outcome.Odds,
 		probability,
@@ -195,7 +184,7 @@ func (p *OddsParser) storeOdds(tx *sql.Tx, marketPK int, eventID string, marketI
 		_, err = tx.Exec(historyQuery,
 			marketPK,
 			eventID,
-			actualOutcomeID,  // 使用提取后的 ID
+			outcome.ID,  // 使用完整的 URN
 			outcomeName,
 			outcome.Odds,
 			probability,
