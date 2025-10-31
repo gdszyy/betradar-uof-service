@@ -66,7 +66,7 @@ func main() {
 	go statsTracker.StartPeriodicReport()
 
 	// 启动AMQP消费者
-	amqpConsumer := services.NewAMQPConsumer(cfg, messageStore, wsHub)
+	amqpConsumer := services.NewAMQPConsumer(cfg, messageStore, wsHub, marketDescService)
 	
 	// 设置消息统计回调
 	amqpConsumer.SetStatsTracker(statsTracker)

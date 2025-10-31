@@ -38,12 +38,13 @@ type AMQPConsumer struct {
 	rollbackBetCancelProc       *RollbackBetCancelProcessor
 	srnMappingService           *SRNMappingService
 	fixtureService              *FixtureService
+	marketDescService           *MarketDescriptionsService
 	conn                 *amqp.Connection
 	channel              *amqp.Channel
 	done                 chan bool
 }
 
-func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster MessageBroadcaster) *AMQPConsumer {
+func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster MessageBroadcaster, marketDescService *MarketDescriptionsService) *AMQPConsumer {
 	notifier := NewLarkNotifier(cfg.LarkWebhook)
 	statsTracker := NewMessageStatsTracker(notifier, 5*time.Minute)
 	
@@ -51,7 +52,7 @@ func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster Messag
 	srnMappingService := NewSRNMappingService(cfg.UOFAPIToken, cfg.APIBaseURL, store.db)
 	fixtureParser := NewFixtureParser(store.db, srnMappingService, cfg.APIBaseURL, cfg.AccessToken)
 	oddsChangeParser := NewOddsChangeParser(store.db)
-	oddsParser := NewOddsParser(store.db)
+	oddsParser := NewOddsParser(store.db, marketDescService)
 	betSettlementParser := NewBetSettlementParser(store.db)
 	betStopProcessor := NewBetStopProcessor(store.db)
 	betCancelProcessor := NewBetCancelProcessor(store.db)
@@ -81,6 +82,7 @@ func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster Messag
 		rollbackBetCancelProc:      rollbackBetCancelProc,
 		srnMappingService:          srnMappingService,
 		fixtureService:             fixtureService,
+		marketDescService:          marketDescService,
 			done:                 make(chan bool),
 		}
 }

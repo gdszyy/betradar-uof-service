@@ -385,7 +385,49 @@ func (s *MarketDescriptionsService) GetOutcomeName(marketID string, outcomeID st
 	
 	outcome, ok := outcomes[outcomeID]
 	if !ok {
-		return fmt.Sprintf("Outcome %s", outcomeID)
+		// Fallback: 尝试根据常见的 outcome ID 返回友好名称
+		switch outcomeID {
+		case "1":
+			return "Home"
+		case "2":
+			return "Away"
+		case "X":
+			return "Draw"
+		case "12":
+			return "Home or Away"
+		case "1X":
+			return "Home or Draw"
+		case "2X":
+			return "Away or Draw"
+		case "over":
+			return "Over"
+		case "under":
+			return "Under"
+		case "yes":
+			return "Yes"
+		case "no":
+			return "No"
+		case "13":
+			// 13 通常表示 Over/Under 类型
+			if strings.Contains(specifiers, "total=") {
+				return "Over"
+			}
+			return "Outcome 13"
+		case "14":
+			if strings.Contains(specifiers, "total=") {
+				return "Under"
+			}
+			return "Outcome 14"
+		default:
+			// 处理 sr:point_range 类型
+			if strings.HasPrefix(outcomeID, "sr:point_range:") {
+				parts := strings.Split(outcomeID, ":")
+				if len(parts) >= 3 {
+					return fmt.Sprintf("Point Range: %s", parts[2])
+				}
+			}
+			return fmt.Sprintf("Outcome %s", outcomeID)
+		}
 	}
 	
 	name := outcome.Name

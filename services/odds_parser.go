@@ -8,12 +8,16 @@ import (
 
 // OddsParser 赔率解析器
 type OddsParser struct {
-	db *sql.DB
+	db                *sql.DB
+	marketDescService *MarketDescriptionsService
 }
 
 // NewOddsParser 创建赔率解析器
-func NewOddsParser(db *sql.DB) *OddsParser {
-	return &OddsParser{db: db}
+func NewOddsParser(db *sql.DB, marketDescService *MarketDescriptionsService) *OddsParser {
+	return &OddsParser{
+		db:                db,
+		marketDescService: marketDescService,
+	}
 }
 
 // OddsChangeData 赔率变化数据结构
@@ -99,7 +103,7 @@ func (p *OddsParser) storeMarket(tx *sql.Tx, eventID string, market MarketData, 
 	
 	// 2. 存储每个结果的赔率
 	for _, outcome := range market.Outcomes {
-			if err := p.storeOdds(tx, marketPK, eventID, outcome, timestamp); err != nil {
+			if err := p.storeOdds(tx, marketPK, eventID, market.ID, market.Specifiers, outcome, timestamp); err != nil {
 				// 错误日志已简化
 			}
 	}
@@ -108,7 +112,7 @@ func (p *OddsParser) storeMarket(tx *sql.Tx, eventID string, market MarketData, 
 }
 
 // storeOdds 存储赔率
-func (p *OddsParser) storeOdds(tx *sql.Tx, marketPK int, eventID string, outcome OutcomeData, timestamp int64) error {
+func (p *OddsParser) storeOdds(tx *sql.Tx, marketPK int, eventID string, marketID string, specifiers string, outcome OutcomeData, timestamp int64) error {
 	// 查询旧赔率
 	var oldOdds sql.NullFloat64
 	oldOddsQuery := `SELECT odds_value FROM odds WHERE market_id = $1 AND outcome_id = $2`
@@ -120,12 +124,29 @@ func (p *OddsParser) storeOdds(tx *sql.Tx, marketPK int, eventID string, outcome
 		probability = 1.0 / outcome.Odds
 	}
 	
+	// 查询赛事信息以构建 ReplacementContext
+	var homeTeamName, awayTeamName sql.NullString
+	teamQuery := `SELECT home_team_name, away_team_name FROM markets WHERE id = $1`
+	tx.QueryRow(teamQuery, marketPK).Scan(&homeTeamName, &awayTeamName)
+	
+	// 使用 MarketDescriptionsService 获取 outcome 名称
+	outcomeName := p.getOutcomeName(outcome.ID) // fallback
+	if p.marketDescService != nil {
+		ctx := &ReplacementContext{
+			HomeTeamName: homeTeamName.String,
+			AwayTeamName: awayTeamName.String,
+			Specifiers:   specifiers,
+		}
+		outcomeName = p.marketDescService.GetOutcomeName(marketID, outcome.ID, specifiers, ctx)
+	}
+	
 	// 插入或更新当前赔率
 	oddsQuery := `
 		INSERT INTO odds (market_id, event_id, outcome_id, outcome_name, odds_value, probability, active, timestamp, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
 		ON CONFLICT (market_id, outcome_id) DO UPDATE
 		SET odds_value = EXCLUDED.odds_value,
+		    outcome_name = EXCLUDED.outcome_name,
 		    probability = EXCLUDED.probability,
 		    active = EXCLUDED.active,
 		    timestamp = EXCLUDED.timestamp,
@@ -136,7 +157,7 @@ func (p *OddsParser) storeOdds(tx *sql.Tx, marketPK int, eventID string, outcome
 		marketPK,
 		eventID,
 		outcome.ID,
-		p.getOutcomeName(outcome.ID),
+		outcomeName,
 		outcome.Odds,
 		probability,
 		outcome.Active == 1,
@@ -163,7 +184,7 @@ func (p *OddsParser) storeOdds(tx *sql.Tx, marketPK int, eventID string, outcome
 			marketPK,
 			eventID,
 			outcome.ID,
-			p.getOutcomeName(outcome.ID),
+			outcomeName,
 			outcome.Odds,
 			probability,
 			changeType,
@@ -180,7 +201,7 @@ func (p *OddsParser) storeOdds(tx *sql.Tx, marketPK int, eventID string, outcome
 			VALUES ($1, $2, $3, $4, $5, $6, 'new', $7)
 		`
 		
-		tx.Exec(historyQuery, marketPK, eventID, outcome.ID, p.getOutcomeName(outcome.ID), outcome.Odds, probability, timestamp)
+		tx.Exec(historyQuery, marketPK, eventID, outcome.ID, outcomeName, outcome.Odds, probability, timestamp)
 	}
 	
 	return nil
