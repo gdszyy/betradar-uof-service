@@ -123,9 +123,9 @@ func (s *PlayersService) GetPlayerName(playerID string) string {
 
 // loadPlayerFromAPI 从 API 加载球员信息
 func (s *PlayersService) loadPlayerFromAPI(playerID string) error {
-	// 构造 URL: /v1/players/{player_id}/profile.xml
+	// 构造 URL: /v1/sports/en/players/{player_id}/profile.xml
 	apiBase := strings.TrimSuffix(s.apiBaseURL, "/v1")
-	url := fmt.Sprintf("%s/v1/players/%s/profile.xml", apiBase, playerID)
+	url := fmt.Sprintf("%s/v1/sports/en/players/%s/profile.xml", apiBase, playerID)
 	
 	logger.Printf("[PlayersService] Fetching player profile from: %s", url)
 	
