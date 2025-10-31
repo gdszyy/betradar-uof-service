@@ -384,17 +384,34 @@ func (s *MarketDescriptionsService) GetOutcomeName(marketID string, outcomeID st
 	if !ok {
 		// 记录警告: market 不存在于 API 数据中
 		logger.Printf("[⚠️  MarketDescService] Market not found in API data: marketID=%s, outcomeID=%s", marketID, outcomeID)
+		
+		// 尝试解析 URN 格式的 outcome_id
+		if parsedName := s.parseURNOutcome(outcomeID); parsedName != "" {
+			return parsedName
+		}
+		
 		return fmt.Sprintf("Outcome %s", outcomeID)
 	}
 	
-	outcome, ok := outcomes[outcomeID]
+	// 如果 outcome_id 是 URN 格式,提取最后的 ID 部分进行查询
+	// 例如: sr:correct_score:max:6:1330 -> 1330
+	actualOutcomeID := outcomeID
+	if strings.HasPrefix(outcomeID, "sr:") {
+		parts := strings.Split(outcomeID, ":")
+		if len(parts) >= 2 {
+			// 最后一部分是真实的 outcome ID
+			actualOutcomeID = parts[len(parts)-1]
+		}
+	}
+	
+	outcome, ok := outcomes[actualOutcomeID]
 	if !ok {
 		// 记录警告: outcome 不存在于 API 数据中
 		// 这可能说明:
 		// 1. API 数据不完整
 		// 2. outcome 是动态生成的,需要根据 specifiers 解析
 		// 3. outcome_id 本身就是错误的
-		logger.Printf("[⚠️  MarketDescService] Outcome not found in API data: marketID=%s, outcomeID=%s, specifiers=%s", marketID, outcomeID, specifiers)
+		logger.Printf("[⚠️  MarketDescService] Outcome not found in API data: marketID=%s, outcomeID=%s (actualID=%s), specifiers=%s", marketID, outcomeID, actualOutcomeID, specifiers)
 		
 		// 尝试解析 URN 格式的 outcome_id
 		if parsedName := s.parseURNOutcome(outcomeID); parsedName != "" {
