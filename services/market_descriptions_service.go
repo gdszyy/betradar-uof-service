@@ -728,7 +728,7 @@ func (s *MarketDescriptionsService) loadVariantDescription(marketID string, vari
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 	
-	req.Header.Set("x-access-token", s.accessToken)
+	req.Header.Set("x-access-token", s.token)
 	
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
