@@ -730,7 +730,7 @@ func (s *MarketDescriptionsService) parseURNOutcome(outcomeID string) string {
 
 // loadVariantDescription 从 API 加载 variant 描述
 func (s *MarketDescriptionsService) loadVariantDescription(marketID string, variant string) error {
-	url := fmt.Sprintf("%s/v1/descriptions/en/markets/%s/variants/%s.xml", s.apiBaseURL, marketID, variant)
+	url := fmt.Sprintf("%s/v1/descriptions/en/markets/%s/variants/%s", s.apiBaseURL, marketID, variant)
 	
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
