@@ -97,10 +97,47 @@ func (s *Server) handleGetMatchDetail(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleGetLiveMatches 获取所有进行中的比赛
+// handleGetLiveMatches 获取所有进行中的比赛 (分页)
 func (s *Server) handleGetLiveMatches(w http.ResponseWriter, r *http.Request) {
 	log.Println("[API] Getting live matches...")
 	
+	// 获取分页参数
+	pageParam := r.URL.Query().Get("page")
+	pageSizeParam := r.URL.Query().Get("page_size")
+	
+	page := 1 // 默认第 1 页
+	if pageParam != "" {
+		if p, err := strconv.Atoi(pageParam); err == nil && p > 0 {
+			page = p
+		}
+	}
+	
+	pageSize := 100 // 默认每页 100 条
+	if pageSizeParam != "" {
+		if ps, err := strconv.Atoi(pageSizeParam); err == nil && ps > 0 && ps <= 500 {
+			pageSize = ps
+		}
+	}
+	
+	offset := (page - 1) * pageSize
+	
+	// 查询总数
+	countQuery := `
+		SELECT COUNT(*)
+		FROM tracked_events
+		WHERE status = 'active'
+		AND match_status IS NOT NULL
+	`
+	
+	var totalCount int
+	if err := s.db.QueryRow(countQuery).Scan(&totalCount); err != nil {
+		log.Printf("[API] Error counting live matches: %v", err)
+		totalCount = 0
+	}
+	
+	totalPages := (totalCount + pageSize - 1) / pageSize
+	
+	// 查询当前页数据
 	query := `
 		SELECT 
 			event_id, srn_id, sport_id, status, schedule_time,
@@ -111,10 +148,10 @@ func (s *Server) handleGetLiveMatches(w http.ResponseWriter, r *http.Request) {
 		WHERE status = 'active'
 		AND match_status IS NOT NULL
 		ORDER BY schedule_time DESC NULLS LAST, created_at DESC
-		LIMIT 100
+		LIMIT $1 OFFSET $2
 	`
 	
-	rows, err := s.db.Query(query)
+	rows, err := s.db.Query(query, pageSize, offset)
 	if err != nil {
 		log.Printf("[API] Error querying live matches: %v", err)
 		http.Error(w, fmt.Sprintf("Failed to query matches: %v", err), http.StatusInternalServerError)
@@ -160,13 +197,17 @@ func (s *Server) handleGetLiveMatches(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"count":   len(enhancedMatches),
-		"matches": enhancedMatches,
+		"success":     true,
+		"count":       len(enhancedMatches),
+		"total":       totalCount,
+		"page":        page,
+		"page_size":   pageSize,
+		"total_pages": totalPages,
+		"matches":     enhancedMatches,
 	})
 }
 
-// handleGetUpcomingMatches 获取即将开始的比赛
+// handleGetUpcomingMatches 获取即将开始的比赛 (分页)
 func (s *Server) handleGetUpcomingMatches(w http.ResponseWriter, r *http.Request) {
 	log.Println("[API] Getting upcoming matches...")
 	
@@ -179,6 +220,44 @@ func (s *Server) handleGetUpcomingMatches(w http.ResponseWriter, r *http.Request
 		}
 	}
 	
+	// 获取分页参数
+	pageParam := r.URL.Query().Get("page")
+	pageSizeParam := r.URL.Query().Get("page_size")
+	
+	page := 1 // 默认第 1 页
+	if pageParam != "" {
+		if p, err := strconv.Atoi(pageParam); err == nil && p > 0 {
+			page = p
+		}
+	}
+	
+	pageSize := 100 // 默认每页 100 条
+	if pageSizeParam != "" {
+		if ps, err := strconv.Atoi(pageSizeParam); err == nil && ps > 0 && ps <= 500 {
+			pageSize = ps
+		}
+	}
+	
+	offset := (page - 1) * pageSize
+	
+	// 查询总数
+	countQuery := `
+		SELECT COUNT(*)
+		FROM tracked_events
+		WHERE schedule_time IS NOT NULL
+		AND schedule_time > NOW()
+		AND schedule_time < NOW() + INTERVAL '1 hour' * $1
+	`
+	
+	var totalCount int
+	if err := s.db.QueryRow(countQuery, hours).Scan(&totalCount); err != nil {
+		log.Printf("[API] Error counting upcoming matches: %v", err)
+		totalCount = 0
+	}
+	
+	totalPages := (totalCount + pageSize - 1) / pageSize
+	
+	// 查询当前页数据
 	query := `
 		SELECT 
 			event_id, srn_id, sport_id, status, schedule_time,
@@ -190,10 +269,10 @@ func (s *Server) handleGetUpcomingMatches(w http.ResponseWriter, r *http.Request
 		AND schedule_time > NOW()
 		AND schedule_time < NOW() + INTERVAL '1 hour' * $1
 		ORDER BY schedule_time ASC
-		LIMIT 100
+		LIMIT $2 OFFSET $3
 	`
 	
-	rows, err := s.db.Query(query, hours)
+	rows, err := s.db.Query(query, hours, pageSize, offset)
 	if err != nil {
 		log.Printf("[API] Error querying upcoming matches: %v", err)
 		http.Error(w, fmt.Sprintf("Failed to query matches: %v", err), http.StatusInternalServerError)
@@ -239,10 +318,14 @@ func (s *Server) handleGetUpcomingMatches(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"count":   len(enhancedMatches),
-		"hours":   hours,
-		"matches": enhancedMatches,
+		"success":     true,
+		"count":       len(enhancedMatches),
+		"total":       totalCount,
+		"page":        page,
+		"page_size":   pageSize,
+		"total_pages": totalPages,
+		"hours":       hours,
+		"matches":     enhancedMatches,
 	})
 }
 
