@@ -185,14 +185,14 @@ func (s *Server) handleGetAllBookedMarketsOdds(w http.ResponseWriter, r *http.Re
 		// 获取每个盘口的赔率
 		var marketsWithOdds []map[string]interface{}
 		for _, market := range markets {
-			odds, err := oddsParser.GetMarketOdds(eventID, market.MarketID)
+			odds, err := oddsParser.GetMarketOdds(eventID, market.SrMarketID)
 			if err != nil {
-				log.Printf("[API] Error getting odds for market %s: %v", market.MarketID, err)
+				log.Printf("[API] Error getting odds for market %s: %v", market.SrMarketID, err)
 				continue
 			}
 			
 			marketsWithOdds = append(marketsWithOdds, map[string]interface{}{
-				"market_id":   market.MarketID,
+				"sr_market_id":   market.SrMarketID,
 				"market_type": market.MarketType,
 				"market_name": market.MarketName,
 				"specifiers":  market.Specifiers,

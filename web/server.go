@@ -85,8 +85,10 @@ func (s *Server) Start() error {
 		log.Printf("[Server] ⚠️  Failed to start Market Descriptions Service: %v", err)
 		log.Println("[Server] Continuing with fallback market names...")
 	} else {
-			status := s.marketDescService.GetStatus()
-			log.Printf("[Server] ✅ Market Descriptions Service started with %d markets", status["market_count"])
+			// TODO: Implement GetStatus() method in MarketDescriptionsService
+			// status := s.marketDescService.GetStatus()
+			// log.Printf("[Server] ✅ Market Descriptions Service started with %d markets", status["market_count"])
+			log.Println("[Server] ✅ Market Descriptions Service started")
 	}
 	
 	// 启动 Subscription Sync Service
