@@ -35,6 +35,7 @@ type Server struct {
 	subscriptionSync    *services.SubscriptionSyncService
 	messageHistoryService *services.MessageHistoryService
 	marketQueryService  *services.MarketQueryService
+	queryCache          *services.QueryCache
 	httpServer          *http.Server
 	upgrader            websocket.Upgrader
 }
@@ -53,23 +54,24 @@ func NewServer(cfg *config.Config, db *sql.DB, hub *Hub, larkNotifier *services.
 	autoBooking := services.NewAutoBookingService(cfg, db, larkNotifier)
 	autoBookingController := services.NewAutoBookingController(cfg, autoBooking)
 	
-		return &Server{
-			config:          cfg,
-			db:              db,
-			wsHub:           hub,
-			messageStore:    services.NewMessageStore(db),
-			recoveryManager: services.NewRecoveryManager(cfg, services.NewMessageStore(db)),
-			srMapper:        services.NewSRMapper(),
-			replayClient:    replayClient,
-			larkNotifier:      larkNotifier,
-			autoBooking:       autoBooking,
-			autoBookingController: autoBookingController,
-			producerMonitor:   services.NewProducerMonitor(db, larkNotifier, cfg.ProducerCheckIntervalSeconds, cfg.ProducerDownThresholdSeconds),
-			marketDescService: marketDescService,
-			subscriptionSync:  services.NewSubscriptionSyncService(db, cfg.AccessToken, cfg.APIBaseURL, cfg.SubscriptionSyncIntervalMinutes),
-			messageHistoryService: services.NewMessageHistoryService(db),
-			marketQueryService: services.NewMarketQueryService(db),
-			upgrader: websocket.Upgrader{
+	return &Server{
+		config:          cfg,
+		db:              db,
+		wsHub:           hub,
+		messageStore:    services.NewMessageStore(db),
+		recoveryManager: services.NewRecoveryManager(cfg, services.NewMessageStore(db)),
+		srMapper:        services.NewSRMapper(),
+		replayClient:    replayClient,
+		larkNotifier:      larkNotifier,
+		autoBooking:       autoBooking,
+		autoBookingController: autoBookingController,
+		producerMonitor:   services.NewProducerMonitor(db, larkNotifier, cfg.ProducerCheckIntervalSeconds, cfg.ProducerDownThresholdSeconds),
+		marketDescService: marketDescService,
+		subscriptionSync:  services.NewSubscriptionSyncService(db, cfg.AccessToken, cfg.APIBaseURL, cfg.SubscriptionSyncIntervalMinutes),
+		messageHistoryService: services.NewMessageHistoryService(db),
+		marketQueryService: services.NewMarketQueryService(db),
+		queryCache:      services.NewQueryCache(30 * time.Second), // 30秒缓存
+		upgrader: websocket.Upgrader{
 				ReadBufferSize:  1024,
 				WriteBufferSize: 1024,
 				CheckOrigin: func(r *http.Request) bool {

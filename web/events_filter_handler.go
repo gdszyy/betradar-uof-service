@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	
+	"uof-service/services"
 )
 
 // handleGetEventsWithFilters 获取比赛列表(支持多种筛选)
@@ -18,6 +20,20 @@ func (s *Server) handleGetEventsWithFilters(w http.ResponseWriter, r *http.Reque
 	
 	// 解析查询参数
 	filters := parseEventFilters(r)
+	
+	// 生成缓存键
+	cacheKey := services.GenerateCacheKey("events_filter", filters)
+	
+	// 尝试从缓存获取
+	if s.queryCache != nil {
+		if cached, found := s.queryCache.Get(cacheKey); found {
+			log.Printf("[API] Cache hit for events filter query")
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("X-Cache", "HIT")
+			json.NewEncoder(w).Encode(cached)
+			return
+		}
+	}
 	
 	// 构建 SQL 查询
 	query, args := buildEventFilterQuery(filters)
@@ -77,8 +93,8 @@ func (s *Server) handleGetEventsWithFilters(w http.ResponseWriter, r *http.Reque
 	// 使用 SR 映射器转换数据
 	enhancedMatches := MapMatchList(matches, s.srMapper)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	// 构建响应
+	response := map[string]interface{}{
 		"success":     true,
 		"count":       len(enhancedMatches),
 		"total":       totalCount,
@@ -87,7 +103,16 @@ func (s *Server) handleGetEventsWithFilters(w http.ResponseWriter, r *http.Reque
 		"total_pages": totalPages,
 		"filters":     filters.toMap(),
 		"matches":     enhancedMatches,
-	})
+	}
+	
+	// 缓存结果
+	if s.queryCache != nil {
+		s.queryCache.Set(cacheKey, response)
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Cache", "MISS")
+	json.NewEncoder(w).Encode(response)
 }
 
 // EventFilters 事件筛选参数
@@ -226,7 +251,7 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 	`
 	
 	// 是否需要 JOIN markets 表
-	needMarketsJoin := filters.MarketGroup != "" || filters.MarketID != ""
+	needMarketsJoin := filters.MarketID != "" // MarketGroup 暂时不支持
 	
 	if needMarketsJoin {
 		query += " LEFT JOIN markets m ON e.event_id = m.event_id"
@@ -274,12 +299,12 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 		argIndex++
 	}
 	
-	// 盘口组筛选
-	if filters.MarketGroup != "" {
-		conditions = append(conditions, fmt.Sprintf("m.groups LIKE $%d", argIndex))
-		args = append(args, "%"+filters.MarketGroup+"%")
-		argIndex++
-	}
+	// 盘口组筛选 (暂时禁用,因为 markets 表没有 groups 字段)
+	// if filters.MarketGroup != "" {
+	// 	conditions = append(conditions, fmt.Sprintf("m.groups LIKE $%d", argIndex))
+	// 	args = append(args, "%"+filters.MarketGroup+"%")
+	// 	argIndex++
+	// }
 	
 	// 盘口类型筛选
 	if filters.MarketID != "" {
@@ -346,7 +371,7 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 	query := "SELECT COUNT(DISTINCT e.event_id) FROM tracked_events e"
 	
 	// 是否需要 JOIN markets 表
-	needMarketsJoin := filters.MarketGroup != "" || filters.MarketID != ""
+	needMarketsJoin := filters.MarketID != "" // MarketGroup 暂时不支持
 	
 	if needMarketsJoin {
 		query += " LEFT JOIN markets m ON e.event_id = m.event_id"
@@ -389,11 +414,12 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 		argIndex++
 	}
 	
-	if filters.MarketGroup != "" {
-		conditions = append(conditions, fmt.Sprintf("m.groups LIKE $%d", argIndex))
-		args = append(args, "%"+filters.MarketGroup+"%")
-		argIndex++
-	}
+	// 盘口组筛选 (暂时禁用,因为 markets 表没有 groups 字段)
+	// if filters.MarketGroup != "" {
+	// 	conditions = append(conditions, fmt.Sprintf("m.groups LIKE $%d", argIndex))
+	// 	args = append(args, "%"+filters.MarketGroup+"%")
+	// 	argIndex++
+	// }
 	
 	if filters.MarketID != "" {
 		conditions = append(conditions, fmt.Sprintf("m.sr_market_id = $%d", argIndex))
