@@ -124,8 +124,8 @@ type EventFilters struct {
 	IsLive *bool // true=live, false=非live, nil=全部
 	Status string // active, ended, etc.
 	
-	// 体育类型筛选
-	SportID string
+	// 体育类型筛选 (支持多选,逗号分隔)
+	SportIDs []string
 	
 	// 开赛时间筛选 (左闭右闭)
 	StartTimeFrom *time.Time
@@ -134,15 +134,15 @@ type EventFilters struct {
 	// 盘口组筛选
 	MarketGroup string
 	
-	// 盘口类型筛选
-	MarketID string
+	// 盘口类型筛选 (支持多选,逗号分隔)
+	MarketIDs []string
 	
-	// 队伍筛选
-	TeamID   string
+	// 队伍筛选 (支持多选,逗号分隔)
+	TeamIDs  []string
 	TeamName string
 	
-	// 联赛筛选
-	LeagueID   string
+	// 联赛筛选 (支持多选,逗号分隔)
+	LeagueIDs  []string
 	LeagueName string
 	
 	// 搜索
@@ -177,8 +177,14 @@ func parseEventFilters(r *http.Request) *EventFilters {
 	
 	filters.Status = r.URL.Query().Get("status")
 	
-	// 体育类型筛选
-	filters.SportID = r.URL.Query().Get("sport_id")
+	// 体育类型筛选 (支持多选,逗号分隔)
+	if sportID := r.URL.Query().Get("sport_id"); sportID != "" {
+		filters.SportIDs = strings.Split(sportID, ",")
+		// 去除空格
+		for i := range filters.SportIDs {
+			filters.SportIDs[i] = strings.TrimSpace(filters.SportIDs[i])
+		}
+	}
 	
 	// 开赛时间筛选
 	if startFrom := r.URL.Query().Get("start_time_from"); startFrom != "" {
@@ -196,15 +202,30 @@ func parseEventFilters(r *http.Request) *EventFilters {
 	// 盘口组筛选
 	filters.MarketGroup = r.URL.Query().Get("market_group")
 	
-	// 盘口类型筛选
-	filters.MarketID = r.URL.Query().Get("market_id")
+	// 盘口类型筛选 (支持多选,逗号分隔)
+	if marketID := r.URL.Query().Get("market_id"); marketID != "" {
+		filters.MarketIDs = strings.Split(marketID, ",")
+		for i := range filters.MarketIDs {
+			filters.MarketIDs[i] = strings.TrimSpace(filters.MarketIDs[i])
+		}
+	}
 	
-	// 队伍筛选
-	filters.TeamID = r.URL.Query().Get("team_id")
+	// 队伍筛选 (支持多选,逗号分隔)
+	if teamID := r.URL.Query().Get("team_id"); teamID != "" {
+		filters.TeamIDs = strings.Split(teamID, ",")
+		for i := range filters.TeamIDs {
+			filters.TeamIDs[i] = strings.TrimSpace(filters.TeamIDs[i])
+		}
+	}
 	filters.TeamName = r.URL.Query().Get("team_name")
 	
-	// 联赛筛选
-	filters.LeagueID = r.URL.Query().Get("league_id")
+	// 联赛筛选 (支持多选,逗号分隔)
+	if leagueID := r.URL.Query().Get("league_id"); leagueID != "" {
+		filters.LeagueIDs = strings.Split(leagueID, ",")
+		for i := range filters.LeagueIDs {
+			filters.LeagueIDs[i] = strings.TrimSpace(filters.LeagueIDs[i])
+		}
+	}
 	filters.LeagueName = r.URL.Query().Get("league_name")
 	
 	// 搜索
@@ -250,7 +271,7 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 	`
 	
 	// 是否需要 JOIN markets 表
-	needMarketsJoin := filters.MarketID != "" // MarketGroup 暂时不支持
+	needMarketsJoin := len(filters.MarketIDs) > 0 // MarketGroup 暂时不支持
 	
 	if needMarketsJoin {
 		query += " LEFT JOIN markets m ON e.event_id = m.event_id"
@@ -273,11 +294,15 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 		argIndex++
 	}
 	
-	// 体育类型筛选
-	if filters.SportID != "" {
-		conditions = append(conditions, fmt.Sprintf("e.sport_id = $%d", argIndex))
-		args = append(args, filters.SportID)
-		argIndex++
+	// 体育类型筛选 (支持多选)
+	if len(filters.SportIDs) > 0 {
+		placeholders := []string{}
+		for _, sportID := range filters.SportIDs {
+			placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
+			args = append(args, sportID)
+			argIndex++
+		}
+		conditions = append(conditions, fmt.Sprintf("e.sport_id IN (%s)", strings.Join(placeholders, ", ")))
 	}
 	
 	// 开赛时间筛选 (左闭右闭)
@@ -305,31 +330,41 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 	// 	argIndex++
 	// }
 	
-	// 盘口类型筛选
-	if filters.MarketID != "" {
-		conditions = append(conditions, fmt.Sprintf("m.sr_market_id = $%d", argIndex))
-		args = append(args, filters.MarketID)
-		argIndex++
+	// 盘口类型筛选 (支持多选)
+	if len(filters.MarketIDs) > 0 {
+		placeholders := []string{}
+		for _, marketID := range filters.MarketIDs {
+			placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
+			args = append(args, marketID)
+			argIndex++
+		}
+		conditions = append(conditions, fmt.Sprintf("m.sr_market_id IN (%s)", strings.Join(placeholders, ", ")))
 	}
-	
-	// 队伍筛选
-	if filters.TeamID != "" {
-		conditions = append(conditions, fmt.Sprintf("(e.home_team_id = $%d OR e.away_team_id = $%d)", argIndex, argIndex))
-		args = append(args, filters.TeamID)
-		argIndex++
+	// 队伍 ID 筛选 (支持多选)
+	if len(filters.TeamIDs) > 0 {
+		placeholders := []string{}
+		for _, teamID := range filters.TeamIDs {
+			placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
+			args = append(args, teamID)
+			argIndex++
+		}
+		inClause := strings.Join(placeholders, ", ")
+		conditions = append(conditions, fmt.Sprintf("(e.home_team_id IN (%s) OR e.away_team_id IN (%s))", inClause, inClause))
 	}
-	
 	if filters.TeamName != "" {
 		conditions = append(conditions, fmt.Sprintf("(e.home_team_name ILIKE $%d OR e.away_team_name ILIKE $%d)", argIndex, argIndex))
 		args = append(args, "%"+filters.TeamName+"%")
 		argIndex++
 	}
-	
-	// 联赛筛选 (需要从 srn_id 中提取)
-	if filters.LeagueID != "" {
-		conditions = append(conditions, fmt.Sprintf("e.srn_id LIKE $%d", argIndex))
-		args = append(args, "%:"+filters.LeagueID+":%")
-		argIndex++
+		// 联赛 ID 筛选 (从 srn_id 提取,支持多选)
+	if len(filters.LeagueIDs) > 0 {
+		leagueConditions := []string{}
+		for _, leagueID := range filters.LeagueIDs {
+			leagueConditions = append(leagueConditions, fmt.Sprintf("e.srn_id LIKE $%d", argIndex))
+			args = append(args, "%:"+leagueID+":%")
+			argIndex++
+		}
+		conditions = append(conditions, fmt.Sprintf("(%s)", strings.Join(leagueConditions, " OR ")))
 	}
 	
 	if filters.LeagueName != "" {
@@ -370,7 +405,7 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 	query := "SELECT COUNT(DISTINCT e.event_id) FROM tracked_events e"
 	
 	// 是否需要 JOIN markets 表
-	needMarketsJoin := filters.MarketID != "" // MarketGroup 暂时不支持
+	needMarketsJoin := len(filters.MarketIDs) > 0 // MarketGroup 暂时不支持
 	
 	if needMarketsJoin {
 		query += " LEFT JOIN markets m ON e.event_id = m.event_id"
@@ -468,8 +503,8 @@ func (f *EventFilters) toMap() map[string]interface{} {
 	if f.Status != "" {
 		m["status"] = f.Status
 	}
-	if f.SportID != "" {
-		m["sport_id"] = f.SportID
+	if len(f.SportIDs) > 0 {
+		m["sport_id"] = strings.Join(f.SportIDs, ",")
 	}
 	if f.StartTimeFrom != nil {
 		m["start_time_from"] = f.StartTimeFrom.Format(time.RFC3339)
@@ -480,17 +515,17 @@ func (f *EventFilters) toMap() map[string]interface{} {
 	if f.MarketGroup != "" {
 		m["market_group"] = f.MarketGroup
 	}
-	if f.MarketID != "" {
-		m["market_id"] = f.MarketID
+	if len(f.MarketIDs) > 0 {
+		m["market_id"] = strings.Join(f.MarketIDs, ",")
 	}
-	if f.TeamID != "" {
-		m["team_id"] = f.TeamID
+	if len(f.TeamIDs) > 0 {
+		m["team_id"] = strings.Join(f.TeamIDs, ",")
 	}
 	if f.TeamName != "" {
 		m["team_name"] = f.TeamName
 	}
-	if f.LeagueID != "" {
-		m["league_id"] = f.LeagueID
+	if len(f.LeagueIDs) > 0 {
+		m["league_id"] = strings.Join(f.LeagueIDs, ",")
 	}
 	if f.LeagueName != "" {
 		m["league_name"] = f.LeagueName
