@@ -173,6 +173,9 @@ func (s *Server) Start() error {
 	api.HandleFunc("/matches/search", s.handleSearchMatches).Methods("GET")
 	api.HandleFunc("/matches/{event_id}", s.handleGetMatchDetail).Methods("GET")
 	
+	// 联赛API
+	api.HandleFunc("/leagues", s.handleGetLeagues).Methods("GET")
+	
 	// 盘口赔率API
 	api.HandleFunc("/odds/all", s.handleGetAllBookedMarketsOdds).Methods("GET")
 	api.HandleFunc("/odds/{event_id}/markets", s.handleGetEventMarkets).Methods("GET")
