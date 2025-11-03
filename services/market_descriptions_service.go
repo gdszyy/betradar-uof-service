@@ -525,6 +525,19 @@ func (s *MarketDescriptionsService) GetOutcomeName(marketID string, outcomeID st
 		}
 	}
 	
+	// 检查是否是球员 ID (sr:player:xxxxx)
+	if strings.HasPrefix(outcomeID, "sr:player:") {
+		if s.playersService != nil {
+			playerName := s.playersService.GetPlayerName(outcomeID)
+			if playerName != "" && !strings.HasPrefix(playerName, "Player ") {
+				return playerName
+			}
+		}
+		// 如果 PlayersService 不可用或找不到,返回格式化的 ID
+		logger.Printf("[MarketDescService] ⚠️  Player name not found: outcomeID=%s", outcomeID)
+		return fmt.Sprintf("Player %s", strings.TrimPrefix(outcomeID, "sr:player:"))
+	}
+	
 	// 最终降级
 	logger.Printf("[MarketDescService] ⚠️  Outcome name not found: marketID=%s, outcomeID=%s, specifiers=%s", marketID, outcomeID, specifiers)
 	return outcomeID
