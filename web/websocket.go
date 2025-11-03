@@ -174,12 +174,12 @@ func (c *Client) readPump() {
 		c.conn.Close()
 	}()
 
-	// 设置读取超时 (60 秒)
-	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	// 设置读取超时 (120 秒,给客户端更多时间响应)
+	c.conn.SetReadDeadline(time.Now().Add(120 * time.Second))
 	
 	// 设置 pong 处理器,收到 pong 时重置超时
 	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		c.conn.SetReadDeadline(time.Now().Add(120 * time.Second))
 		return nil
 	})
 
@@ -203,8 +203,8 @@ func (c *Client) writePump() {
 		c.conn.Close()
 	}()
 
-	// 设置 ping 定时器 (每 30 秒发送一次 ping)
-	pingTicker := time.NewTicker(30 * time.Second)
+	// 设置 ping 定时器 (每 20 秒发送一次 ping,确保在超时前多次尝试)
+	pingTicker := time.NewTicker(20 * time.Second)
 	defer pingTicker.Stop()
 
 	for {

@@ -259,8 +259,11 @@ func (c *AMQPConsumer) processMessage(msg amqp.Delivery) {
 		logger.Errorf("Failed to save message: %v", err)
 	}
 
-	// 广播到WebSocket客户端 (不发送 XML,只发送元数据)
+	// 广播到WebSocket客户端 (包含基本数据)
 	if c.broadcaster != nil {
+		// 根据消息类型添加额外数据
+		data := c.extractMessageData(messageType, xmlContent)
+		
 		c.broadcaster.Broadcast(map[string]interface{}{
 			"type":         "message",
 			"message_type": messageType,
@@ -268,7 +271,7 @@ func (c *AMQPConsumer) processMessage(msg amqp.Delivery) {
 			"product_id":   productID,
 			"routing_key":  routingKey,
 			"timestamp":    timestamp,
-			// XML 字段已移除,客户端应使用 API 获取详细数据
+			"data":         data,
 		})
 	}
 
@@ -698,5 +701,119 @@ func (c *AMQPConsumer) fetchAndStoreFixture(eventID string) {
 	}
 	
 	logger.Printf("[FixtureFetch] ✅ Updated team info for %s: %s vs %s (sport: %s, status: %s)", eventID, homeName, awayName, sportName, status)
+}
+
+
+
+// extractMessageData 从 XML 中提取关键数据用于 WebSocket 广播
+func (c *AMQPConsumer) extractMessageData(messageType string, xmlContent string) map[string]interface{} {
+	data := make(map[string]interface{})
+	
+	switch messageType {
+	case "odds_change":
+		type OddsChange struct {
+			Odds struct {
+				Markets []struct {
+					ID     string `xml:"id,attr"`
+					Status int    `xml:"status,attr"`
+					Outcomes []struct {
+						ID     string  `xml:"id,attr"`
+						Odds   float64 `xml:"odds,attr"`
+						Active int     `xml:"active,attr"`
+					} `xml:"outcome"`
+				} `xml:"market"`
+			} `xml:"odds"`
+			SportEventStatus struct {
+				Status        string `xml:"status,attr"`
+				MatchStatus   int    `xml:"match_status,attr"`
+				HomeScore     int    `xml:"home_score,attr"`
+				AwayScore     int    `xml:"away_score,attr"`
+			} `xml:"sport_event_status"`
+		}
+		
+		var oddsChange OddsChange
+		if err := xml.Unmarshal([]byte(xmlContent), &oddsChange); err == nil {
+			data["markets_count"] = len(oddsChange.Odds.Markets)
+			data["status"] = oddsChange.SportEventStatus.Status
+			data["match_status"] = oddsChange.SportEventStatus.MatchStatus
+			data["home_score"] = oddsChange.SportEventStatus.HomeScore
+			data["away_score"] = oddsChange.SportEventStatus.AwayScore
+			
+			// 添加部分盘口信息 (最多前 5 个)
+			markets := []map[string]interface{}{}
+			for i, market := range oddsChange.Odds.Markets {
+				if i >= 5 {
+					break
+				}
+				marketData := map[string]interface{}{
+					"id":     market.ID,
+					"status": market.Status,
+				}
+				outcomes := []map[string]interface{}{}
+				for _, outcome := range market.Outcomes {
+					outcomes = append(outcomes, map[string]interface{}{
+						"id":     outcome.ID,
+						"odds":   outcome.Odds,
+						"active": outcome.Active,
+					})
+				}
+				marketData["outcomes"] = outcomes
+				markets = append(markets, marketData)
+			}
+			data["markets"] = markets
+		}
+		
+	case "bet_stop":
+		type BetStop struct {
+			Groups string `xml:"groups,attr"`
+			MarketStatus int `xml:"market_status,attr"`
+		}
+		var betStop BetStop
+		if err := xml.Unmarshal([]byte(xmlContent), &betStop); err == nil {
+			data["groups"] = betStop.Groups
+			data["market_status"] = betStop.MarketStatus
+		}
+		
+	case "bet_settlement":
+		type BetSettlement struct {
+			Outcomes struct {
+				Markets []struct {
+					ID string `xml:"id,attr"`
+					Outcomes []struct {
+						ID     string  `xml:"id,attr"`
+						Result int     `xml:"result,attr"`
+					} `xml:"outcome"`
+				} `xml:"market"`
+			} `xml:"outcomes"`
+		}
+		var settlement BetSettlement
+		if err := xml.Unmarshal([]byte(xmlContent), &settlement); err == nil {
+			data["markets_count"] = len(settlement.Outcomes.Markets)
+		}
+		
+	case "fixture_change":
+		type FixtureChange struct {
+			ChangeType int   `xml:"change_type,attr"`
+			StartTime  int64 `xml:"start_time,attr"`
+		}
+		var fixtureChange FixtureChange
+		if err := xml.Unmarshal([]byte(xmlContent), &fixtureChange); err == nil {
+			data["change_type"] = fixtureChange.ChangeType
+			data["start_time"] = fixtureChange.StartTime
+		}
+		
+	case "bet_cancel":
+		type BetCancel struct {
+			Markets []struct {
+				ID string `xml:"id,attr"`
+			} `xml:"market"`
+		}
+		var betCancel BetCancel
+		if err := xml.Unmarshal([]byte(xmlContent), &betCancel); err == nil {
+			data["markets_count"] = len(betCancel.Markets)
+		}
+	}
+	
+	return data
 }
 
