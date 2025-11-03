@@ -164,6 +164,7 @@ func (s *Server) Start() error {
 	api.HandleFunc("/prematch/stats", s.handleGetPrematchStats).Methods("GET")
 	
 	// 前端API - 比赛查询
+	api.HandleFunc("/events", s.handleGetEventsWithFilters).Methods("GET") // 统一的筛选接口
 	api.HandleFunc("/matches/live", s.handleGetLiveMatches).Methods("GET")
 	api.HandleFunc("/matches/upcoming", s.handleGetUpcomingMatches).Methods("GET")
 	api.HandleFunc("/matches/status", s.handleGetMatchesByStatus).Methods("GET")
