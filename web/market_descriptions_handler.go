@@ -22,13 +22,12 @@ func NewMarketDescriptionsHandler(service *services.MarketDescriptionsService) *
 
 // HandleGetStatus 获取服务状态
 func (h *MarketDescriptionsHandler) HandleGetStatus(w http.ResponseWriter, r *http.Request) {
-	// TODO: Implement GetStatus() method in MarketDescriptionsService
-	// status := h.service.GetStatus()
+	status := h.service.GetStatus()
 	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status": "ok",
-		"message": "GetStatus method not yet implemented",
+		"data":   status,
 	})
 }
 
@@ -36,24 +35,23 @@ func (h *MarketDescriptionsHandler) HandleGetStatus(w http.ResponseWriter, r *ht
 func (h *MarketDescriptionsHandler) HandleForceRefresh(w http.ResponseWriter, r *http.Request) {
 	logger.Println("[API] Force refresh of market descriptions requested")
 	
-	// TODO: Implement ForceRefresh() method in MarketDescriptionsService
-	// if err := h.service.ForceRefresh(); err != nil {
-	// 	logger.Printf("[API] ⚠️  Failed to refresh: %v", err)
-	// 	w.Header().Set("Content-Type", "application/json")
-	// 	w.WriteHeader(http.StatusInternalServerError)
-	// 	json.NewEncoder(w).Encode(map[string]interface{}{
-	// 		"status":  "error",
-	// 		"message": err.Error(),
-	// 	})
-	// 	return
-	// }
+	if err := h.service.ForceRefresh(); err != nil {
+		logger.Printf("[API] ⚠️  Failed to refresh: %v", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "error",
+			"message": err.Error(),
+		})
+		return
+	}
 	
-	logger.Println("[API] ✅ Market descriptions refresh not yet implemented")
+	logger.Println("[API] ✅ Market descriptions refreshed successfully")
 	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":  "ok",
-		"message": "ForceRefresh method not yet implemented",
+		"message": "Market descriptions refreshed successfully",
 	})
 }
 
@@ -61,27 +59,27 @@ func (h *MarketDescriptionsHandler) HandleForceRefresh(w http.ResponseWriter, r 
 func (h *MarketDescriptionsHandler) HandleBulkUpdate(w http.ResponseWriter, r *http.Request) {
 	logger.Println("[API] Bulk update of existing markets/outcomes requested")
 	
-	// TODO: Implement UpdateExistingMarkets() method in MarketDescriptionsService
-	// updatedMarkets, updatedOutcomes, err := h.service.UpdateExistingMarkets()
-	// if err != nil {
-	// 	logger.Printf("[API] ⚠️  Failed to bulk update: %v", err)
-	// 	w.Header().Set("Content-Type", "application/json")
-	// 	w.WriteHeader(http.StatusInternalServerError)
-	// 	json.NewEncoder(w).Encode(map[string]interface{}{
-	// 		"status":  "error",
-	// 		"message": err.Error(),
-	// 	})
-	// 	return
-	// }
+	updatedMarkets, updatedOutcomes, err := h.service.UpdateExistingMarkets()
+	if err != nil {
+		logger.Printf("[API] ⚠️  Failed to bulk update: %v", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "error",
+			"message": err.Error(),
+		})
+		return
+	}
 	
-	// logger.Printf("[API] ✅ Bulk update completed: %d markets, %d outcomes", updatedMarkets, updatedOutcomes)
-	
-	logger.Println("[API] ⚠️  Bulk update not yet implemented")
+	logger.Printf("[API] ✅ Bulk update completed: %d markets, %d outcomes", updatedMarkets, updatedOutcomes)
 	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status": "ok",
-		"message": "UpdateExistingMarkets method not yet implemented",
+		"data": map[string]interface{}{
+			"updated_markets":  updatedMarkets,
+			"updated_outcomes": updatedOutcomes,
+		},
 	})
 }
 
