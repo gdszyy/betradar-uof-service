@@ -7,8 +7,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	
-	"uof-service/services"
 )
 
 // LeagueInfo 联赛信息
@@ -212,7 +210,7 @@ func getLeagueName(leagueID string) string {
 		"sr:tournament:23":  "西甲 (La Liga)",
 		"sr:tournament:35":  "意甲 (Serie A)",
 		"sr:tournament:34":  "德甲 (Bundesliga)",
-		"sr:tournament:34":  "法甲 (Ligue 1)",
+		"sr:tournament:16":  "法甲 (Ligue 1)",
 		"sr:tournament:7":   "欧冠 (Champions League)",
 		"sr:tournament:679": "欧罗巴联赛 (Europa League)",
 		"sr:tournament:132": "世界杯 (World Cup)",
