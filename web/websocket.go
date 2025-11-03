@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -15,9 +16,9 @@ type WSMessage struct {
 	EventID     string  `json:"event_id,omitempty"`
 	ProductID   *int    `json:"product_id,omitempty"`
 	RoutingKey  string  `json:"routing_key,omitempty"`
-	XML         string  `json:"xml,omitempty"`
 	Timestamp   int64   `json:"timestamp,omitempty"`
 	Data        interface{} `json:"data,omitempty"`
+	// XML 字段已移除,使用 Data 字段传递结构化数据
 }
 
 // Client WebSocket客户端
@@ -118,9 +119,6 @@ func (h *Hub) Broadcast(message interface{}) {
 		if v, ok := msgMap["routing_key"].(string); ok {
 			wsMsg.RoutingKey = v
 		}
-		if v, ok := msgMap["xml"].(string); ok {
-			wsMsg.XML = v
-		}
 		if v, ok := msgMap["timestamp"].(int64); ok {
 			wsMsg.Timestamp = v
 		}
@@ -176,6 +174,15 @@ func (c *Client) readPump() {
 		c.conn.Close()
 	}()
 
+	// 设置读取超时 (60 秒)
+	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	
+	// 设置 pong 处理器,收到 pong 时重置超时
+	c.conn.SetPongHandler(func(string) error {
+		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+
 	for {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
@@ -196,15 +203,27 @@ func (c *Client) writePump() {
 		c.conn.Close()
 	}()
 
-	for {
-		message, ok := <-c.send
-		if !ok {
-			c.conn.WriteMessage(websocket.CloseMessage, []byte{})
-			return
-		}
+	// 设置 ping 定时器 (每 30 秒发送一次 ping)
+	pingTicker := time.NewTicker(30 * time.Second)
+	defer pingTicker.Stop()
 
-		if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
-			return
+	for {
+		select {
+		case message, ok := <-c.send:
+			if !ok {
+				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+
+			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
+				return
+			}
+
+		case <-pingTicker.C:
+			// 发送 ping 消息
+			if err := c.conn.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
+				return
+			}
 		}
 	}
 }

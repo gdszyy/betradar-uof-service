@@ -259,7 +259,7 @@ func (c *AMQPConsumer) processMessage(msg amqp.Delivery) {
 		logger.Errorf("Failed to save message: %v", err)
 	}
 
-	// 广播到WebSocket客户端
+	// 广播到WebSocket客户端 (不发送 XML,只发送元数据)
 	if c.broadcaster != nil {
 		c.broadcaster.Broadcast(map[string]interface{}{
 			"type":         "message",
@@ -267,8 +267,8 @@ func (c *AMQPConsumer) processMessage(msg amqp.Delivery) {
 			"event_id":     eventID,
 			"product_id":   productID,
 			"routing_key":  routingKey,
-			"xml":          xmlContent,
 			"timestamp":    timestamp,
+			// XML 字段已移除,客户端应使用 API 获取详细数据
 		})
 	}
 
