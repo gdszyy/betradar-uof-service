@@ -426,10 +426,15 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 		argIndex++
 	}
 	
-	if filters.SportID != "" {
-		conditions = append(conditions, fmt.Sprintf("e.sport_id = $%d", argIndex))
-		args = append(args, filters.SportID)
-		argIndex++
+	// 体育类型筛选 (支持多选)
+	if len(filters.SportIDs) > 0 {
+		placeholders := []string{}
+		for _, sportID := range filters.SportIDs {
+			placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
+			args = append(args, sportID)
+			argIndex++
+		}
+		conditions = append(conditions, fmt.Sprintf("e.sport_id IN (%s)", strings.Join(placeholders, ", ")))
 	}
 	
 	if filters.StartTimeFrom != nil {
@@ -455,16 +460,27 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 	// 	argIndex++
 	// }
 	
-	if filters.MarketID != "" {
-		conditions = append(conditions, fmt.Sprintf("m.sr_market_id = $%d", argIndex))
-		args = append(args, filters.MarketID)
-		argIndex++
+	// 盘口类型筛选 (支持多选)
+	if len(filters.MarketIDs) > 0 {
+		placeholders := []string{}
+		for _, marketID := range filters.MarketIDs {
+			placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
+			args = append(args, marketID)
+			argIndex++
+		}
+		conditions = append(conditions, fmt.Sprintf("m.sr_market_id IN (%s)", strings.Join(placeholders, ", ")))
 	}
 	
-	if filters.TeamID != "" {
-		conditions = append(conditions, fmt.Sprintf("(e.home_team_id = $%d OR e.away_team_id = $%d)", argIndex, argIndex))
-		args = append(args, filters.TeamID)
-		argIndex++
+	// 队伍 ID 筛选 (支持多选)
+	if len(filters.TeamIDs) > 0 {
+		placeholders := []string{}
+		for _, teamID := range filters.TeamIDs {
+			placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
+			args = append(args, teamID)
+			argIndex++
+		}
+		inClause := strings.Join(placeholders, ", ")
+		conditions = append(conditions, fmt.Sprintf("(e.home_team_id IN (%s) OR e.away_team_id IN (%s))", inClause, inClause))
 	}
 	
 	if filters.TeamName != "" {
@@ -473,10 +489,15 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 		argIndex++
 	}
 	
-	if filters.LeagueID != "" {
-		conditions = append(conditions, fmt.Sprintf("e.srn_id LIKE $%d", argIndex))
-		args = append(args, "%:"+filters.LeagueID+":%")
-		argIndex++
+	// 联赛 ID 筛选 (从 srn_id 提取,支持多选)
+	if len(filters.LeagueIDs) > 0 {
+		leagueConditions := []string{}
+		for _, leagueID := range filters.LeagueIDs {
+			leagueConditions = append(leagueConditions, fmt.Sprintf("e.srn_id LIKE $%d", argIndex))
+			args = append(args, "%:"+leagueID+":%")
+			argIndex++
+		}
+		conditions = append(conditions, fmt.Sprintf("(%s)", strings.Join(leagueConditions, " OR ")))
 	}
 	
 	if filters.Search != "" {
