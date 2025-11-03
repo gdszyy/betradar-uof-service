@@ -415,7 +415,7 @@ func (p *OddsParser) GetEventMarkets(eventID string) ([]OddsMarketInfo, error) {
 		
 		err := rows.Scan(
 			&market.ID,
-			&market.MarketID,
+			&market.SrMarketID,
 			&market.MarketType,
 			&marketName,
 			&specifiers,
