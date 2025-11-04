@@ -36,6 +36,7 @@ type Server struct {
 	messageHistoryService *services.MessageHistoryService
 	marketQueryService  *services.MarketQueryService
 	queryCache          *services.QueryCache
+	sportradarAPIClient *services.SportradarAPIClient
 	httpServer          *http.Server
 	upgrader            websocket.Upgrader
 }
@@ -54,6 +55,10 @@ func NewServer(cfg *config.Config, db *sql.DB, hub *Hub, larkNotifier *services.
 	autoBooking := services.NewAutoBookingService(cfg, db, larkNotifier)
 	autoBookingController := services.NewAutoBookingController(cfg, autoBooking)
 	
+	// 创建 Sportradar API 客户端
+	sportradarAPIClient := services.NewSportradarAPIClient(cfg.APIBaseURL, cfg.AccessToken)
+	log.Println("[Server] Sportradar API client initialized")
+	
 	return &Server{
 		config:          cfg,
 		db:              db,
@@ -71,6 +76,7 @@ func NewServer(cfg *config.Config, db *sql.DB, hub *Hub, larkNotifier *services.
 		messageHistoryService: services.NewMessageHistoryService(db),
 		marketQueryService: services.NewMarketQueryService(db),
 		queryCache:      services.NewQueryCache(30 * time.Second), // 30秒缓存
+		sportradarAPIClient: sportradarAPIClient,
 		upgrader: websocket.Upgrader{
 				ReadBufferSize:  1024,
 				WriteBufferSize: 1024,
