@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 // LeagueInfo 联赛信息
@@ -74,14 +76,14 @@ func (s *Server) getLeaguesInfo(sportID string) ([]LeagueInfo, error) {
 			return nil, fmt.Errorf("failed to get tournaments for sport %s: %w", sportID, err)
 		}
 		
-		for _, tournament := range tournaments.Tournaments {
-			league := LeagueInfo{
-				LeagueID:     tournament.ID,
-				LeagueName:   tournament.Name,
-				SportID:      sportID,
-				CategoryID:   tournament.Category.ID,
-				CategoryName: tournament.Category.Name,
-			}
+			for _, tournament := range tournaments.Tournaments {
+					league := LeagueInfo{
+						LeagueID:     tournament.ID,
+						LeagueName:   extractEnglishName(tournament.Name),
+						SportID:      sportID,
+						CategoryID:   tournament.Category.ID,
+						CategoryName: extractEnglishName(tournament.Category.Name),
+					}
 			
 			// 获取统计信息
 			stats, err := s.getLeagueStats(tournament.ID)
@@ -107,10 +109,10 @@ func (s *Server) getLeaguesInfo(sportID string) ([]LeagueInfo, error) {
 			for _, tournament := range tournaments.Tournaments {
 				league := LeagueInfo{
 					LeagueID:     tournament.ID,
-					LeagueName:   tournament.Name,
+					LeagueName:   extractEnglishName(tournament.Name),
 					SportID:      sportID,
 					CategoryID:   tournament.Category.ID,
-					CategoryName: tournament.Category.Name,
+					CategoryName: extractEnglishName(tournament.Category.Name),
 				}
 				
 				// 获取统计信息
@@ -233,5 +235,85 @@ func sortLeagues(leagues []LeagueInfo, sortBy string, order string) {
 		
 		return less
 	})
+}
+
+
+
+
+// extractEnglishName 从联赛名称中提取英文部分
+// 例如: "中超 (Chinese Super League)" -> "Chinese Super League"
+//      "Premier League" -> "Premier League"
+func extractEnglishName(name string) string {
+	// 1. 尝试提取括号中的内容
+	re := regexp.MustCompile(`\((.*?)\)`)
+	matches := re.FindStringSubmatch(name)
+	if len(matches) > 1 {
+		englishName := strings.TrimSpace(matches[1])
+		// 验证提取的内容是否主要是英文
+		if isEnglishText(englishName) {
+			return englishName
+		}
+	}
+	
+	// 2. 如果没有括号，检查名称是否包含中文
+	if containsChinese(name) {
+		// 尝试移除中文部分，保留英文部分
+		cleanedName := removeChinese(name)
+		if cleanedName != "" {
+			return cleanedName
+		}
+	}
+	
+	// 3. 返回原名称
+	return name
+}
+
+// isEnglishText 检查文本是否主要是英文
+func isEnglishText(s string) bool {
+	if s == "" {
+		return false
+	}
+	
+	englishChars := 0
+	totalChars := 0
+	
+	for _, r := range s {
+		if unicode.IsLetter(r) {
+			totalChars++
+			if r < 128 { // ASCII 范围内的字母
+				englishChars++
+			}
+		}
+	}
+	
+	if totalChars == 0 {
+		return false
+	}
+	
+	// 如果超过 80% 是英文字母，认为是英文文本
+	return float64(englishChars)/float64(totalChars) > 0.8
+}
+
+// containsChinese 检查字符串是否包含中文字符
+func containsChinese(s string) bool {
+	for _, r := range s {
+		if unicode.Is(unicode.Han, r) {
+			return true
+		}
+	}
+	return false
+}
+
+// removeChinese 移除字符串中的中文字符
+func removeChinese(s string) string {
+	var result strings.Builder
+	
+	for _, r := range s {
+		if !unicode.Is(unicode.Han, r) {
+			result.WriteRune(r)
+		}
+	}
+	
+	return strings.TrimSpace(result.String())
 }
 
