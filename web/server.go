@@ -128,6 +128,8 @@ func (s *Server) Start() error {
 	api.HandleFunc("/recovery/trigger", s.handleTriggerRecovery).Methods("POST")
 	api.HandleFunc("/recovery/event/{event_id}", s.handleTriggerEventRecovery).Methods("POST")
 	api.HandleFunc("/recovery/status", s.handleGetRecoveryStatus).Methods("GET")
+	api.HandleFunc("/recovery/fixtures", s.handleTriggerFixtureRecovery).Methods("POST")
+	api.HandleFunc("/recovery/stateful/{event_id}", s.handleTriggerStatefulRecovery).Methods("POST")
 	
 	// Replay API
 	api.HandleFunc("/replay/start", s.handleReplayStart).Methods("POST")
@@ -727,6 +729,84 @@ func (s *Server) handleGetBetAcceptance(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"can_accept_bets": canAccept,
 		"reason":          reason,
+	})
+}
+
+
+
+// handleTriggerFixtureRecovery 触发 Fixture 变更恢复
+func (s *Server) handleTriggerFixtureRecovery(w http.ResponseWriter, r *http.Request) {
+	// 获取 after 参数（Unix timestamp 秒）
+	afterStr := r.URL.Query().Get("after")
+	var after int64
+	
+	if afterStr != "" {
+		var err error
+		after, err = strconv.ParseInt(afterStr, 10, 64)
+		if err != nil {
+			http.Error(w, "Invalid 'after' parameter: must be Unix timestamp in seconds", http.StatusBadRequest)
+			return
+		}
+	} else {
+		// 默认恢复最近 10 小时的数据
+		after = time.Now().Add(-10 * time.Hour).Unix()
+	}
+	
+	log.Printf("Fixture recovery triggered via API (after: %d)", after)
+	
+	var fixtureChanges []services.FixtureChange
+	var recoveryErr error
+	
+	// 同步执行以便返回结果
+	fixtureChanges, recoveryErr = s.recoveryManager.TriggerFixtureRecovery(after)
+	
+	if recoveryErr != nil {
+		log.Printf("Fixture recovery failed: %v", recoveryErr)
+		http.Error(w, fmt.Sprintf("Fixture recovery failed: %v", recoveryErr), http.StatusInternalServerError)
+		return
+	}
+	
+	log.Printf("Fixture recovery completed: %d changes retrieved", len(fixtureChanges))
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "success",
+		"message": "Fixture recovery completed",
+		"after":   after,
+		"count":   len(fixtureChanges),
+		"changes": fixtureChanges,
+		"time":    time.Now().Unix(),
+	})
+}
+
+// handleTriggerStatefulRecovery 触发单个事件的 Stateful Messages 恢复
+func (s *Server) handleTriggerStatefulRecovery(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	eventID := vars["event_id"]
+	
+	// 获取 product 参数（默认为 liveodds）
+	product := r.URL.Query().Get("product")
+	if product == "" {
+		product = "liveodds"
+	}
+	
+	log.Printf("Stateful messages recovery triggered for %s (product: %s)", eventID, product)
+	
+	go func() {
+		if err := s.recoveryManager.TriggerStatefulMessagesRecovery(product, eventID); err != nil {
+			log.Printf("Stateful messages recovery failed: %v", err)
+		} else {
+			log.Printf("Stateful messages recovery completed for %s", eventID)
+		}
+	}()
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":   "accepted",
+		"message":  "Stateful messages recovery request accepted and processing",
+		"event_id": eventID,
+		"product":  product,
+		"time":     time.Now().Unix(),
 	})
 }
 

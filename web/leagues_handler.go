@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"sort"
 	"strings"
-	
-	"uof-service/services"
 )
 
 // LeagueInfo 联赛信息

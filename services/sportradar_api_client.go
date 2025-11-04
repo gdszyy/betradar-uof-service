@@ -37,20 +37,20 @@ func NewSportradarAPIClient(baseURL, accessToken string) *SportradarAPIClient {
 	}
 }
 
-// Sport 体育类型
-type Sport struct {
+// APISport 体育类型（API响应）
+type APISport struct {
 	ID   string `xml:"id,attr"`
 	Name string `xml:"name,attr"`
 }
 
 // SportsList 体育类型列表
 type SportsList struct {
-	XMLName xml.Name `xml:"sports"`
-	Sports  []Sport  `xml:"sport"`
+	XMLName xml.Name   `xml:"sports"`
+	Sports  []APISport `xml:"sport"`
 }
 
-// Tournament 联赛/赛事
-type Tournament struct {
+// APITournament 联赛/赛事（API响应）
+type APITournament struct {
 	ID       string `xml:"id,attr"`
 	Name     string `xml:"name,attr"`
 	SportID  string `xml:"sport>id,attr"`
@@ -62,8 +62,8 @@ type Tournament struct {
 
 // TournamentsList 联赛列表
 type TournamentsList struct {
-	XMLName     xml.Name     `xml:"tournaments"`
-	Tournaments []Tournament `xml:"tournament"`
+	XMLName     xml.Name         `xml:"tournaments"`
+	Tournaments []APITournament `xml:"tournament"`
 }
 
 // GetAllSports 获取所有体育类型

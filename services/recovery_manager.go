@@ -13,25 +13,30 @@ import (
 )
 
 type RecoveryManager struct {
-	config           *config.Config
-	client           *http.Client
-	messageStore     *MessageStore // 用于保存恢复状态
-	nodeID           int // 用于区分会话的节点ID
-	requestIDCounter int // 用于生成唯一的request_id
+	config              *config.Config
+	client              *http.Client
+	messageStore        *MessageStore // 用于保存恢复状态
+	fixtureChangesService *FixtureChangesService // Fixture 变更服务
+	nodeID              int // 用于区分会话的节点ID
+	requestIDCounter    int // 用于生成唯一的request_id
 }
 
 func NewRecoveryManager(cfg *config.Config, store *MessageStore) *RecoveryManager {
 	// 生成随机 node_id (1-9999) 避免多实例冲突
 	randomNodeID := rand.Intn(9999) + 1
 	
+	// 初始化 FixtureChangesService
+	fixtureService := NewFixtureChangesService(cfg.UOFAPIToken, cfg.APIBaseURL)
+	
 	return &RecoveryManager{
-		config:           cfg,
-		client:           &http.Client{
+		config:              cfg,
+		client:              &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		messageStore:     store,
-		nodeID:           randomNodeID,
-		requestIDCounter: int(time.Now().Unix()), // 使用当前时间戳作为起始ID
+		messageStore:        store,
+		fixtureChangesService: fixtureService,
+		nodeID:              randomNodeID,
+		requestIDCounter:    int(time.Now().Unix()), // 使用当前时间戳作为起始ID
 	}
 }
 
@@ -62,6 +67,23 @@ func (r *RecoveryManager) TriggerFullRecovery() error {
 	
 	if rateLimitErrors > 0 {
 		logger.Printf("ℹ️  %d product(s) rate limited, retries scheduled in background", rateLimitErrors)
+	}
+	
+	// 触发 Fixture 变更恢复（如果配置了 RecoveryAfterHours）
+	if r.config.RecoveryAfterHours > 0 {
+		hours := r.config.RecoveryAfterHours
+		if hours > 10 {
+			hours = 10 // Betradar 限制最多 10 小时
+		}
+		duration := time.Duration(hours) * time.Hour
+		logger.Printf("Triggering fixture recovery for last %d hours...", hours)
+		
+		fixtureChanges, err := r.TriggerFixtureRecoverySince(duration)
+		if err != nil {
+			logger.Printf("⚠️  Fixture recovery failed: %v", err)
+		} else {
+			logger.Printf("✅ Fixture recovery completed: %d changes retrieved", len(fixtureChanges))
+		}
 	}
 	
 	logger.Println("Full recovery triggered successfully for all products")
@@ -160,6 +182,11 @@ func (r *RecoveryManager) triggerProductRecovery(product string) error {
 		}
 	}
 	
+	// 注意：Stateful Messages 恢复需要单独的 API 调用
+	// 根据 Betradar 文档，这是一个单独的恢复类型
+	// 但目前只支持单个事件的 stateful messages 恢复
+	// 全量恢复不包含 stateful messages，需要单独调用 TriggerStatefulMessagesRecovery
+	
 	return nil
 }
 
@@ -253,5 +280,28 @@ func (r *RecoveryManager) scheduleRecoveryRetry(product string, requestID int, d
 	} else {
 		logger.Printf("✅ Recovery retry successful for product %s", product)
 	}
+}
+
+
+
+// TriggerFixtureRecovery 触发 Fixture 变更恢复
+// after: Unix timestamp (秒), 获取此时间之后的变更
+func (r *RecoveryManager) TriggerFixtureRecovery(after int64) ([]FixtureChange, error) {
+	logger.Printf("Triggering fixture recovery after timestamp %d", after)
+	
+	changes, err := r.fixtureChangesService.FetchFixtureChanges(after)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch fixture changes: %w", err)
+	}
+	
+	logger.Printf("✅ Retrieved %d fixture changes", len(changes))
+	
+	return changes, nil
+}
+
+// TriggerFixtureRecoverySince 触发指定时间段内的 Fixture 变更恢复
+func (r *RecoveryManager) TriggerFixtureRecoverySince(duration time.Duration) ([]FixtureChange, error) {
+	after := time.Now().Add(-duration).Unix()
+	return r.TriggerFixtureRecovery(after)
 }
 
