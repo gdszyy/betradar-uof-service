@@ -6,11 +6,11 @@ WORKDIR /app
 # 复制依赖文件
 COPY go.mod go.sum ./
 
-# 下载依赖并整理 (只有 go.mod/go.sum 变化时才会重新执行)
-RUN go mod download && go mod tidy
-
-# 复制源代码 (只有源代码变化时才会重新执行)
+# 复制源代码
 COPY . .
+
+# 下载依赖并整理
+RUN go mod download && go mod tidy
 
 # 构建应用
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
