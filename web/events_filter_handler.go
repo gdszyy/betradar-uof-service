@@ -334,16 +334,23 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 		conditions = append(conditions, "e.status != 'ended'")
 	}
 	
-	// 体育类型筛选 (支持多选)
-	if len(filters.SportIDs) > 0 {
-		placeholders := []string{}
-		for _, sportID := range filters.SportIDs {
-			placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
-			args = append(args, sportID)
-			argIndex++
+		// 体育类型筛选 (支持多选)
+		if len(filters.SportIDs) > 0 {
+			placeholders := []string{}
+			for _, sportIDStr := range filters.SportIDs {
+				sportID, err := strconv.ParseInt(sportIDStr, 10, 64)
+				if err != nil {
+					log.Printf("[API] Warning: Invalid sport_id in filter: %s", sportIDStr)
+					continue
+				}
+				placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
+				args = append(args, sportID)
+				argIndex++
+			}
+			if len(placeholders) > 0 {
+				conditions = append(conditions, fmt.Sprintf("e.sport_id IN (%s)", strings.Join(placeholders, ", ")))
+			}
 		}
-		conditions = append(conditions, fmt.Sprintf("e.sport_id IN (%s)", strings.Join(placeholders, ", ")))
-	}
 	
 	// 开赛时间筛选 (左闭右闭)
 	if filters.StartTimeFrom != nil {
@@ -370,16 +377,23 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 	// 	argIndex++
 	// }
 	
-	// 盘口类型筛选 (支持多选)
-	if len(filters.MarketIDs) > 0 {
-		placeholders := []string{}
-		for _, marketID := range filters.MarketIDs {
-			placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
-			args = append(args, marketID)
-			argIndex++
+		// 盘口类型筛选 (支持多选)
+		if len(filters.MarketIDs) > 0 {
+			placeholders := []string{}
+			for _, marketIDStr := range filters.MarketIDs {
+				marketID, err := strconv.ParseInt(marketIDStr, 10, 64)
+				if err != nil {
+					log.Printf("[API] Warning: Invalid market_id in filter: %s", marketIDStr)
+					continue
+				}
+				placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
+				args = append(args, marketID)
+				argIndex++
+			}
+			if len(placeholders) > 0 {
+				conditions = append(conditions, fmt.Sprintf("m.sr_market_id IN (%s)", strings.Join(placeholders, ", ")))
+			}
 		}
-		conditions = append(conditions, fmt.Sprintf("m.sr_market_id IN (%s)", strings.Join(placeholders, ", ")))
-	}
 	// 队伍 ID 筛选 (支持多选)
 	if len(filters.TeamIDs) > 0 {
 		placeholders := []string{}
@@ -512,7 +526,13 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 	// 体育类型筛选 (支持多选)
 	if len(filters.SportIDs) > 0 {
 		placeholders := []string{}
-		for _, sportID := range filters.SportIDs {
+		for _, sportIDStr := range filters.SportIDs {
+	sportID, err := strconv.ParseInt(sportIDStr, 10, 64)
+	if err != nil {
+		log.Printf("[API] Warning: Invalid sport_id in filter: %s", sportIDStr)
+		continue
+	}
+
 			placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
 			args = append(args, sportID)
 			argIndex++
@@ -546,7 +566,13 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 	// 盘口类型筛选 (支持多选)
 	if len(filters.MarketIDs) > 0 {
 		placeholders := []string{}
-		for _, marketID := range filters.MarketIDs {
+		for _, marketIDStr := range filters.MarketIDs {
+	marketID, err := strconv.ParseInt(marketIDStr, 10, 64)
+	if err != nil {
+		log.Printf("[API] Warning: Invalid market_id in filter: %s", marketIDStr)
+		continue
+	}
+
 			placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
 			args = append(args, marketID)
 			argIndex++
