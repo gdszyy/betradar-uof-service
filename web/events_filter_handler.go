@@ -314,12 +314,12 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 	// 状态筛选
 	if filters.IsLive != nil {
 		if *filters.IsLive {
-			// Live: status = 'active' AND match_status IS NOT NULL
-			conditions = append(conditions, "e.status = 'active' AND e.match_status IS NOT NULL")
-		} else {
-			// 非 Live: status != 'active' OR match_status IS NULL
-			conditions = append(conditions, "(e.status != 'active' OR e.match_status IS NULL)")
-		}
+				// Live: status = 'active' AND match_status IS NOT NULL
+				conditions = append(conditions, "e.status::text = 'active' AND e.match_status IS NOT NULL")
+			} else {
+				// 非 Live: status != 'active' OR match_status IS NULL
+				conditions = append(conditions, "(e.status::text != 'active' OR e.match_status IS NULL)")
+			}
 	}
 	
 			if filters.Status != "" {
@@ -328,11 +328,11 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 				argIndex++
 			}
 	
-	// 默认排除已结束的比赛 (除非明确请求包含)
-	if !filters.IncludeEnded && filters.Status == "" {
-		// 如果没有明确指定 status, 则排除 ended 状态
-		conditions = append(conditions, "e.status != 'ended'")
-	}
+		// 默认排除已结束的比赛 (除非明确请求包含)
+		if !filters.IncludeEnded && filters.Status == "" {
+			// 如果没有明确指定 status, 则排除 ended 状态
+			conditions = append(conditions, "e.status::text != 'ended'")
+		}
 	
 		// 体育类型筛选 (支持多选)
 		if len(filters.SportIDs) > 0 {
@@ -505,11 +505,11 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 	
 	// 复用筛选条件逻辑
 	if filters.IsLive != nil {
-		if *filters.IsLive {
-			conditions = append(conditions, "e.status = 'active' AND e.match_status IS NOT NULL")
-		} else {
-			conditions = append(conditions, "(e.status != 'active' OR e.match_status IS NULL)")
-		}
+			if *filters.IsLive {
+				conditions = append(conditions, "e.status::text = 'active' AND e.match_status IS NOT NULL")
+			} else {
+				conditions = append(conditions, "(e.status::text != 'active' OR e.match_status IS NULL)")
+			}
 	}
 	
 		if filters.Status != "" {
@@ -518,10 +518,10 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 			argIndex++
 		}
 	
-	// 默认排除已结束的比赛 (除非明确请求包含)
-	if !filters.IncludeEnded && filters.Status == "" {
-		conditions = append(conditions, "e.status != 'ended'")
-	}
+		// 默认排除已结束的比赛 (除非明确请求包含)
+		if !filters.IncludeEnded && filters.Status == "" {
+			conditions = append(conditions, "e.status::text != 'ended'")
+		}
 	
 	// 体育类型筛选 (支持多选)
 	if len(filters.SportIDs) > 0 {
