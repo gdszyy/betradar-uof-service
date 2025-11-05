@@ -391,11 +391,11 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 		inClause := strings.Join(placeholders, ", ")
 		conditions = append(conditions, fmt.Sprintf("(e.home_team_id IN (%s) OR e.away_team_id IN (%s))", inClause, inClause))
 	}
-	if filters.TeamName != "" {
-		conditions = append(conditions, fmt.Sprintf("(e.home_team_name ILIKE $%d OR e.away_team_name ILIKE $%d)", argIndex, argIndex))
-		args = append(args, "%"+filters.TeamName+"%")
-		argIndex++
-	}
+		if filters.TeamName != "" {
+			conditions = append(conditions, fmt.Sprintf("(e.home_team_name ILIKE $%d OR e.away_team_name ILIKE $%d)", argIndex, argIndex+1))
+			args = append(args, "%"+filters.TeamName+"%", "%"+filters.TeamName+"%")
+			argIndex += 2
+		}
 		// 联赛 ID 筛选 (从 srn_id 提取,支持多选)
 	if len(filters.LeagueIDs) > 0 {
 		leagueConditions := []string{}
@@ -412,13 +412,14 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 		log.Printf("[API] Warning: league_name filter not yet supported")
 	}
 	
-	// 搜索 (队伍名称或赛事 ID)
-	if filters.Search != "" {
-		searchCondition := fmt.Sprintf("(e.event_id ILIKE $%d OR e.home_team_name ILIKE $%d OR e.away_team_name ILIKE $%d)", argIndex, argIndex, argIndex)
-		conditions = append(conditions, searchCondition)
-		args = append(args, "%"+filters.Search+"%")
-		argIndex++
-	}
+		// 搜索 (队伍名称或赛事 ID)
+		if filters.Search != "" {
+			// 假设 event_id 是 bigint，需要转换为 text 才能使用 ILIKE
+			searchCondition := fmt.Sprintf("(e.event_id::text ILIKE $%d OR e.home_team_name ILIKE $%d OR e.away_team_name ILIKE $%d)", argIndex, argIndex+1, argIndex+2)
+			conditions = append(conditions, searchCondition)
+			args = append(args, "%"+filters.Search+"%", "%"+filters.Search+"%", "%"+filters.Search+"%")
+			argIndex += 3
+		}
 	
 	// 热门度筛选
 	if filters.Popular != nil {
@@ -558,11 +559,11 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 		conditions = append(conditions, fmt.Sprintf("(e.home_team_id IN (%s) OR e.away_team_id IN (%s))", inClause, inClause))
 	}
 	
-	if filters.TeamName != "" {
-		conditions = append(conditions, fmt.Sprintf("(e.home_team_name ILIKE $%d OR e.away_team_name ILIKE $%d)", argIndex, argIndex))
-		args = append(args, "%"+filters.TeamName+"%")
-		argIndex++
-	}
+		if filters.TeamName != "" {
+			conditions = append(conditions, fmt.Sprintf("(e.home_team_name ILIKE $%d OR e.away_team_name ILIKE $%d)", argIndex, argIndex+1))
+			args = append(args, "%"+filters.TeamName+"%", "%"+filters.TeamName+"%")
+			argIndex += 2
+		}
 	
 	// 联赛 ID 筛选 (从 srn_id 提取,支持多选)
 	if len(filters.LeagueIDs) > 0 {
@@ -582,11 +583,12 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 		
 		// 搜索 (队伍名称或赛事 ID)
 		if filters.Search != "" {
-		searchCondition := fmt.Sprintf("(e.event_id ILIKE $%d OR e.home_team_name ILIKE $%d OR e.away_team_name ILIKE $%d)", argIndex, argIndex, argIndex)
-		conditions = append(conditions, searchCondition)
-		args = append(args, "%"+filters.Search+"%")
-		argIndex++
-	}
+			// 假设 event_id 是 bigint，需要转换为 text 才能使用 ILIKE
+			searchCondition := fmt.Sprintf("(e.event_id::text ILIKE $%d OR e.home_team_name ILIKE $%d OR e.away_team_name ILIKE $%d)", argIndex, argIndex+1, argIndex+2)
+			conditions = append(conditions, searchCondition)
+			args = append(args, "%"+filters.Search+"%", "%"+filters.Search+"%", "%"+filters.Search+"%")
+			argIndex += 3
+		}
 	
 	// 热门度筛选 (与 buildEventFilterQuery 保持一致)
 	if filters.Popular != nil {
