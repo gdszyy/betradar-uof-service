@@ -79,6 +79,7 @@ func MapMatchDetail(match MatchDetail, mapper *services.SRMapper) EnhancedMatchD
 				}
 				// 只要 status 是 live，或者 match_status 是 live 状态，就认为是 live
 				enhanced.IsLive = isLiveFromStatus || isLiveFromMatchStatus
+	log.Printf("[DEBUG] Match ID: %s, Status: %s, MatchStatus: %v, isLiveFromStatus: %t, isLiveFromMatchStatus: %t, Final IsLive: %t", match.EventID, match.Status, match.MatchStatus, isLiveFromStatus, isLiveFromMatchStatus, enhanced.IsLive)
 			
 			enhanced.IsEnded = mapper.IsMatchEnded(*match.MatchStatus)
 	}
