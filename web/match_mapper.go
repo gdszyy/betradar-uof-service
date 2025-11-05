@@ -71,14 +71,17 @@ func MapMatchDetail(match MatchDetail, mapper *services.SRMapper) EnhancedMatchD
 			enhanced.MatchStatusMapped = mapper.MapMatchStatus(*match.MatchStatus)
 			enhanced.MatchStatusName = mapper.MapMatchStatusChinese(*match.MatchStatus)
 			
-// 修复 is_live 逻辑：当 Status 为 "live" 时，IsLive 必须为 true
-				isLiveFromStatus := match.Status == "live"
-				isLiveFromMatchStatus := false
-				if match.MatchStatus != nil {
-					isLiveFromMatchStatus = mapper.IsMatchLive(*match.MatchStatus)
-				}
-				// 只要 status 是 live，或者 match_status 是 live 状态，就认为是 live
-				enhanced.IsLive = isLiveFromStatus || isLiveFromMatchStatus
+	// 修复 is_live 逻辑：当 Status 为 "live" 时，IsLive 必须为 true
+					// 比赛是否 Live 的判断逻辑：
+					// 1. 原始 status 字段为 "live"
+					// 2. 原始 match_status 字段表示比赛正在进行中 (由 mapper.IsMatchLive 判断)
+					isLiveFromStatus := match.Status == "live"
+					isLiveFromMatchStatus := false
+					if match.MatchStatus != nil {
+						isLiveFromMatchStatus = mapper.IsMatchLive(*match.MatchStatus)
+					}
+					// 只要满足任一条件，即认为是 Live
+					enhanced.IsLive = isLiveFromStatus || isLiveFromMatchStatus
 	
 			
 			enhanced.IsEnded = mapper.IsMatchEnded(*match.MatchStatus)
