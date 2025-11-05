@@ -461,6 +461,8 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 	args = append(args, filters.PageSize, offset)
 	argIndex += 2 // 修正：增加 argIndex
 	
+	log.Printf("[DEBUG] SQL Query: %s", query)
+	log.Printf("[DEBUG] SQL Args: %v", args)
 	return query, args
 }
 
@@ -605,6 +607,8 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
 	
+	log.Printf("[DEBUG] SQL Query: %s", query)
+	log.Printf("[DEBUG] SQL Args: %v", args)
 	return query, args
 }
 
