@@ -123,12 +123,12 @@ func Load() *Config {
 		AutoBookingEnabled:         getEnv("AUTO_BOOKING_ENABLED", "false") == "true", // 默认关闭
 		AutoBookingIntervalMinutes: getEnvInt("AUTO_BOOKING_INTERVAL_MINUTES", 30),
 		
-		// 数据清理配置
-		CleanupRetainDaysMessages:  getEnvInt("CLEANUP_RETAIN_DAYS_MESSAGES", 7),   // 原始消息默认保留 7 天
-		CleanupRetainDaysOdds:      getEnvInt("CLEANUP_RETAIN_DAYS_ODDS", 7),       // 赔率数据默认保留 7 天
-		CleanupRetainDaysBets:      getEnvInt("CLEANUP_RETAIN_DAYS_BETS", 7),       // 投注记录默认保留 7 天
-		CleanupRetainDaysLiveData:  getEnvInt("CLEANUP_RETAIN_DAYS_LIVEDATA", 3),   // Live Data 默认保留 3 天
-		CleanupRetainDaysEvents:    getEnvInt("CLEANUP_RETAIN_DAYS_EVENTS", 30),    // 赛事信息默认保留 30 天
+		// 数据清理配置（所有数据默认保留 2 天）
+		CleanupRetainDaysMessages:  getEnvInt("CLEANUP_RETAIN_DAYS_MESSAGES", 2),   // 原始消息默认保留 2 天
+		CleanupRetainDaysOdds:      getEnvInt("CLEANUP_RETAIN_DAYS_ODDS", 2),       // 赔率数据默认保留 2 天
+		CleanupRetainDaysBets:      getEnvInt("CLEANUP_RETAIN_DAYS_BETS", 2),       // 投注记录默认保留 2 天
+		CleanupRetainDaysLiveData:  getEnvInt("CLEANUP_RETAIN_DAYS_LIVEDATA", 2),   // Live Data 默认保留 2 天
+		CleanupRetainDaysEvents:    getEnvInt("CLEANUP_RETAIN_DAYS_EVENTS", 2),    // 赛事信息默认保留 2 天
 		
 		// Producer 监控配置
 		ProducerCheckIntervalSeconds: getEnvInt("PRODUCER_CHECK_INTERVAL_SECONDS", 60),   // 默认每 60 秒检查一次
