@@ -126,11 +126,11 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 			args = append(args, subscribedBool)
 		}
 		
-		// 添加 sport_id 过滤
-		if sportID != "" {
-			whereClauses = append(whereClauses, "te.sport_id = $"+fmt.Sprintf("%d", len(args)+1))
-			args = append(args, sportID)
-		}
+			// 添加 sport_id 过滤
+			if sportID != "" {
+				whereClauses = append(whereClauses, "te.sport_id::text = $"+fmt.Sprintf("%d", len(args)+1))
+				args = append(args, sportID)
+			}
 		
 		// 添加 search 过滤 (event_id 精确匹配或队伍名称模糊匹配)
 		if search != "" {
