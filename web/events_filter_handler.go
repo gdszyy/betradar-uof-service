@@ -383,13 +383,20 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 	// 队伍 ID 筛选 (支持多选)
 	if len(filters.TeamIDs) > 0 {
 		placeholders := []string{}
-		for _, teamID := range filters.TeamIDs {
-			placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
-			args = append(args, teamID)
-			argIndex++
-		}
-		inClause := strings.Join(placeholders, ", ")
-		conditions = append(conditions, fmt.Sprintf("(e.home_team_id IN (%s) OR e.away_team_id IN (%s))", inClause, inClause))
+			for _, teamIDStr := range filters.TeamIDs {
+				teamID, err := strconv.ParseInt(teamIDStr, 10, 64)
+				if err != nil {
+					log.Printf("[API] Warning: Invalid team_id in filter: %s", teamIDStr)
+					continue
+				}
+				placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
+				args = append(args, teamID)
+				argIndex++
+			}
+			if len(placeholders) > 0 {
+				inClause := strings.Join(placeholders, ", ")
+				conditions = append(conditions, fmt.Sprintf("(e.home_team_id IN (%s) OR e.away_team_id IN (%s))", inClause, inClause))
+			}
 	}
 		if filters.TeamName != "" {
 			conditions = append(conditions, fmt.Sprintf("(e.home_team_name ILIKE $%d OR e.away_team_name ILIKE $%d)", argIndex, argIndex+1))
@@ -547,17 +554,24 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 		conditions = append(conditions, fmt.Sprintf("m.sr_market_id IN (%s)", strings.Join(placeholders, ", ")))
 	}
 	
-	// 队伍 ID 筛选 (支持多选)
-	if len(filters.TeamIDs) > 0 {
-		placeholders := []string{}
-		for _, teamID := range filters.TeamIDs {
-			placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
-			args = append(args, teamID)
-			argIndex++
+		// 队伍 ID 筛选 (支持多选)
+		if len(filters.TeamIDs) > 0 {
+			placeholders := []string{}
+			for _, teamIDStr := range filters.TeamIDs {
+				teamID, err := strconv.ParseInt(teamIDStr, 10, 64)
+				if err != nil {
+					log.Printf("[API] Warning: Invalid team_id in filter: %s", teamIDStr)
+					continue
+				}
+				placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
+				args = append(args, teamID)
+				argIndex++
+			}
+			if len(placeholders) > 0 {
+				inClause := strings.Join(placeholders, ", ")
+				conditions = append(conditions, fmt.Sprintf("(e.home_team_id IN (%s) OR e.away_team_id IN (%s))", inClause, inClause))
+			}
 		}
-		inClause := strings.Join(placeholders, ", ")
-		conditions = append(conditions, fmt.Sprintf("(e.home_team_id IN (%s) OR e.away_team_id IN (%s))", inClause, inClause))
-	}
 	
 		if filters.TeamName != "" {
 			conditions = append(conditions, fmt.Sprintf("(e.home_team_name ILIKE $%d OR e.away_team_name ILIKE $%d)", argIndex, argIndex+1))
