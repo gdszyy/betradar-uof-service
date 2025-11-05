@@ -322,11 +322,11 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 		}
 	}
 	
-	if filters.Status != "" {
-		conditions = append(conditions, fmt.Sprintf("e.status = $%d", argIndex))
-		args = append(args, filters.Status)
-		argIndex++
-	}
+		if filters.Status != "" {
+			conditions = append(conditions, fmt.Sprintf("e.status::text = $%d", argIndex))
+			args = append(args, filters.Status)
+			argIndex++
+		}
 	
 	// 默认排除已结束的比赛 (除非明确请求包含)
 	if !filters.IncludeEnded && filters.Status == "" {
