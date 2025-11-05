@@ -323,7 +323,7 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 	}
 	
 		if filters.Status != "" {
-			conditions = append(conditions, fmt.Sprintf("e.status::text = $%d", argIndex))
+			conditions = append(conditions, fmt.Sprintf("e.status = $%d", argIndex))
 			args = append(args, filters.Status)
 			argIndex++
 		}
