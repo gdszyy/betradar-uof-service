@@ -56,7 +56,7 @@ type EnhancedEvent struct {
 
 // MarketInfo 盘口信息
 type MarketInfo struct {
-	MarketID       string        `json:"sr_market_id"`
+	MarketID       string        `json:"market_id"`
 	MarketName     string        `json:"market_name"`
 	Specifiers     string        `json:"specifiers,omitempty"`
 	Status         string        `json:"status"`
@@ -360,21 +360,16 @@ func (s *Server) getEventMarkets(eventID string) ([]MarketInfo, error) {
 // getEventMarketsWithProducer 获取赛事的盘口信息 (按 producer 过滤)
 func (s *Server) getEventMarketsWithProducer(eventID string, producer string, homeTeamName string, awayTeamName string) ([]MarketInfo, error) {
 	query := `
-		SELECT DISTINCT ON (sr_market_id, specifiers)
-			id, sr_market_id, specifiers, status, producer_id, updated_at
+		SELECT DISTINCT ON (market_id, specifiers)
+			id, market_id, specifiers, status, updated_at
 		FROM markets
 		WHERE event_id = $1
 	`
 	
 	args := []interface{}{eventID}
 	
-	// 添加 producer 过滤
-	if producer != "" {
-		query += " AND producer_id = $2"
-		args = append(args, producer)
-	}
 	
-	query += " ORDER BY sr_market_id, specifiers, updated_at DESC"
+	query += " ORDER BY market_id, specifiers, updated_at DESC"
 	
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
@@ -390,9 +385,7 @@ func (s *Server) getEventMarketsWithProducer(eventID string, producer string, ho
 		var marketPK int
 		var specifiers sql.NullString
 		
-		var producerID sql.NullInt64
-		
-		err := rows.Scan(&marketPK, &market.MarketID, &specifiers, &market.Status, &producerID, &market.UpdatedAt)
+		err := rows.Scan(&marketPK, &market.MarketID, &specifiers, &market.Status, &market.UpdatedAt)
 		if err != nil {
 			log.Printf("[API] Failed to scan market: %v", err)
 			continue
@@ -400,10 +393,6 @@ func (s *Server) getEventMarketsWithProducer(eventID string, producer string, ho
 		
 		if specifiers.Valid {
 			market.Specifiers = specifiers.String
-		}
-		
-		if producerID.Valid {
-			market.ProducerID = int(producerID.Int64)
 		}
 		
 	// 获取市场名称 (简化版,可以后续从 market descriptions 获取)

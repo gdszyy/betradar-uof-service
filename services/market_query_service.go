@@ -14,7 +14,7 @@ func NewMarketQueryService(db *sql.DB) *MarketQueryService {
 }
 
 type MarketInfo struct {
-	MarketID    string        `json:"sr_market_id"`
+	MarketID    string        `json:"market_id"`
 	Specifiers  string        `json:"specifiers"`
 	Status      int           `json:"status"`
 	MarketName  string        `json:"market_name"`
@@ -32,13 +32,13 @@ func (s *MarketQueryService) GetEventMarkets(eventID string) ([]MarketInfo, erro
 	// 查询所有市场
 	marketsQuery := `
 		SELECT 
-			m.sr_market_id,
+			m.market_id,
 			COALESCE(m.specifiers, '') as specifiers,
 			m.status,
 			COALESCE(m.market_name, '') as market_name
 		FROM markets m
 		WHERE m.event_id = $1
-		ORDER BY m.sr_market_id, m.specifiers
+		ORDER BY m.market_id, m.specifiers
 	`
 
 	rows, err := s.db.Query(marketsQuery, eventID)
@@ -64,7 +64,7 @@ func (s *MarketQueryService) GetEventMarkets(eventID string) ([]MarketInfo, erro
 			FROM odds o
 			JOIN markets m ON o.market_id = m.id
 			WHERE m.event_id = $1 
-				AND m.sr_market_id = $2 
+				AND m.market_id = $2 
 				AND m.specifiers = $3
 			ORDER BY o.outcome_id
 		`

@@ -82,11 +82,10 @@ func (p *OddsParser) storeMarket(tx *sql.Tx, eventID string, market MarketData, 
 	// 注意: markets 表没有 timestamp 字段,我们使用 updated_at 来判断
 	// 但这不是最优方案,理想情况下应该添加 timestamp 字段
 	marketQuery := `
-		INSERT INTO markets (event_id, sr_market_id, market_type, specifiers, status, producer_id, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, NOW())
-		ON CONFLICT (event_id, sr_market_id, specifiers) DO UPDATE
+		INSERT INTO markets (event_id, market_id, market_type, specifiers, status, updated_at)
+		VALUES ($1, $2, $3, $4, $5, NOW())
+		ON CONFLICT (event_id, market_id, specifiers) DO UPDATE
 		SET status = EXCLUDED.status, 
-		    producer_id = EXCLUDED.producer_id, 
 		    updated_at = NOW()
 		RETURNING id
 	`
@@ -98,7 +97,6 @@ func (p *OddsParser) storeMarket(tx *sql.Tx, eventID string, market MarketData, 
 		p.getMarketType(market.ID),
 		market.Specifiers,
 		market.Status,
-		productID,
 	).Scan(&marketPK)
 	
 	if err != nil {
@@ -289,7 +287,7 @@ func (p *OddsParser) GetMarketOdds(eventID, marketID string) ([]OddsDetail, erro
 			o.updated_at
 		FROM odds o
 		JOIN markets m ON o.market_id = m.id
-		WHERE m.event_id = $1 AND m.sr_market_id = $2
+		WHERE m.event_id = $1 AND m.market_id = $2
 		ORDER BY o.outcome_id
 	`
 	
@@ -332,7 +330,8 @@ func (p *OddsParser) GetOddsHistory(eventID, marketID, outcomeID string, limit i
 			oh.created_at
 		FROM odds_history oh
 		JOIN markets m ON oh.market_id = m.id
-		WHERE m.event_id = $1 AND m.sr_market_id = $2 AND oh.outcome_id = $3	ORDER BY oh.created_at DESC
+		WHERE m.event_id = $1 AND m.market_id = $2 AND oh.outcome_id = $3
+		ORDER BY oh.created_at DESC
 		LIMIT $4
 	`
 	
@@ -387,7 +386,7 @@ func (p *OddsParser) GetEventMarkets(eventID string) ([]OddsMarketInfo, error) {
 	query := `
 		SELECT 
 			m.id,
-			m.sr_market_id,
+			m.market_id,
 			m.market_type,
 			m.market_name,
 			m.specifiers,
@@ -415,7 +414,7 @@ func (p *OddsParser) GetEventMarkets(eventID string) ([]OddsMarketInfo, error) {
 		
 		err := rows.Scan(
 			&market.ID,
-			&market.SrMarketID,
+			&market.MarketID,
 			&market.MarketType,
 			&marketName,
 			&specifiers,
@@ -446,7 +445,7 @@ func (p *OddsParser) GetEventMarkets(eventID string) ([]OddsMarketInfo, error) {
 // OddsMarketInfo 盘口信息 (用于 odds_parser)
 type OddsMarketInfo struct {
 	ID          int    `json:"id"`
-	SrMarketID    string `json:"sr_market_id"`
+	MarketID    string `json:"market_id"`
 	MarketType  string `json:"market_type"`
 	MarketName  string `json:"market_name"`
 	Specifiers  string `json:"specifiers,omitempty"`

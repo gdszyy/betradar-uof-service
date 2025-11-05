@@ -378,7 +378,7 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 			args = append(args, marketID)
 			argIndex++
 		}
-		conditions = append(conditions, fmt.Sprintf("m.sr_market_id IN (%s)", strings.Join(placeholders, ", ")))
+		conditions = append(conditions, fmt.Sprintf("m.market_id IN (%s)", strings.Join(placeholders, ", ")))
 	}
 	// 队伍 ID 筛选 (支持多选)
 	if len(filters.TeamIDs) > 0 {
@@ -547,7 +547,7 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 			args = append(args, marketID)
 			argIndex++
 		}
-		conditions = append(conditions, fmt.Sprintf("m.sr_market_id IN (%s)", strings.Join(placeholders, ", ")))
+		conditions = append(conditions, fmt.Sprintf("m.market_id IN (%s)", strings.Join(placeholders, ", ")))
 	}
 	
 	// 队伍 ID 筛选 (支持多选)
