@@ -26,8 +26,8 @@ type EnhancedMatchDetail struct {
 	UpdatedAt      string  `json:"updated_at"`
 
 	// 映射后的字段
-	Sport              string `json:"sport"`               // "football"
-	SportName          string `json:"sport_name"`          // "足球"
+		Sport              string `json:"sport"`               // "football"
+		SportName          string `json:"sport_name"`          // "Football" (改为英文)
 	MatchStatusMapped  string `json:"match_status_mapped"` // "first_half"
 	MatchStatusName    string `json:"match_status_name"`   // "上半场"
 	MatchTimeMapped    string `json:"match_time_mapped"`   // "23分15秒"
@@ -62,15 +62,21 @@ func MapMatchDetail(match MatchDetail, mapper *services.SRMapper) EnhancedMatchD
 	// 映射运动类型
 	if match.SportID != nil && *match.SportID != "" {
 		enhanced.Sport = mapper.MapSport(*match.SportID)
-		enhanced.SportName = mapper.MapSportChinese(*match.SportID)
+			// 修复中文 sport_name 问题，改为使用英文名称
+			enhanced.SportName = mapper.MapSport(*match.SportID)
 	}
 
 	// 映射比赛状态
 	if match.MatchStatus != nil && *match.MatchStatus != "" {
-		enhanced.MatchStatusMapped = mapper.MapMatchStatus(*match.MatchStatus)
-		enhanced.MatchStatusName = mapper.MapMatchStatusChinese(*match.MatchStatus)
-		enhanced.IsLive = mapper.IsMatchLive(*match.MatchStatus)
-		enhanced.IsEnded = mapper.IsMatchEnded(*match.MatchStatus)
+			enhanced.MatchStatusMapped = mapper.MapMatchStatus(*match.MatchStatus)
+			enhanced.MatchStatusName = mapper.MapMatchStatusChinese(*match.MatchStatus)
+			
+			// 修复 is_live 逻辑：当 Status 为 "live" 或 MatchStatus 为 live 状态时，IsLive 为 true
+			isLiveFromStatus := match.Status == "live"
+			isLiveFromMatchStatus := mapper.IsMatchLive(*match.MatchStatus)
+			enhanced.IsLive = isLiveFromStatus || isLiveFromMatchStatus
+			
+			enhanced.IsEnded = mapper.IsMatchEnded(*match.MatchStatus)
 	}
 
 	// 映射比赛时间
