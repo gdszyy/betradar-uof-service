@@ -123,6 +123,7 @@ type EventFilters struct {
 	// 状态筛选
 	IsLive *bool // true=live, false=非live, nil=全部
 	Status string // active, ended, etc.
+	IncludeEnded bool // true=包含已结束的比赛, false=排除已结束的比赛(默认)
 	
 	// 体育类型筛选 (支持多选,逗号分隔)
 	SportIDs []string
@@ -176,6 +177,11 @@ func parseEventFilters(r *http.Request) *EventFilters {
 	}
 	
 	filters.Status = r.URL.Query().Get("status")
+	
+	// include_ended 参数 (默认 false, 排除已结束的比赛)
+	if includeEndedParam := r.URL.Query().Get("include_ended"); includeEndedParam != "" {
+		filters.IncludeEnded = includeEndedParam == "true" || includeEndedParam == "1"
+	}
 	
 	// 体育类型筛选 (支持多选,逗号分隔)
 	if sportID := r.URL.Query().Get("sport_id"); sportID != "" {
@@ -292,6 +298,12 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 		conditions = append(conditions, fmt.Sprintf("e.status = $%d", argIndex))
 		args = append(args, filters.Status)
 		argIndex++
+	}
+	
+	// 默认排除已结束的比赛 (除非明确请求包含)
+	if !filters.IncludeEnded && filters.Status == "" {
+		// 如果没有明确指定 status, 则排除 ended 状态
+		conditions = append(conditions, "e.status != 'ended'")
 	}
 	
 	// 体育类型筛选 (支持多选)
@@ -424,6 +436,11 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 		conditions = append(conditions, fmt.Sprintf("e.status = $%d", argIndex))
 		args = append(args, filters.Status)
 		argIndex++
+	}
+	
+	// 默认排除已结束的比赛 (除非明确请求包含)
+	if !filters.IncludeEnded && filters.Status == "" {
+		conditions = append(conditions, "e.status != 'ended'")
 	}
 	
 	// 体育类型筛选 (支持多选)
