@@ -118,7 +118,7 @@ func (s *Server) handleGetEventsWithFilters(w http.ResponseWriter, r *http.Reque
 	
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Cache", "MISS")
-	json.NewEncoder(w).Encode(response)
+			json.NewEncoder(w).Encode(response)
 }
 
 // EventFilters 事件筛选参数
@@ -459,6 +459,7 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 	offset := (filters.Page - 1) * filters.PageSize
 	query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", argIndex, argIndex+1)
 	args = append(args, filters.PageSize, offset)
+	argIndex += 2 // 修正：增加 argIndex
 	
 	return query, args
 }
