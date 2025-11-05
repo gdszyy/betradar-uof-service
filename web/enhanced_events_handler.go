@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	
 	"uof-service/services"
 )
@@ -88,10 +89,24 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 	isLive := r.URL.Query().Get("is_live")
 	isEnded := r.URL.Query().Get("is_ended")
 	hasMarkets := r.URL.Query().Get("has_markets")
-	limit := r.URL.Query().Get("limit")
 	
-	if limit == "" {
-		limit = "100"
+	page := 1
+	pageSize := 100
+	
+	if pageParam := r.URL.Query().Get("page"); pageParam != "" {
+		if p, err := strconv.Atoi(pageParam); err == nil && p > 0 {
+			page = p
+		}
+	}
+	
+	if pageSizeParam := r.URL.Query().Get("page_size"); pageSizeParam != "" {
+		if ps, err := strconv.Atoi(pageSizeParam); err == nil && ps > 0 && ps <= 500 {
+			pageSize = ps
+		}
+	} else if limitParam := r.URL.Query().Get("limit"); limitParam != "" {
+		if l, err := strconv.Atoi(limitParam); err == nil && l > 0 && l <= 500 {
+			pageSize = l
+		}
 	}
 	
 		// 构建 SQL 查询
@@ -143,15 +158,17 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 	
 	// 添加 producer 过滤
 	if producer != "" {
-		// 通过 markets 表过滤 producer_id
-		whereClauses = append(whereClauses, "EXISTS (SELECT 1 FROM markets m WHERE m.event_id = te.event_id AND m.producer_id = $"+fmt.Sprintf("%d", len(args)+1)+")")
-		args = append(args, producer)
+		// 通过 markets 表过滤 producer_id (使用 defensive cast 避免类型不匹配)
+		if producerID, err := strconv.Atoi(producer); err == nil {
+			whereClauses = append(whereClauses, "EXISTS (SELECT 1 FROM markets m WHERE m.event_id::text = te.event_id AND m.producer_id = $"+fmt.Sprintf("%d", len(args)+1)+")")
+			args = append(args, producerID)
+		}
 	}
 	
 	// 添加 has_markets 过滤
 	if hasMarkets == "true" {
-		// 只返回有 markets 数据的比赛
-		whereClauses = append(whereClauses, "EXISTS (SELECT 1 FROM markets m WHERE m.event_id = te.event_id)")
+		// 只返回有 markets 数据的比赛 (使用 defensive cast 避免类型不匹配)
+		whereClauses = append(whereClauses, "EXISTS (SELECT 1 FROM markets m WHERE m.event_id::text = te.event_id)")
 	}
 		
 		// 构建 WHERE 子句
@@ -174,7 +191,7 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 				te.created_at, te.updated_at,
 				COALESCE(MAX(m.updated_at), te.last_message_at) as last_update
 			FROM tracked_events te
-			LEFT JOIN markets m ON te.event_id = m.event_id
+			LEFT JOIN markets m ON m.event_id::text = te.event_id
 		` + whereClause + `
 			GROUP BY te.event_id, te.srn_id, te.sport_id, te.status, te.schedule_time,
 				te.home_team_id, te.home_team_name, te.away_team_id, te.away_team_name,
@@ -183,9 +200,14 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 				te.created_at, te.updated_at
 		`
 	
-		// 添加排序和限制
-		query += " ORDER BY last_update DESC NULLS LAST, te.event_id LIMIT $" + fmt.Sprintf("%d", len(args)+1)
-		args = append(args, limit)
+		// 添加排序和限制 (支持 page/page_size)
+		query += " ORDER BY last_update DESC NULLS LAST, te.event_id"
+		
+		limit := pageSize
+		offset := (page - 1) * pageSize
+		
+		query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
+		args = append(args, limit, offset)
 	
 	rows, err := s.db.Query(query, args...)
 	if err != nil {

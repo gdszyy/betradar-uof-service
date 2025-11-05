@@ -478,13 +478,17 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 	}
 	
 	// 分页
-	offset := (filters.Page - 1) * filters.PageSize
-	query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", argIndex, argIndex+1)
-	args = append(args, filters.PageSize, offset)
-	argIndex += 2 // 修正：增加 argIndex
+limit := filters.PageSize
+		offset := (filters.Page - 1) * filters.PageSize
+
+		query += fmt.Sprintf(" LIMIT $%d", argIndex)
+		args = append(args, limit)
+		argIndex++
+
+		query += fmt.Sprintf(" OFFSET $%d", argIndex)
+		args = append(args, offset)
+		argIndex++
 	
-	log.Printf("[DEBUG] SQL Query: %s", query)
-	log.Printf("[DEBUG] SQL Args: %v", args)
 	return query, args
 }
 
@@ -649,8 +653,8 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
 	
-	log.Printf("[DEBUG] SQL Query: %s", query)
-	log.Printf("[DEBUG] SQL Args: %v", args)
+	
+	
 	return query, args
 }
 
