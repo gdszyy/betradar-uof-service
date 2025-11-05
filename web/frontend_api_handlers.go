@@ -31,6 +31,15 @@ type MatchDetail struct {
 	LastMessageAt  *string   `json:"last_message_at"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
+	
+	// 热门度相关字段
+	Attendance          *int     `json:"attendance,omitempty"`           // 到场人数
+	Sellout             *bool    `json:"sellout,omitempty"`              // 是否售罄
+	FeatureMatch        *bool    `json:"feature_match,omitempty"`        // 是否焦点赛
+	LiveVideoAvailable  *bool    `json:"live_video_available,omitempty"` // 是否提供直播
+	LiveDataAvailable   *bool    `json:"live_data_available,omitempty"`  // 是否提供实时数据
+	BroadcastsCount     *int     `json:"broadcasts_count,omitempty"`     // 转播平台数量
+	PopularityScore     *float64 `json:"popularity_score,omitempty"`     // 热门度评分 (0-100)
 }
 
 // handleGetMatchDetail 获取单个比赛的详细信息

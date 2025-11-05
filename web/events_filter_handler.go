@@ -77,6 +77,13 @@ func (s *Server) handleGetEventsWithFilters(w http.ResponseWriter, r *http.Reque
 			&match.LastMessageAt,
 			&match.CreatedAt,
 			&match.UpdatedAt,
+			&match.Attendance,
+			&match.Sellout,
+			&match.FeatureMatch,
+			&match.LiveVideoAvailable,
+			&match.LiveDataAvailable,
+			&match.BroadcastsCount,
+			&match.PopularityScore,
 		)
 		if err != nil {
 			log.Printf("[API] Error scanning match: %v", err)
@@ -148,6 +155,11 @@ type EventFilters struct {
 	
 	// 搜索
 	Search string
+	
+	// 热门度筛选
+	Popular      *bool  // true=只返回热门比赛, false=排除热门比赛, nil=全部
+	SortBy       string // 排序字段: popularity, time, default
+	MinPopularity float64 // 最小热门度评分 (0-100)
 }
 
 // parseEventFilters 解析查询参数
@@ -237,6 +249,20 @@ func parseEventFilters(r *http.Request) *EventFilters {
 	// 搜索
 	filters.Search = r.URL.Query().Get("search")
 	
+	// 热门度筛选
+	if popularParam := r.URL.Query().Get("popular"); popularParam != "" {
+		popular := popularParam == "true" || popularParam == "1"
+		filters.Popular = &popular
+	}
+	
+	filters.SortBy = r.URL.Query().Get("sort_by")
+	
+	if minPopParam := r.URL.Query().Get("min_popularity"); minPopParam != "" {
+		if minPop, err := strconv.ParseFloat(minPopParam, 64); err == nil && minPop >= 0 && minPop <= 100 {
+			filters.MinPopularity = minPop
+		}
+	}
+	
 	return filters
 }
 
@@ -272,7 +298,9 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 			e.event_id, e.srn_id, e.sport_id, e.status, e.schedule_time,
 			e.home_team_id, e.home_team_name, e.away_team_id, e.away_team_name,
 			e.home_score, e.away_score, e.match_status, e.match_time,
-			e.message_count, e.last_message_at, e.created_at, e.updated_at
+			e.message_count, e.last_message_at, e.created_at, e.updated_at,
+			e.attendance, e.sellout, e.feature_match, e.live_video_available,
+			e.live_data_available, e.broadcasts_count, e.popularity_score
 		FROM tracked_events e
 	`
 	
@@ -392,13 +420,40 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 		argIndex++
 	}
 	
+	// 热门度筛选
+	if filters.Popular != nil {
+		if *filters.Popular {
+			// 只返回热门比赛: 焦点赛 OR 售罄 OR 转播数 > 0 OR 热门度评分 > 50
+			conditions = append(conditions, "(e.feature_match = TRUE OR e.sellout = TRUE OR e.broadcasts_count > 0 OR e.popularity_score > 50)")
+		} else {
+			// 排除热门比赛
+			conditions = append(conditions, "(e.feature_match = FALSE OR e.feature_match IS NULL) AND (e.sellout = FALSE OR e.sellout IS NULL) AND (e.broadcasts_count = 0 OR e.broadcasts_count IS NULL) AND (e.popularity_score <= 50 OR e.popularity_score IS NULL)")
+		}
+	}
+	
+	// 最小热门度评分
+	if filters.MinPopularity > 0 {
+		conditions = append(conditions, fmt.Sprintf("e.popularity_score >= $%d", argIndex))
+		args = append(args, filters.MinPopularity)
+		argIndex++
+	}
+	
 	// 添加 WHERE 子句
 	if len(conditions) > 0 {
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
 	
 	// 排序
-	query += " ORDER BY e.schedule_time DESC NULLS LAST, e.created_at DESC"
+	if filters.SortBy == "popularity" {
+		// 按热门度排序 (热门度评分高的在前)
+		query += " ORDER BY e.popularity_score DESC NULLS LAST, e.schedule_time DESC"
+	} else if filters.SortBy == "time" {
+		// 按时间排序
+		query += " ORDER BY e.schedule_time DESC NULLS LAST, e.created_at DESC"
+	} else {
+		// 默认排序: 先按时间
+		query += " ORDER BY e.schedule_time DESC NULLS LAST, e.created_at DESC"
+	}
 	
 	// 分页
 	offset := (filters.Page - 1) * filters.PageSize
@@ -514,13 +569,34 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 			args = append(args, "%:"+leagueID+":%")
 			argIndex++
 		}
-		conditions = append(conditions, fmt.Sprintf("(%s)", strings.Join(leagueConditions, " OR ")))
-	}
-	
-	if filters.Search != "" {
+			conditions = append(conditions, fmt.Sprintf("(%s)", strings.Join(leagueConditions, " OR ")))
+		}
+		
+		if filters.LeagueName != "" {
+			// 联赛名称搜索 (需要 JOIN 联赛表,暂时不支持)
+			log.Printf("[API] Warning: league_name filter not yet supported")
+		}
+		
+		// 搜索 (队伍名称或赛事 ID)
+		if filters.Search != "" {
 		searchCondition := fmt.Sprintf("(e.event_id ILIKE $%d OR e.home_team_name ILIKE $%d OR e.away_team_name ILIKE $%d)", argIndex, argIndex, argIndex)
 		conditions = append(conditions, searchCondition)
 		args = append(args, "%"+filters.Search+"%")
+		argIndex++
+	}
+	
+	// 热门度筛选 (与 buildEventFilterQuery 保持一致)
+	if filters.Popular != nil {
+		if *filters.Popular {
+			conditions = append(conditions, "(e.feature_match = TRUE OR e.sellout = TRUE OR e.broadcasts_count > 0 OR e.popularity_score > 50)")
+		} else {
+			conditions = append(conditions, "(e.feature_match = FALSE OR e.feature_match IS NULL) AND (e.sellout = FALSE OR e.sellout IS NULL) AND (e.broadcasts_count = 0 OR e.broadcasts_count IS NULL) AND (e.popularity_score <= 50 OR e.popularity_score IS NULL)")
+		}
+	}
+	
+	if filters.MinPopularity > 0 {
+		conditions = append(conditions, fmt.Sprintf("e.popularity_score >= $%d", argIndex))
+		args = append(args, filters.MinPopularity)
 		argIndex++
 	}
 	
