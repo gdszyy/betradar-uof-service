@@ -284,12 +284,20 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 		event.Sport = s.srMapper.MapSport(event.SportID)
 		event.SportName = s.srMapper.MapSportChinese(event.SportID)
 		
-		if event.MatchStatus != nil {
-			event.MatchStatusMapped = s.srMapper.MapMatchStatus(*event.MatchStatus)
-			event.MatchStatusName = s.srMapper.MapMatchStatusChinese(*event.MatchStatus)
-			event.IsLive = s.srMapper.IsMatchLive(*event.MatchStatus)
-			event.IsEnded = s.srMapper.IsMatchEnded(*event.MatchStatus)
-		}
+			// 映射比赛状态
+			if event.MatchStatus != nil {
+				event.MatchStatusMapped = s.srMapper.MapMatchStatus(*event.MatchStatus)
+				event.MatchStatusName = s.srMapper.MapMatchStatusChinese(*event.MatchStatus)
+				event.IsEnded = s.srMapper.IsMatchEnded(*event.MatchStatus)
+			}
+			
+			// 修复 is_live 逻辑：当 Status 为 "live" 时，IsLive 必须为 true
+			isLiveFromStatus := event.Status == "live"
+			isLiveFromMatchStatus := false
+			if event.MatchStatus != nil {
+				isLiveFromMatchStatus = s.srMapper.IsMatchLive(*event.MatchStatus)
+			}
+			event.IsLive = isLiveFromStatus || isLiveFromMatchStatus
 		
 		if event.MatchTime != nil {
 			event.MatchTimeMapped = s.srMapper.FormatMatchTime(*event.MatchTime)
