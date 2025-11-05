@@ -305,11 +305,11 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 	`
 	
 	// 是否需要 JOIN markets 表
-	// 暂时禁用: markets 表不存在
-	// needMarketsJoin := len(filters.MarketIDs) > 0
-	// if needMarketsJoin {
-	// 	query += " LEFT JOIN markets m ON e.event_id = m.event_id"
-	// }
+	needMarketsJoin := len(filters.MarketIDs) > 0 // MarketGroup 暂时不支持
+	
+	if needMarketsJoin {
+		query += " LEFT JOIN markets m ON e.event_id = m.event_id"
+	}
 	
 	// 状态筛选
 	if filters.IsLive != nil {
@@ -370,18 +370,15 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 	// 	argIndex++
 	// }
 	
-	// 盘口类型筛选 (暂时禁用: markets 表不存在)
-	// if len(filters.MarketIDs) > 0 {
-	// 	placeholders := []string{}
-	// 	for _, marketID := range filters.MarketIDs {
-	// 		placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
-	// 		args = append(args, marketID)
-	// 		argIndex++
-	// 	}
-	// 	conditions = append(conditions, fmt.Sprintf("m.sr_market_id IN (%s)", strings.Join(placeholders, ", ")))
-	// }
+	// 盘口类型筛选 (支持多选)
 	if len(filters.MarketIDs) > 0 {
-		log.Printf("[API] Warning: market_id filter not supported (markets table does not exist)")
+		placeholders := []string{}
+		for _, marketID := range filters.MarketIDs {
+			placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
+			args = append(args, marketID)
+			argIndex++
+		}
+		conditions = append(conditions, fmt.Sprintf("m.sr_market_id IN (%s)", strings.Join(placeholders, ", ")))
 	}
 	// 队伍 ID 筛选 (支持多选)
 	if len(filters.TeamIDs) > 0 {
@@ -475,11 +472,11 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 	query := "SELECT COUNT(DISTINCT e.event_id) FROM tracked_events e"
 	
 	// 是否需要 JOIN markets 表
-	// 暂时禁用: markets 表不存在
-	// needMarketsJoin := len(filters.MarketIDs) > 0
-	// if needMarketsJoin {
-	// 	query += " LEFT JOIN markets m ON e.event_id = m.event_id"
-	// }
+	needMarketsJoin := len(filters.MarketIDs) > 0 // MarketGroup 暂时不支持
+	
+	if needMarketsJoin {
+		query += " LEFT JOIN markets m ON e.event_id = m.event_id"
+	}
 	
 	// 复用筛选条件逻辑
 	if filters.IsLive != nil {
@@ -535,18 +532,15 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 	// 	argIndex++
 	// }
 	
-	// 盘口类型筛选 (暂时禁用: markets 表不存在)
-	// if len(filters.MarketIDs) > 0 {
-	// 	placeholders := []string{}
-	// 	for _, marketID := range filters.MarketIDs {
-	// 		placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
-	// 		args = append(args, marketID)
-	// 		argIndex++
-	// 	}
-	// 	conditions = append(conditions, fmt.Sprintf("m.sr_market_id IN (%s)", strings.Join(placeholders, ", ")))
-	// }
+	// 盘口类型筛选 (支持多选)
 	if len(filters.MarketIDs) > 0 {
-		log.Printf("[API] Warning: market_id filter not supported (markets table does not exist)")
+		placeholders := []string{}
+		for _, marketID := range filters.MarketIDs {
+			placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
+			args = append(args, marketID)
+			argIndex++
+		}
+		conditions = append(conditions, fmt.Sprintf("m.sr_market_id IN (%s)", strings.Join(placeholders, ", ")))
 	}
 	
 	// 队伍 ID 筛选 (支持多选)
