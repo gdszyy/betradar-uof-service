@@ -292,12 +292,7 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 			}
 			
 			// 修复 is_live 逻辑：当 Status 为 "live" 时，IsLive 必须为 true
-			isLiveFromStatus := event.Status == "live"
-			isLiveFromMatchStatus := false
-			if event.MatchStatus != nil {
-				isLiveFromMatchStatus = s.srMapper.IsMatchLive(*event.MatchStatus)
-			}
-			event.IsLive = isLiveFromStatus || isLiveFromMatchStatus
+			event.IsLive = event.Status == "live"
 		
 		if event.MatchTime != nil {
 			event.MatchTimeMapped = s.srMapper.FormatMatchTime(*event.MatchTime)
