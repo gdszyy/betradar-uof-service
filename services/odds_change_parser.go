@@ -266,15 +266,22 @@ func (p *OddsChangeParser) storeOddsChangeData(
 		finalStatus = status
 	}
 
-	_, err := p.db.Exec(
-		query,
-		eventID, t1Score, t2Score, finalStatus, matchTime, statusName,
-		homeTeamID, awayTeamID, homeTeamName, awayTeamName,
-		now, now, now,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to upsert tracked_events: %w", err)
-	}
+		p.logger.Printf("[DEBUG] SQL Query: %s", query)
+		p.logger.Printf("[DEBUG] SQL Args: %v", []interface{}{
+			eventID, t1Score, t2Score, finalStatus, matchTime, statusName,
+			homeTeamID, awayTeamID, homeTeamName, awayTeamName,
+			now, now, now,
+		})
+		
+		_, err := p.db.Exec(
+			query,
+			eventID, t1Score, t2Score, finalStatus, matchTime, statusName,
+			homeTeamID, awayTeamID, homeTeamName, awayTeamName,
+			now, now, now,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to upsert tracked_events: %w", err)
+		}
 
 	return nil
 }

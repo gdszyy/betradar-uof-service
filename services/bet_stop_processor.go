@@ -67,14 +67,17 @@ func (p *BetStopProcessor) updateMarketStatus(betStop BetStopMessage) error {
 	if betStop.Groups == "all" || betStop.Groups == "" {
 		// 更新该赛事的所有市场
 		query := `
-			UPDATE markets 
-			SET status = $1, updated_at = NOW()
-			WHERE event_id = $2
+				UPDATE markets 
+				SET status = $1, updated_at = NOW()
+				WHERE event_id::text = $2
 		`
-		result, err := p.db.Exec(query, targetStatus, betStop.EventID)
-		if err != nil {
-			return fmt.Errorf("failed to update all markets: %w", err)
-		}
+			p.logger.Printf("[DEBUG] SQL Query: %s", query)
+			p.logger.Printf("[DEBUG] SQL Args: %v", []interface{}{targetStatus, betStop.EventID})
+			
+			result, err := p.db.Exec(query, targetStatus, betStop.EventID)
+			if err != nil {
+				return fmt.Errorf("failed to update all markets: %w", err)
+			}
 
 		rowsAffected, _ := result.RowsAffected()
 		p.logger.Printf("[bet_stop] 比赛 %s 的所有市场已暂停 (%d个市场)",
@@ -88,14 +91,17 @@ func (p *BetStopProcessor) updateMarketStatus(betStop BetStopMessage) error {
 		// 简化实现: 如果 groups 不是 "all",暂时也更新所有市场
 		// TODO: 实现基于 market group 的筛选
 		query := `
-			UPDATE markets 
-			SET status = $1, updated_at = NOW()
-			WHERE event_id = $2
+				UPDATE markets 
+				SET status = $1, updated_at = NOW()
+				WHERE event_id::text = $2
 		`
-		result, err := p.db.Exec(query, targetStatus, betStop.EventID)
-		if err != nil {
-			return fmt.Errorf("failed to update markets by groups: %w", err)
-		}
+			p.logger.Printf("[DEBUG] SQL Query: %s", query)
+			p.logger.Printf("[DEBUG] SQL Args: %v", []interface{}{targetStatus, betStop.EventID})
+			
+			result, err := p.db.Exec(query, targetStatus, betStop.EventID)
+			if err != nil {
+				return fmt.Errorf("failed to update markets by groups: %w", err)
+			}
 
 		rowsAffected, _ := result.RowsAffected()
 		p.logger.Printf("[bet_stop] 比赛 %s 的市场组 %s 已暂停 (%d个市场)",
