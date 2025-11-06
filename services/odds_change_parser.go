@@ -267,15 +267,11 @@ func (p *OddsChangeParser) storeOddsChangeData(
 	}
 
 		p.logger.Printf("[DEBUG] SQL Query: %s", query)
-		p.logger.Printf("[DEBUG] SQL Args: %v", []interface{}{
-			eventID, t1Score, t2Score, finalStatus, matchTime, statusName,
-			homeTeamID, awayTeamID, homeTeamName, awayTeamName,
-			now, now, now,
-		})
+p.logger.Printf("[DEBUG] SQL Args: event_id=%v, home_score=%v, away_score=%v, match_status=%v, match_time=%v, status=%v", eventID, t1Score, t2Score, finalStatus, matchTime, statusName)
 		
 		_, err := p.db.Exec(
 			query,
-			eventID, t1Score, t2Score, finalStatus, matchTime, statusName,
+				eventID, t1Score, t2Score, finalStatus, matchTime, statusName,
 			homeTeamID, awayTeamID, homeTeamName, awayTeamName,
 			now, now, now,
 		)
