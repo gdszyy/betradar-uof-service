@@ -1,12 +1,23 @@
 package services
 
 import (
-"os"
-"database/sql"
-"encoding/xml"
-"fmt"
-"log"
-)
+	"os"
+	"database/sql"
+	"encoding/xml"
+	"fmt"
+	"log"
+	"strconv"
+	"strings"
+	)
+
+// ExtractMarketIDFromURN 从 market URN (sr:market:123) 中提取数字 ID (123)
+func ExtractMarketIDFromURN(urn string) (int64, error) {
+	parts := strings.Split(urn, ":")
+	if len(parts) != 3 || parts[0] != "sr" || parts[1] != "market" {
+		return 0, fmt.Errorf("invalid market URN format: %s", urn)
+	}
+	return strconv.ParseInt(parts[2], 10, 64)
+}
 
 // BetCancelProcessor Bet Cancel 消息处理器
 type BetCancelProcessor struct {
@@ -52,9 +63,15 @@ return fmt.Errorf("failed to begin transaction: %w", err)
 }
 defer tx.Rollback()
 
-// 遍历所有市场
-for _, market := range betCancel.Market {
-// 存储到 bet_cancels 表
+	// 遍历所有市场
+	for _, market := range betCancel.Market {
+		marketID, err := ExtractMarketIDFromURN(market.ID)
+		if err != nil {
+			p.logger.Printf("Warning: failed to extract market ID from URN %s: %v", market.ID, err)
+			continue
+		}
+
+	// 存储到 bet_cancels 表
 query := `
 INSERT INTO bet_cancels (
 event_id, producer_id, timestamp,
@@ -75,10 +92,10 @@ created_at = NOW()
 _, err := tx.Exec(
 query,
 betCancel.EventID,
-betCancel.ProductID,
-betCancel.Timestamp,
-market.ID,
-market.Specifiers,
+	betCancel.ProductID,
+	betCancel.Timestamp,
+	marketID,
+	market.Specifiers,
 market.VoidReason,
 betCancel.StartTime,
 betCancel.EndTime,
@@ -94,7 +111,7 @@ UPDATE markets
 SET status = -4, updated_at = NOW()
 WHERE event_id = $1 AND sr_market_id = $2 AND specifiers = $3
 `
-_, err = tx.Exec(updateQuery, betCancel.EventID, market.ID, market.Specifiers)
+	_, err = tx.Exec(updateQuery, betCancel.EventID, marketID, market.Specifiers)
 if err != nil {
 p.logger.Printf("Warning: failed to update market status to cancelled: %v", err)
 }
