@@ -91,9 +91,10 @@ betCancel.StartTime,
 betCancel.EndTime,
 betCancel.SupercededBy,
 )
-if err != nil {
-return fmt.Errorf("failed to insert bet_cancel: %w", err)
-}
+	if err != nil {
+	p.logger.Printf("Error: failed to insert bet_cancel: %v", err)
+	return fmt.Errorf("failed to insert bet_cancel: %w", err)
+	}
 
 // 更新当前 market 的 status 为 -4 (Cancelled)
 updateQuery := `
@@ -102,9 +103,10 @@ SET status = -4, updated_at = NOW()
 WHERE event_id = $1 AND sr_market_id = $2 AND specifiers = $3
 `
 	_, err = tx.Exec(updateQuery, betCancel.EventID, marketID, market.Specifiers)
-if err != nil {
-p.logger.Printf("Warning: failed to update market status to cancelled: %v", err)
-}
+	if err != nil {
+	p.logger.Printf("Warning: failed to update market status to cancelled: %v", err)
+	// 不返回错误，因为这只是一个警告
+	}
 }
 
 // 提交事务
