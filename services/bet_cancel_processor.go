@@ -50,12 +50,13 @@ tx, err := p.db.Begin()
 if err != nil {
 return fmt.Errorf("failed to begin transaction: %w", err)
 }
-defer tx.Rollback()
-
-	// 遍历所有市场
-	for _, market := range betCancel.Market {
-		marketID, err := ExtractMarketIDFromURN(market.ID)
-		if err != nil {
+	defer tx.Rollback()
+	
+		// 遍历所有市场
+		for _, market := range betCancel.Market {
+			var marketID int64
+			marketID, err = ExtractMarketIDFromURN(market.ID)
+			if err != nil {
 			p.logger.Printf("Warning: failed to extract market ID from URN %s: %v", market.ID, err)
 			continue
 		}
