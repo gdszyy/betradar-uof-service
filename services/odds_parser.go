@@ -50,7 +50,10 @@ func (p *OddsParser) ParseAndStoreOdds(xmlData []byte, productID int) error {
 		return fmt.Errorf("failed to parse odds_change XML: %w", err)
 	}
 	
-		// 日志已移至 odds_change_parser.go
+	eventPK, err := p.resolveEventID(oddsChange.EventID)
+	if err != nil {
+		return fmt.Errorf("failed to resolve event ID %s: %w", oddsChange.EventID, err)
+	}
 	
 	// 开始事务
 	tx, err := p.db.Begin()
@@ -61,9 +64,8 @@ func (p *OddsParser) ParseAndStoreOdds(xmlData []byte, productID int) error {
 	
 	// 存储每个盘口
 	for _, market := range oddsChange.Markets {
-		if err := p.storeMarket(tx, oddsChange.EventID, market, oddsChange.Timestamp, productID); err != nil {
-				// 错误日志已简化
-				continue
+		if err := p.storeMarket(tx, eventPK, oddsChange.EventID, market, oddsChange.Timestamp, productID); err != nil {
+			return fmt.Errorf("failed to store market %s: %w", market.ID, err)
 		}
 	}
 	
@@ -76,8 +78,18 @@ func (p *OddsParser) ParseAndStoreOdds(xmlData []byte, productID int) error {
 	return nil
 }
 
+func (p *OddsParser) resolveEventID(srEventID string) (int64, error) {
+	var eventPK int64
+	query := `SELECT id FROM events WHERE external_id = $1`
+	err := p.db.QueryRow(query, srEventID).Scan(&eventPK)
+	if err != nil {
+		return 0, fmt.Errorf("event not found in events table: %w", err)
+	}
+	return eventPK, nil
+}
+
 // storeMarket 存储盘口数据
-func (p *OddsParser) storeMarket(tx *sql.Tx, eventID string, market MarketData, timestamp int64, productID int) error {
+func (p *OddsParser) storeMarket(tx *sql.Tx, eventPK int64, srEventID string, market MarketData, timestamp int64, productID int) error {
 	// 1. 插入或更新盘口
 	// 注意: markets 表没有 timestamp 字段,我们使用 updated_at 来判断
 	// 但这不是最优方案,理想情况下应该添加 timestamp 字段
@@ -92,7 +104,7 @@ func (p *OddsParser) storeMarket(tx *sql.Tx, eventID string, market MarketData, 
 	
 	var marketPK int
 	err := tx.QueryRow(marketQuery, 
-		eventID, 
+		eventPK, 
 		market.ID, 
 		p.getMarketType(market.ID),
 		market.Specifiers,
@@ -105,16 +117,16 @@ func (p *OddsParser) storeMarket(tx *sql.Tx, eventID string, market MarketData, 
 	
 	// 2. 存储每个结果的赔率
 	for _, outcome := range market.Outcomes {
-			if err := p.storeOdds(tx, marketPK, eventID, market.ID, market.Specifiers, outcome, timestamp); err != nil {
-				// 错误日志已简化
-			}
+		if err := p.storeOdds(tx, marketPK, srEventID, market.ID, market.Specifiers, outcome, timestamp); err != nil {
+			return fmt.Errorf("failed to store odds for outcome %s: %w", outcome.ID, err)
+		}
 	}
 	
 	return nil
 }
 
 // storeOdds 存储赔率
-func (p *OddsParser) storeOdds(tx *sql.Tx, marketPK int, eventID string, marketID string, specifiers string, outcome OutcomeData, timestamp int64) error {
+func (p *OddsParser) storeOdds(tx *sql.Tx, marketPK int, srEventID string, marketID string, specifiers string, outcome OutcomeData, timestamp int64) error {
 	// 查询旧赔率
 	var oldOdds sql.NullFloat64
 	oldOddsQuery := `SELECT odds_value FROM odds WHERE market_id = $1 AND outcome_id = $2`
@@ -176,7 +188,7 @@ func (p *OddsParser) storeOdds(tx *sql.Tx, marketPK int, eventID string, marketI
 	
 	_, err := tx.Exec(oddsQuery,
 		marketPK,
-		eventID,
+		srEventID,
 		outcome.ID,  // 使用完整的 URN
 		outcomeName,
 		outcome.Odds,
@@ -203,7 +215,7 @@ func (p *OddsParser) storeOdds(tx *sql.Tx, marketPK int, eventID string, marketI
 		
 		_, err = tx.Exec(historyQuery,
 			marketPK,
-			eventID,
+			srEventID,
 			outcome.ID,  // 使用完整的 URN
 			outcomeName,
 			outcome.Odds,
@@ -222,7 +234,7 @@ func (p *OddsParser) storeOdds(tx *sql.Tx, marketPK int, eventID string, marketI
 			VALUES ($1, $2, $3, $4, $5, $6, 'new', $7)
 		`
 		
-		tx.Exec(historyQuery, marketPK, eventID, outcome.ID, outcomeName, outcome.Odds, probability, timestamp)
+		tx.Exec(historyQuery, marketPK, srEventID, outcome.ID, outcomeName, outcome.Odds, probability, timestamp)
 	}
 	
 	return nil
@@ -275,7 +287,7 @@ func (p *OddsParser) getOutcomeName(outcomeID string) string {
 }
 
 // GetMarketOdds 获取盘口的当前赔率
-func (p *OddsParser) GetMarketOdds(eventID, marketID string) ([]OddsDetail, error) {
+func (p *OddsParser) GetMarketOdds(srEventID, marketID string) ([]OddsDetail, error) {
 	query := `
 		SELECT 
 			o.outcome_id,
@@ -287,11 +299,12 @@ func (p *OddsParser) GetMarketOdds(eventID, marketID string) ([]OddsDetail, erro
 			o.updated_at
 		FROM odds o
 		JOIN markets m ON o.market_id = m.id
-		WHERE m.event_id = $1 AND m.market_id = $2
+		JOIN events e ON m.event_id = e.id
+		WHERE e.external_id = $1 AND m.market_id = $2
 		ORDER BY o.outcome_id
 	`
 	
-	rows, err := p.db.Query(query, eventID, marketID)
+	rows, err := p.db.Query(query, srEventID, marketID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query odds: %w", err)
 	}
@@ -320,7 +333,7 @@ func (p *OddsParser) GetMarketOdds(eventID, marketID string) ([]OddsDetail, erro
 }
 
 // GetOddsHistory 获取赔率变化历史
-func (p *OddsParser) GetOddsHistory(eventID, marketID, outcomeID string, limit int) ([]OddsHistoryInfo, error) {
+func (p *OddsParser) GetOddsHistory(srEventID, marketID, outcomeID string, limit int) ([]OddsHistoryInfo, error) {
 	query := `
 		SELECT 
 			oh.odds_value,
@@ -330,12 +343,13 @@ func (p *OddsParser) GetOddsHistory(eventID, marketID, outcomeID string, limit i
 			oh.created_at
 		FROM odds_history oh
 		JOIN markets m ON oh.market_id = m.id
-		WHERE m.event_id = $1 AND m.market_id = $2 AND oh.outcome_id = $3
+		JOIN events e ON m.event_id = e.id
+		WHERE e.external_id = $1 AND m.market_id = $2 AND oh.outcome_id = $3
 		ORDER BY oh.created_at DESC
 		LIMIT $4
 	`
 	
-	rows, err := p.db.Query(query, eventID, marketID, outcomeID, limit)
+	rows, err := p.db.Query(query, srEventID, marketID, outcomeID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query odds history: %w", err)
 	}
@@ -382,7 +396,7 @@ type OddsHistoryInfo struct {
 }
 
 // GetEventMarkets 获取比赛的所有盘口
-func (p *OddsParser) GetEventMarkets(eventID string) ([]OddsMarketInfo, error) {
+func (p *OddsParser) GetEventMarkets(srEventID string) ([]OddsMarketInfo, error) {
 	query := `
 		SELECT 
 			m.id,
@@ -395,12 +409,13 @@ func (p *OddsParser) GetEventMarkets(eventID string) ([]OddsMarketInfo, error) {
 			m.updated_at
 		FROM markets m
 		LEFT JOIN odds o ON m.id = o.market_id
-		WHERE m.event_id = $1
+		JOIN events e ON m.event_id = e.id
+		WHERE e.external_id = $1
 		GROUP BY m.id
 		ORDER BY m.market_type, m.id
 	`
 	
-	rows, err := p.db.Query(query, eventID)
+	rows, err := p.db.Query(query, srEventID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query markets: %w", err)
 	}
