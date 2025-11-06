@@ -232,15 +232,15 @@ func (p *OddsChangeParser) storeOddsChangeData(
 	
 	// 更新 tracked_events 表 (不再使用 ld_matches)
 	query := `
-		INSERT INTO tracked_events (
-			event_id, home_score, away_score, match_status, match_time, status,
+INSERT INTO tracked_events (
+				event_id, home_score, away_score, match_time, status,
 			home_team_id, away_team_id, home_team_name, away_team_name,
 			last_message_at, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		ON CONFLICT (event_id) DO UPDATE SET
 			home_score = COALESCE(EXCLUDED.home_score, tracked_events.home_score),
 			away_score = COALESCE(EXCLUDED.away_score, tracked_events.away_score),
-			match_status = COALESCE(NULLIF(EXCLUDED.match_status, ''), tracked_events.match_status),
+			
 			match_time = COALESCE(NULLIF(EXCLUDED.match_time, ''), tracked_events.match_time),
 			status = COALESCE(NULLIF(EXCLUDED.status, ''), tracked_events.status),
 			home_team_id = COALESCE(NULLIF(EXCLUDED.home_team_id, ''), tracked_events.home_team_id),
@@ -271,7 +271,7 @@ p.logger.Printf("[DEBUG] SQL Args: event_id=%v, home_score=%v, away_score=%v, ma
 		
 		_, err := p.db.Exec(
 			query,
-				eventID, t1Score, t2Score, finalStatus, matchTime, statusName,
+				eventID, t1Score, t2Score, matchTime, statusName,
 			homeTeamID, awayTeamID, homeTeamName, awayTeamName,
 			now, now, now,
 		)
