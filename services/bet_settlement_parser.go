@@ -80,12 +80,12 @@ func (p *BetSettlementParser) ParseAndStore(xmlContent string) error {
 
 			// 存储到数据库
 			query := `
-			INSERT INTO bet_settlements (
-				event_id, producer_id, timestamp, certainty,
-				sr_market_id, specifiers, void_factor,
-					outcome_id, result, dead_heat_factor,
-					created_at
-				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+				INSERT INTO bet_settlements (
+					event_id, producer_id, timestamp, certainty,
+					sr_market_id, specifiers, void_factor,
+						outcome_id, result, dead_heat_factor,
+						created_at
+					) VALUES ($1, $2, $3, $4, $5::bigint, $6, $7, $8, $9, $10, NOW())
 				ON CONFLICT (event_id, sr_market_id, specifiers, outcome_id, producer_id) 
 				DO UPDATE SET
 					certainty = EXCLUDED.certainty,
@@ -102,7 +102,7 @@ func (p *BetSettlementParser) ParseAndStore(xmlContent string) error {
 				settlement.ProductID,
 				settlement.Timestamp,
 				settlement.Certainty,
-				market.ID,
+					market.ID,
 				market.Specifiers,
 				finalVoidFactor,
 				outcome.ID,
@@ -116,9 +116,9 @@ func (p *BetSettlementParser) ParseAndStore(xmlContent string) error {
 
 		// 更新当前 market 的 status 为 -3 (Settled)
 		updateQuery := `
-			UPDATE markets 
-			SET status = -3, updated_at = NOW()
-			WHERE event_id = $1 AND sr_market_id = $2 AND specifiers = $3
+				UPDATE markets 
+				SET status = -3, updated_at = NOW()
+				WHERE event_id = $1 AND sr_market_id = $2::bigint AND specifiers = $3
 		`
 		_, err := tx.Exec(updateQuery, settlement.EventID, market.ID, market.Specifiers)
 		if err != nil {
