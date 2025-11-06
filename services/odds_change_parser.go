@@ -261,7 +261,7 @@ func (p *OddsChangeParser) storeOddsChangeData(
 	}
 
 	// 使用 status 如果 matchStatus 为空
-	finalStatus := matchStatus
+	finalStatus := fmt.Sprintf("%s", matchStatus)
 	if finalStatus == "" {
 		finalStatus = status
 	}
