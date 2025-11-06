@@ -1,8 +1,7 @@
 module uof-service
 
-go 1.24.0
+go 1.18
 
-toolchain go1.24.9
 
 require (
 	github.com/gorilla/mux v1.8.1

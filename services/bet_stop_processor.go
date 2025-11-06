@@ -6,8 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
-	"strings"
+
 )
 
 // BetStopProcessor Bet Stop 消息处理器
@@ -68,36 +67,20 @@ func (p *BetStopProcessor) updateMarketStatus(betStop BetStopMessage) error {
 	// 根据 groups 字段更新不同的市场
 	if betStop.Groups == "all" || betStop.Groups == "" {
 		// 更新该赛事的所有市场
-<<<<<<< HEAD
-		query := `
-				UPDATE markets 
-				SET status = $1, updated_at = NOW()
-				WHERE event_id::text = $2
-		`
-			p.logger.Printf("[DEBUG] SQL Query: %s", query)
-			p.logger.Printf("[DEBUG] SQL Args: %v", []interface{}{targetStatus, betStop.EventID})
-			
-			result, err := p.db.Exec(query, targetStatus, betStop.EventID)
+				eventID, err := ExtractEventIDFromURN(betStop.EventID)
+				if err != nil {
+					return fmt.Errorf("failed to extract event ID from URN: %w", err)
+				}
+				query := `
+					UPDATE markets 
+					SET status = $1, updated_at = NOW()
+					WHERE event_id = $2
+				`
+				result, err := p.db.Exec(query, targetStatus, eventID)
 			if err != nil {
 				return fmt.Errorf("failed to update all markets: %w", err)
-			}
-=======
-			eventID, err := ExtractEventIDFromURN(betStop.EventID)
-			if err != nil {
-				return fmt.Errorf("failed to extract event ID from URN: %w", err)
-			}
-			query := `
-				UPDATE markets 
-				SET status = $1, updated_at = NOW()
-				WHERE event_id = $2
-			`
-			result, err := p.db.Exec(query, targetStatus, eventID)
-		if err != nil {
-			return fmt.Errorf("failed to update all markets: %w", err)
-		}
->>>>>>> 20d4911 (Fix: bet_stop_processor.go event_id type mismatch and add ExtractEventIDFromURN)
-
-		rowsAffected, _ := result.RowsAffected()
+				}
+			rowsAffected, _ := result.RowsAffected()
 		p.logger.Printf("[bet_stop] 比赛 %s 的所有市场已暂停 (%d个市场)",
 			betStop.EventID, rowsAffected)
 
@@ -108,36 +91,20 @@ func (p *BetStopProcessor) updateMarketStatus(betStop BetStopMessage) error {
 		
 		// 简化实现: 如果 groups 不是 "all",暂时也更新所有市场
 		// TODO: 实现基于 market group 的筛选
-<<<<<<< HEAD
-		query := `
-				UPDATE markets 
-				SET status = $1, updated_at = NOW()
-				WHERE event_id::text = $2
-		`
-			p.logger.Printf("[DEBUG] SQL Query: %s", query)
-			p.logger.Printf("[DEBUG] SQL Args: %v", []interface{}{targetStatus, betStop.EventID})
-			
-			result, err := p.db.Exec(query, targetStatus, betStop.EventID)
+				eventID, err := ExtractEventIDFromURN(betStop.EventID)
+				if err != nil {
+					return fmt.Errorf("failed to extract event ID from URN: %w", err)
+				}
+				query := `
+					UPDATE markets 
+					SET status = $1, updated_at = NOW()
+					WHERE event_id = $2
+				`
+				result, err := p.db.Exec(query, targetStatus, eventID)
 			if err != nil {
 				return fmt.Errorf("failed to update markets by groups: %w", err)
-			}
-=======
-			eventID, err := ExtractEventIDFromURN(betStop.EventID)
-			if err != nil {
-				return fmt.Errorf("failed to extract event ID from URN: %w", err)
-			}
-			query := `
-				UPDATE markets 
-				SET status = $1, updated_at = NOW()
-				WHERE event_id = $2
-			`
-			result, err := p.db.Exec(query, targetStatus, eventID)
-		if err != nil {
-			return fmt.Errorf("failed to update markets by groups: %w", err)
-		}
->>>>>>> 20d4911 (Fix: bet_stop_processor.go event_id type mismatch and add ExtractEventIDFromURN)
-
-		rowsAffected, _ := result.RowsAffected()
+				}
+			rowsAffected, _ := result.RowsAffected()
 		p.logger.Printf("[bet_stop] 比赛 %s 的市场组 %s 已暂停 (%d个市场)",
 			betStop.EventID, betStop.Groups, rowsAffected)
 	}

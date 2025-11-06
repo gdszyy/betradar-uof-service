@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-<<<<<<< HEAD
-=======
+
+
 // ExtractEventIDFromURN 从 event URN (sr:match:123) 中提取数字 ID (123)
 func ExtractEventIDFromURN(urn string) (int64, error) {
 	parts := strings.Split(urn, ":")
@@ -17,7 +17,7 @@ func ExtractEventIDFromURN(urn string) (int64, error) {
 	return strconv.ParseInt(parts[2], 10, 64)
 }
 
->>>>>>> 20d4911 (Fix: bet_stop_processor.go event_id type mismatch and add ExtractEventIDFromURN)
+
 // ExtractMarketIDFromURN 从 market URN (sr:market:123) 中提取数字 ID (123)
 func ExtractMarketIDFromURN(urn string) (int64, error) {
 	parts := strings.Split(urn, ":")
