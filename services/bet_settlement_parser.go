@@ -6,7 +6,18 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
+	"strings"
 )
+
+// ExtractMarketIDFromURN 从 market URN (sr:market:123) 中提取数字 ID (123)
+func ExtractMarketIDFromURN(urn string) (int64, error) {
+	parts := strings.Split(urn, ":")
+	if len(parts) != 3 || parts[0] != "sr" || parts[1] != "market" {
+		return 0, fmt.Errorf("invalid market URN format: %s", urn)
+	}
+	return strconv.ParseInt(parts[2], 10, 64)
+}
 
 // BetSettlementParser Bet Settlement 消息解析器
 type BetSettlementParser struct {
@@ -66,9 +77,15 @@ func (p *BetSettlementParser) ParseAndStore(xmlContent string) error {
 	}
 	defer tx.Rollback()
 
-	// 遍历所有市场
-	for _, market := range settlement.Outcomes.Markets {
-		// 遍历所有结果
+		// 遍历所有市场
+		for _, market := range settlement.Outcomes.Markets {
+			marketID, err := ExtractMarketIDFromURN(market.ID)
+			if err != nil {
+				p.logger.Printf("Warning: failed to extract market ID from URN %s: %v", market.ID, err)
+				continue
+			}
+
+			// 遍历所有结果
 		for _, outcome := range market.Outcomes {
 			// 确定最终的 void_factor (outcome 级别优先于 market 级别)
 			var finalVoidFactor *float64
@@ -82,10 +99,10 @@ func (p *BetSettlementParser) ParseAndStore(xmlContent string) error {
 			query := `
 				INSERT INTO bet_settlements (
 					event_id, producer_id, timestamp, certainty,
-					sr_market_id, specifiers, void_factor,
-						outcome_id, result, dead_heat_factor,
-						created_at
-					) VALUES ($1, $2, $3, $4, $5::bigint, $6, $7, $8, $9, $10, NOW())
+						sr_market_id, specifiers, void_factor,
+							outcome_id, result, dead_heat_factor,
+							created_at
+						) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
 				ON CONFLICT (event_id, sr_market_id, specifiers, outcome_id, producer_id) 
 				DO UPDATE SET
 					certainty = EXCLUDED.certainty,
@@ -101,9 +118,9 @@ func (p *BetSettlementParser) ParseAndStore(xmlContent string) error {
 				settlement.EventID,
 				settlement.ProductID,
 				settlement.Timestamp,
-				settlement.Certainty,
-					market.ID,
-				market.Specifiers,
+					settlement.Certainty,
+						marketID,
+					market.Specifiers,
 				finalVoidFactor,
 				outcome.ID,
 				outcome.Result,
@@ -118,9 +135,9 @@ func (p *BetSettlementParser) ParseAndStore(xmlContent string) error {
 		updateQuery := `
 				UPDATE markets 
 				SET status = -3, updated_at = NOW()
-				WHERE event_id = $1 AND sr_market_id = $2::bigint AND specifiers = $3
-		`
-		_, err := tx.Exec(updateQuery, settlement.EventID, market.ID, market.Specifiers)
+					WHERE event_id = $1 AND sr_market_id = $2 AND specifiers = $3
+			`
+			_, err = tx.Exec(updateQuery, settlement.EventID, marketID, market.Specifiers)
 		if err != nil {
 			p.logger.Printf("Warning: failed to update market status to settled: %v", err)
 		}
