@@ -114,7 +114,15 @@ func (p *OddsParser) storeMarket(tx *sql.Tx, eventID string, market MarketData, 
 		}
 
 // storeOdds stores the odds
-func (p *OddsParser) storeOdds(tx *sql.Tx, marketPK int, eventID string, marketID string, specifiers string, outcome OutcomeData, timestamp int64) error {
+func (p *OddsParser) storeOdds(
+	tx *sql.Tx, 
+	marketPK int, 
+	eventID string, 
+	marketID string, 
+	specifiers string, 
+	outcome OutcomeData, 
+	timestamp int64,
+) error {
 	// 查询旧赔率
 	var oldOdds sql.NullFloat64
 	oldOddsQuery := `SELECT odds_value FROM odds WHERE market_id = $1 AND outcome_id = $2`
