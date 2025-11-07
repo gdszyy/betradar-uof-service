@@ -33,53 +33,42 @@ func (h *MarketDescriptionsHandler) HandleGetStatus(w http.ResponseWriter, r *ht
 
 // HandleForceRefresh 强制刷新 (从 API 重新加载)
 func (h *MarketDescriptionsHandler) HandleForceRefresh(w http.ResponseWriter, r *http.Request) {
-	logger.Println("[API] Force refresh of market descriptions requested")
+logger.Println("[API] Force refresh of market descriptions requested")
 	
-	if err := h.service.ForceRefresh(); err != nil {
-		logger.Printf("[API] ⚠️  Failed to refresh: %v", err)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":  "error",
-			"message": err.Error(),
-		})
-		return
-	}
+	h.service.ForceRefresh()
 	
-	logger.Println("[API] ✅ Market descriptions refreshed successfully")
+	logger.Println("[API] ✅ Market descriptions refresh initiated")
 	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":  "ok",
-		"message": "Market descriptions refreshed successfully",
+	"status":  "ok",
+	"message": "Market descriptions refresh initiated",
 	})
 }
 
 // HandleBulkUpdate 批量更新存量数据
 func (h *MarketDescriptionsHandler) HandleBulkUpdate(w http.ResponseWriter, r *http.Request) {
-	logger.Println("[API] Bulk update of existing markets/outcomes requested")
+logger.Println("[API] Bulk update of existing markets/outcomes requested")
 	
-	updatedMarkets, updatedOutcomes, err := h.service.UpdateExistingMarkets()
+	err := h.service.UpdateExistingMarkets()
 	if err != nil {
-		logger.Printf("[API] ⚠️  Failed to bulk update: %v", err)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":  "error",
-			"message": err.Error(),
-		})
-		return
+	logger.Printf("[API] ⚠️  Failed to bulk update: %v", err)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusInternalServerError)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+	"status":  "error",
+	"message": err.Error(),
+	})
+	return
 	}
 	
-	logger.Printf("[API] ✅ Bulk update completed: %d markets, %d outcomes", updatedMarkets, updatedOutcomes)
+	logger.Printf("[API] ✅ Bulk update completed")
 	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": "ok",
-		"data": map[string]interface{}{
-			"updated_markets":  updatedMarkets,
-			"updated_outcomes": updatedOutcomes,
-		},
+	"status": "ok",
+	"data": map[string]interface{}{
+	// "updated_markets":  updatedMarkets,
+	// "updated_outcomes": updatedOutcomes,
+	},
 	})
-}
-

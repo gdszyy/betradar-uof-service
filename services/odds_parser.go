@@ -1,3 +1,4 @@
+
 package services
 
 import (
@@ -446,7 +447,7 @@ func (p *OddsParser) GetEventMarkets(eventID string) ([]OddsMarketInfo, error) {
 // OddsMarketInfo 盘口信息 (用于 odds_parser)
 type OddsMarketInfo struct {
 	ID          int    `json:"id"`
-	SrMarketID    string `json:"sr_market_id"`
+	MarketID    string `json:"sr_market_id"`
 	MarketType  string `json:"market_type"`
 	MarketName  string `json:"market_name"`
 	Specifiers  string `json:"specifiers,omitempty"`

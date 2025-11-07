@@ -22,6 +22,27 @@ type ReplacementContext struct {
 }
 
 // MarketDescriptionsService 市场描述服务
+
+// GetStatus 返回服务的状态
+func (s *MarketDescriptionsService) GetStatus() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	if s.lastUpdated.IsZero() {
+		return "Initializing"
+	}
+	return fmt.Sprintf("Ready (Last updated: %s)", s.lastUpdated.Format("2006-01-02 15:04:05"))
+}
+
+// ForceRefresh 强制刷新市场描述
+func (s *MarketDescriptionsService) ForceRefresh() {
+	go s.loadMarketDescriptions()
+}
+
+// UpdateExistingMarkets 批量更新现有市场的名称
+func (s *MarketDescriptionsService) UpdateExistingMarkets() error {
+	return s.UpdateAllMarketAndOutcomeNames()
+}
 type MarketDescriptionsService struct {
 	token          string
 	apiBaseURL     string
