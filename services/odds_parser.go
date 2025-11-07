@@ -106,14 +106,11 @@ func (p *OddsParser) storeMarket(tx *sql.Tx, eventID string, market MarketData, 
 	}
 	
 	// 2. 存储每个结果的赔率
-	for _, outcome := range market.Outcomes {
+		for _, outcome := range market.Outcomes {
 			if err := p.storeOdds(tx, marketPK, eventID, market.ID, market.Specifiers, outcome, timestamp); err != nil {
-				// 错误日志已简化
+				return fmt.Errorf("failed to store odds: %w", err)
 			}
-	}
-	
-	return nil
-}
+		}
 
 // storeOdds 存储赔率
 func (p *OddsParser) storeOdds(tx *sql.Tx, marketPK int, eventID string, marketID string, specifiers string, outcome OutcomeData, timestamp int64) error {
@@ -214,9 +211,9 @@ func (p *OddsParser) storeOdds(tx *sql.Tx, marketPK int, eventID string, marketI
 			timestamp,
 		)
 		
-			if err != nil {
-				// 错误日志已简化
-			}
+					if err != nil {
+						return fmt.Errorf("failed to insert odds history: %w", err)
+					}
 	} else if !oldOdds.Valid {
 		// 新赔率
 		historyQuery := `
@@ -224,7 +221,10 @@ func (p *OddsParser) storeOdds(tx *sql.Tx, marketPK int, eventID string, marketI
 			VALUES ($1, $2, $3, $4, $5, $6, 'new', $7)
 		`
 		
-		tx.Exec(historyQuery, marketPK, eventID, outcome.ID, outcomeName, outcome.Odds, probability, timestamp)
+				_, err = tx.Exec(historyQuery, marketPK, eventID, outcome.ID, outcomeName, outcome.Odds, probability, timestamp)
+					if err != nil {
+						return fmt.Errorf("failed to insert new odds history: %w", err)
+					}
 	}
 	
 	return nil
