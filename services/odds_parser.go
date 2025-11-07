@@ -126,7 +126,10 @@ func (p *OddsParser) storeOdds(
 	// 查询旧赔率
 	var oldOdds sql.NullFloat64
 	oldOddsQuery := `SELECT odds_value FROM odds WHERE market_id = $1 AND outcome_id = $2`
-	tx.QueryRow(oldOddsQuery, marketPK, outcome.ID).Scan(&oldOdds)
+	err := tx.QueryRow(oldOddsQuery, marketPK, outcome.ID).Scan(&oldOdds)
+if err != nil && err != sql.ErrNoRows {
+    return fmt.Errorf("failed to query old odds: %w", err)
+}
 	
 	// 计算隐含概率
 	probability := 0.0
@@ -137,7 +140,11 @@ func (p *OddsParser) storeOdds(
 	// 查询赛事信息以构建 ReplacementContext
 	var homeTeamName, awayTeamName sql.NullString
 	teamQuery := `SELECT home_team_name, away_team_name FROM markets WHERE id = $1`
-	tx.QueryRow(teamQuery, marketPK).Scan(&homeTeamName, &awayTeamName)
+	err = tx.QueryRow(teamQuery, marketPK).Scan(&homeTeamName, &awayTeamName)
+if err != nil && err != sql.ErrNoRows {
+    // 这里的 markets 表应该总是有数据，如果没数据说明 marketPK 是错的，应该返回错误
+    return fmt.Errorf("failed to query market info for ReplacementContext: %w", err)
+}
 	
 	// 使用 MarketDescriptionsService 获取 outcome 名称
 	outcomeName := p.getOutcomeName(outcome.ID) // fallback
@@ -156,30 +163,13 @@ func (p *OddsParser) storeOdds(
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
 		ON CONFLICT (market_id, outcome_id) DO UPDATE
 		SET 
-		    odds_value = CASE 
-		        WHEN EXCLUDED.timestamp > odds.timestamp THEN EXCLUDED.odds_value
-		        ELSE odds.odds_value
-		    END,
-		    outcome_name = CASE 
-		        WHEN EXCLUDED.timestamp > odds.timestamp THEN EXCLUDED.outcome_name
-		        ELSE odds.outcome_name
-		    END,
-		    probability = CASE 
-		        WHEN EXCLUDED.timestamp > odds.timestamp THEN EXCLUDED.probability
-		        ELSE odds.probability
-		    END,
-		    active = CASE 
-		        WHEN EXCLUDED.timestamp > odds.timestamp THEN EXCLUDED.active
-		        ELSE odds.active
-		    END,
-		    timestamp = CASE 
-		        WHEN EXCLUDED.timestamp > odds.timestamp THEN EXCLUDED.timestamp
-		        ELSE odds.timestamp
-		    END,
-		    updated_at = CASE 
-		        WHEN EXCLUDED.timestamp > odds.timestamp THEN NOW()
-		        ELSE odds.updated_at
-		    END
+			    odds_value = EXCLUDED.odds_value,
+			    outcome_name = EXCLUDED.outcome_name,
+			    probability = EXCLUDED.probability,
+			    active = EXCLUDED.active,
+			    timestamp = EXCLUDED.timestamp,
+			    updated_at = NOW()
+			WHERE EXCLUDED.timestamp > odds.timestamp
 	`
 	
 	_, err := tx.Exec(oddsQuery,
