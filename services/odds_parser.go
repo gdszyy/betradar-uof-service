@@ -108,10 +108,12 @@ func (p *OddsParser) storeMarket(tx *sql.Tx, eventID string, market MarketData, 
 	
 	// 2. 存储每个结果的赔率
 		for _, outcome := range market.Outcomes {
-			if err := p.storeOdds(tx, marketPK, eventID, market.ID, market.Specifiers, outcome, timestamp); err != nil {
-				return fmt.Errorf("failed to store odds: %w", err)
+if err := p.storeOdds(tx, marketPK, eventID, market.ID, market.Specifiers, outcome, timestamp); err != nil {
+					return fmt.Errorf("failed to store odds: %w", err)
+				}
 			}
-		}
+	return nil
+}
 
 // storeOdds stores the odds
 func (p *OddsParser) storeOdds(
