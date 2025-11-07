@@ -121,7 +121,7 @@ func (p *OddsParser) storeOdds(
 	marketID string, 
 	specifiers string, 
 	outcome OutcomeData, 
-	timestamp int64,
+	timestamp int64
 ) error {
 	// 查询旧赔率
 	var oldOdds sql.NullFloat64
