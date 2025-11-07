@@ -143,11 +143,11 @@ func (p *FixtureParser) storeFixtureData(
 			srn_id = COALESCE(NULLIF(EXCLUDED.srn_id, ''), tracked_events.srn_id),
 			sport_id = COALESCE(NULLIF(EXCLUDED.sport_id, ''), tracked_events.sport_id),
 			schedule_time = COALESCE(EXCLUDED.schedule_time, tracked_events.schedule_time),
-			home_team_id = COALESCE(NULLIF(EXCLUDED.home_team_id, ''), tracked_events.home_team_id),
-			home_team_name = COALESCE(NULLIF(EXCLUDED.home_team_name, ''), tracked_events.home_team_name),
-			away_team_id = COALESCE(NULLIF(EXCLUDED.away_team_id, ''), tracked_events.away_team_id),
-			away_team_name = COALESCE(NULLIF(EXCLUDED.away_team_name, ''), tracked_events.away_team_name),
-			match_status = COALESCE(NULLIF(EXCLUDED.match_status, ''), tracked_events.match_status),
+			home_team_id = CASE WHEN EXCLUDED.home_team_id = '' THEN tracked_events.home_team_id ELSE EXCLUDED.home_team_id END,
+			home_team_name = CASE WHEN EXCLUDED.home_team_name = '' THEN tracked_events.home_team_name ELSE EXCLUDED.home_team_name END,
+			away_team_id = CASE WHEN EXCLUDED.away_team_id = '' THEN tracked_events.away_team_id ELSE EXCLUDED.away_team_id END,
+			away_team_name = CASE WHEN EXCLUDED.away_team_name = '' THEN tracked_events.away_team_name ELSE EXCLUDED.away_team_name END,
+			match_status = CASE WHEN EXCLUDED.match_status = '' THEN tracked_events.match_status ELSE EXCLUDED.match_status END,
 			updated_at = EXCLUDED.updated_at
 	`
 
