@@ -174,7 +174,7 @@ if err != nil && err != sql.ErrNoRows {
 			WHERE EXCLUDED.timestamp > odds.timestamp
 	`
 	
-	_, err := tx.Exec(oddsQuery,
+	_, err = tx.Exec(oddsQuery,
 		marketPK,
 		eventID,
 		outcome.ID,  // 使用完整的 URN
@@ -416,7 +416,7 @@ func (p *OddsParser) GetEventMarkets(eventID string) ([]OddsMarketInfo, error) {
 		
 		err := rows.Scan(
 			&market.ID,
-			&market.SrMarketID,
+			&market.MarketID,
 			&market.MarketType,
 			&marketName,
 			&specifiers,
