@@ -26,3 +26,18 @@ func ExtractMarketIDFromURN(urn string) (int64, error) {
 	}
 	return strconv.ParseInt(parts[2], 10, 64)
 }
+
+// CleanSQLQuery 清理 SQL 语句中的换行符和多余空格，使其成为单行
+func CleanSQLQuery(query string) string {
+	// 替换所有换行符和制表符为空格
+	query = strings.ReplaceAll(query, "\n", " ")
+	query = strings.ReplaceAll(query, "\t", " ")
+
+	// 替换多个连续空格为一个空格
+	for strings.Contains(query, "  ") {
+		query = strings.ReplaceAll(query, "  ", " ")
+	}
+
+	// 去除首尾空格
+	return strings.TrimSpace(query)
+}

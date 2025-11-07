@@ -231,25 +231,7 @@ func (p *OddsChangeParser) storeOddsChangeData(
 	}
 	
 	// 更新 tracked_events 表 (不再使用 ld_matches)
-	query := `
-INSERT INTO tracked_events (
-				event_id, home_score, away_score, match_time, status,
-			home_team_id, away_team_id, home_team_name, away_team_name,
-			last_message_at, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-		ON CONFLICT (event_id) DO UPDATE SET
-			home_score = EXCLUDED.home_score,
-			away_score = EXCLUDED.away_score,
-			
-			match_time = CASE WHEN EXCLUDED.match_time = '' THEN tracked_events.match_time ELSE EXCLUDED.match_time END,
-			status = CASE WHEN EXCLUDED.status = '' THEN tracked_events.status ELSE EXCLUDED.status END,
-			home_team_id = CASE WHEN EXCLUDED.home_team_id = '' THEN tracked_events.home_team_id ELSE EXCLUDED.home_team_id END,
-			away_team_id = CASE WHEN EXCLUDED.away_team_id = '' THEN tracked_events.away_team_id ELSE EXCLUDED.away_team_id END,
-			home_team_name = CASE WHEN EXCLUDED.home_team_name = '' THEN tracked_events.home_team_name ELSE EXCLUDED.home_team_name END,
-			away_team_name = CASE WHEN EXCLUDED.away_team_name = '' THEN tracked_events.away_team_name ELSE EXCLUDED.away_team_name END,
-			last_message_at = EXCLUDED.last_message_at,
-			updated_at = EXCLUDED.updated_at
-	`
+query := `INSERT INTO tracked_events (event_id, home_score, away_score, match_time, status, home_team_id, away_team_id, home_team_name, away_team_name, last_message_at, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ON CONFLICT (event_id) DO UPDATE SET home_score = EXCLUDED.home_score, away_score = EXCLUDED.away_score, match_time = CASE WHEN EXCLUDED.match_time = '' THEN tracked_events.match_time ELSE EXCLUDED.match_time END, status = CASE WHEN EXCLUDED.status = '' THEN tracked_events.status ELSE EXCLUDED.status END, home_team_id = CASE WHEN EXCLUDED.home_team_id = '' THEN tracked_events.home_team_id ELSE EXCLUDED.home_team_id END, away_team_id = CASE WHEN EXCLUDED.away_team_id = '' THEN tracked_events.away_team_id ELSE EXCLUDED.away_team_id END, home_team_name = CASE WHEN EXCLUDED.home_team_name = '' THEN tracked_events.home_team_name ELSE EXCLUDED.home_team_name END, away_team_name = CASE WHEN EXCLUDED.away_team_name = '' THEN tracked_events.away_team_name ELSE EXCLUDED.away_team_name END, last_message_at = EXCLUDED.last_message_at, updated_at = EXCLUDED.updated_at`
 
 	now := time.Now()
 	var t1Score, t2Score int
@@ -266,8 +248,7 @@ INSERT INTO tracked_events (
 		finalStatus = status
 	}
 
-		p.logger.Printf("[DEBUG] SQL Query: %s", query)
-p.logger.Printf("[DEBUG] SQL Args: event_id=%v, home_score=%v, away_score=%v, match_status=%v, match_time=%v, status=%v", eventID, t1Score, t2Score, finalStatus, matchTime, statusName)
+p.logger.Printf("[DEBUG] SQL Query: %s, Args: event_id=%v, home_score=%v, away_score=%v, match_status=%v, match_time=%v, status=%v", CleanSQLQuery(query), eventID, t1Score, t2Score, finalStatus, matchTime, statusName)
 		
 		_, err := p.db.Exec(
 			query,
