@@ -22,12 +22,6 @@ type ReplacementContext struct {
 }
 
 // MarketDescriptionsService 市场描述服务
-
-
-
-
-
-
 type MarketDescriptionsService struct {
 	token          string
 	apiBaseURL     string
@@ -531,19 +525,6 @@ func (s *MarketDescriptionsService) GetOutcomeName(marketID string, outcomeID st
 		}
 	}
 	
-	// 检查是否是球员 ID (sr:player:xxxxx)
-	if strings.HasPrefix(outcomeID, "sr:player:") {
-		if s.playersService != nil {
-			playerName := s.playersService.GetPlayerName(outcomeID)
-			if playerName != "" && !strings.HasPrefix(playerName, "Player ") {
-				return playerName
-			}
-		}
-		// 如果 PlayersService 不可用或找不到,返回格式化的 ID
-		logger.Printf("[MarketDescService] ⚠️  Player name not found: outcomeID=%s", outcomeID)
-		return fmt.Sprintf("Player %s", strings.TrimPrefix(outcomeID, "sr:player:"))
-	}
-	
 	// 最终降级
 	logger.Printf("[MarketDescService] ⚠️  Outcome name not found: marketID=%s, outcomeID=%s, specifiers=%s", marketID, outcomeID, specifiers)
 	return outcomeID
@@ -776,7 +757,128 @@ func (s *MarketDescriptionsService) countMappings() int {
 	return count
 }
 
+// ForceRefresh 强制刷新市场描述 (从 API 重新加载)
+func (s *MarketDescriptionsService) ForceRefresh() error {
+	logger.Println("[MarketDescriptions] Force refresh requested")
+	
+	// 从 API 重新加载
+	if err := s.loadMarketDescriptions(); err != nil {
+		return fmt.Errorf("failed to load market descriptions: %w", err)
+	}
+	
+	// 保存到数据库
+	if s.db != nil {
+		if err := s.saveToDatabase(); err != nil {
+			logger.Printf("[MarketDescriptions] ⚠️  Failed to save to database: %v", err)
+			// 不返回错误,因为内存中已经更新成功
+		}
+	}
+	
+	logger.Println("[MarketDescriptions] ✅ Force refresh completed")
+	return nil
+}
 
-
-
+// UpdateExistingMarkets 批量更新存量数据中的市场和结果名称
+func (s *MarketDescriptionsService) UpdateExistingMarkets() (int, int, error) {
+	if s.db == nil {
+		return 0, 0, fmt.Errorf("database not available")
+	}
+	
+	logger.Println("[MarketDescriptions] Starting bulk update of existing markets and outcomes")
+	
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+	
+	// 更新 markets 表
+	marketRows, err := tx.Query(`
+		SELECT m.id, m.sr_market_id, m.specifiers, 
+		       COALESCE(m.home_team_name, ''), COALESCE(m.away_team_name, '')
+		FROM markets m
+		WHERE m.market_name IS NULL OR m.market_name = '' OR m.market_name = 'Unknown Market'
+		LIMIT 10000
+	`)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to query markets: %w", err)
+	}
+	defer marketRows.Close()
+	
+	marketStmt, err := tx.Prepare("UPDATE markets SET market_name = $1 WHERE id = $2")
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to prepare market update: %w", err)
+	}
+	defer marketStmt.Close()
+	
+	marketCount := 0
+	for marketRows.Next() {
+		var id int
+		var srMarketID, specifiers, homeTeam, awayTeam string
+		if err := marketRows.Scan(&id, &srMarketID, &specifiers, &homeTeam, &awayTeam); err != nil {
+			logger.Printf("[MarketDescriptions] Failed to scan market row: %v", err)
+			continue
+		}
+		
+		ctx := &ReplacementContext{
+			HomeTeamName: homeTeam,
+			AwayTeamName: awayTeam,
+			Specifiers:   specifiers,
+		}
+		marketName := s.GetMarketName(srMarketID, specifiers, ctx)
+		
+		if _, err := marketStmt.Exec(marketName, id); err != nil {
+			logger.Printf("[MarketDescriptions] Failed to update market %d: %v", id, err)
+			continue
+		}
+		marketCount++
+	}
+	
+	// 更新 outcomes 表 (如果存在)
+	outcomeCount := 0
+	outcomeRows, err := tx.Query(`
+		SELECT o.id, m.sr_market_id, o.outcome_id, m.specifiers
+		FROM odds o
+		JOIN markets m ON o.market_id = m.id
+		WHERE o.outcome_name IS NULL OR o.outcome_name = '' OR o.outcome_name = 'Unknown Outcome'
+		LIMIT 50000
+	`)
+	if err != nil {
+		// outcomes 表可能不存在或结构不同,不返回错误
+		logger.Printf("[MarketDescriptions] ⚠️  Failed to query outcomes (may not exist): %v", err)
+	} else {
+		defer outcomeRows.Close()
+		
+		outcomeStmt, err := tx.Prepare("UPDATE odds SET outcome_name = $1 WHERE id = $2")
+		if err != nil {
+			logger.Printf("[MarketDescriptions] ⚠️  Failed to prepare outcome update: %v", err)
+		} else {
+			defer outcomeStmt.Close()
+			
+			for outcomeRows.Next() {
+				var id int
+				var srMarketID, outcomeID, specifiers string
+				if err := outcomeRows.Scan(&id, &srMarketID, &outcomeID, &specifiers); err != nil {
+					logger.Printf("[MarketDescriptions] Failed to scan outcome row: %v", err)
+					continue
+				}
+				
+				outcomeName := s.GetOutcomeName(srMarketID, outcomeID, specifiers, nil)
+				
+				if _, err := outcomeStmt.Exec(outcomeName, id); err != nil {
+					logger.Printf("[MarketDescriptions] Failed to update outcome %d: %v", id, err)
+					continue
+				}
+				outcomeCount++
+			}
+		}
+	}
+	
+	if err := tx.Commit(); err != nil {
+		return 0, 0, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	
+	logger.Printf("[MarketDescriptions] ✅ Bulk update completed: %d markets, %d outcomes", marketCount, outcomeCount)
+	return marketCount, outcomeCount, nil
+}
 
