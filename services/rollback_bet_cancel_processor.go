@@ -77,21 +77,23 @@ func (p *RollbackBetCancelProcessor) ProcessRollbackBetCancel(xmlContent string)
 				event_id, producer_id, product_id, timestamp,
 				sr_market_id, specifiers, market_count,
 				xml_content
-			) VALUES ($1, $2, $3, $4, $5, $6, 0, '')
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			ON CONFLICT (event_id, sr_market_id, specifiers, producer_id, product_id) 
 			DO UPDATE SET
 				timestamp = EXCLUDED.timestamp,
 				updated_at = NOW()
 		`
 		_, err = tx.Exec(
-				insertQuery,
-				rollback.EventID,
-				rollback.ProductID,
-				rollback.ProductID, // product_id
-				rollback.Timestamp,
-				market.ID,
-				market.Specifiers,
-			)
+			insertQuery,
+			rollback.EventID,
+			rollback.ProductID,
+			rollback.ProductID,
+			rollback.Timestamp,
+			market.ID,
+			market.Specifiers,
+			0,
+			"",
+		)
 		if err != nil {
 			return fmt.Errorf("failed to insert rollback_bet_cancel: %w", err)
 		}

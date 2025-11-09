@@ -88,28 +88,31 @@ func (p *BetSettlementParser) ParseAndStore(xmlContent string) error {
 			query := `
 				INSERT INTO bet_settlements (
 					event_id, producer_id, product_id, timestamp, certainty,
-							sr_market_id, specifiers, void_factor, dead_heat_factor,
-								outcome_id, result, created_at
-							) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-					ON CONFLICT (event_id, sr_market_id, specifiers, outcome_id, producer_id) 
-					DO UPDATE SET
-						certainty = EXCLUDED.certainty,
-						void_factor = EXCLUDED.void_factor,
-						dead_heat_factor = EXCLUDED.dead_heat_factor,
-						result = EXCLUDED.result,
-						timestamp = EXCLUDED.timestamp,
-						created_at = NOW() err := tx.Exec(
+					sr_market_id, specifiers, void_factor, dead_heat_factor,
+					outcome_id, result
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+				ON CONFLICT (event_id, sr_market_id, specifiers, outcome_id, producer_id) 
+				DO UPDATE SET
+					certainty = EXCLUDED.certainty,
+					void_factor = EXCLUDED.void_factor,
+					dead_heat_factor = EXCLUDED.dead_heat_factor,
+					result = EXCLUDED.result,
+					timestamp = EXCLUDED.timestamp,
+					updated_at = NOW()
+			`
+			_, err := tx.Exec(
 				query,
 				settlement.EventID,
-settlement.ProductID,
-					settlement.Timestamp,
-						settlement.Certainty,
-							marketID,
-						market.Specifiers,
-					finalVoidFactor,
-					outcome.DeadHeatFactor,
-					outcome.ID,
-					outcome.Result,
+				settlement.ProductID,
+				settlement.ProductID,
+				settlement.Timestamp,
+				settlement.Certainty,
+				marketID,
+				market.Specifiers,
+				finalVoidFactor,
+				outcome.DeadHeatFactor,
+				outcome.ID,
+				outcome.Result,
 			)
 				if err != nil {
 					p.logger.Printf("Error: failed to insert bet_settlement: %v", err)
