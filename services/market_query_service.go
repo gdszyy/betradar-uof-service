@@ -95,4 +95,3 @@ func (s *MarketQueryService) GetEventMarkets(eventID string) ([]MarketInfo, erro
 
 	return markets, nil
 }
-

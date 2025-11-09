@@ -16,7 +16,7 @@ type DataCleanupService struct {
 type CleanupConfig struct {
 	RetainDaysMessages  int // uof_messages 保留天数
 	RetainDaysOdds      int // odds_changes, markets, odds 保留天数
-	RetainDaysBets      int // bet_stops, bet_settlements 保留天数
+	RetainDaysBets      int // bet_stops, bet_settlements, bet_cancels 保留天数
 	RetainDaysLiveData  int // ld_events, ld_lineups 保留天数
 	RetainDaysEvents    int // tracked_events, ld_matches 保留天数
 }
@@ -43,6 +43,7 @@ func NewDataCleanupService(db *sql.DB, config CleanupConfig) *DataCleanupService
 // - odds_changes: 保留 7 天（赔率变化记录）
 // - bet_stops: 保留 7 天
 // - bet_settlements: 保留 7 天
+// - bet_cancels: 保留 7 天
 // - odds_history: 保留 7 天
 // - tracked_events: 保留 30 天（赛事信息，需要更长时间）
 // - markets: 保留 7 天（盘口数据）
@@ -59,6 +60,7 @@ func (s *DataCleanupService) ExecuteCleanup() ([]CleanupResult, error) {
 		"odds_changes":    s.config.RetainDaysOdds,      // 赔率变化
 		"bet_stops":       s.config.RetainDaysBets,      // 投注停止
 		"bet_settlements": s.config.RetainDaysBets,      // 投注结算
+		"bet_cancels":     s.config.RetainDaysBets,      // 投注取消
 		"odds_history":    s.config.RetainDaysOdds,      // 赔率历史
 		"markets":         s.config.RetainDaysOdds,      // 盘口数据
 		"odds":            s.config.RetainDaysOdds,      // 赔率详情
@@ -123,12 +125,13 @@ func (s *DataCleanupService) getTimeField(tableName string) string {
 		"odds_changes":    "created_at",
 		"bet_stops":       "created_at",
 		"bet_settlements": "created_at",
+		"bet_cancels":     "created_at",
 		"odds_history":    "created_at",
 		"markets":         "updated_at",
 		"odds":            "updated_at",
 		"ld_events":       "created_at",
 		"ld_lineups":      "created_at",
-		"tracked_events":  "created_at",
+		"tracked_events":  "schedule_time", // 修正：使用 schedule_time 而不是 created_at
 		"ld_matches":      "created_at",
 	}
 
@@ -168,7 +171,7 @@ func (s *DataCleanupService) GetTableSizes() (map[string]int64, error) {
 // GetTableRowCounts 获取所有表的行数
 func (s *DataCleanupService) GetTableRowCounts() (map[string]int64, error) {
 	tables := []string{
-		"uof_messages", "odds_changes", "bet_stops", "bet_settlements",
+		"uof_messages", "odds_changes", "bet_stops", "bet_settlements", "bet_cancels",
 		"odds_history", "markets", "odds", "ld_events", "ld_lineups",
 		"tracked_events", "ld_matches",
 	}
@@ -192,7 +195,6 @@ func (s *DataCleanupService) GetTableRowCounts() (map[string]int64, error) {
 // 1. 导出即将删除的数据到 CSV/JSON 文件
 // 2. 压缩文件（gzip）
 // 3. 上传到 S3/OSS（可选）
-// 4. 记录归档日志
 //
 // 示例实现：
 // func (s *DataCleanupService) ArchiveToFile(tableName string, cutoffTime time.Time) error {
@@ -242,7 +244,7 @@ func (s *DataCleanupService) GetTableRowCounts() (map[string]int64, error) {
 //     // 1. 查找需要删除的赛事 ID
 //     query := `
 //         SELECT event_id FROM tracked_events
-//         WHERE status = 'ended' AND updated_at < $1
+//         WHERE match_status = 'ended' AND updated_at < $1
 //     `
 //     rows, err := s.db.Query(query, cutoffTime)
 //     if err != nil {
@@ -273,4 +275,3 @@ func (s *DataCleanupService) GetTableRowCounts() (map[string]int64, error) {
 //
 //     return nil
 // }
-

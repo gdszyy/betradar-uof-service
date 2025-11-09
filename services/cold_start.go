@@ -239,22 +239,24 @@ func (c *ColdStart) deduplicate(matches []MatchInfo) []MatchInfo {
 // storeMatches 存储比赛
 func (c *ColdStart) storeMatches(matches []MatchInfo) int {
 	failed := 0
-query := `INSERT INTO tracked_events (event_id, sport_id, schedule_time, home_team_id, home_team_name, away_team_id, away_team_name, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled', $8, $9) ON CONFLICT (event_id) DO UPDATE SET sport_id = CASE WHEN EXCLUDED.sport_id = '' THEN tracked_events.sport_id ELSE EXCLUDED.sport_id END, schedule_time = EXCLUDED.schedule_time, home_team_id = CASE WHEN EXCLUDED.home_team_id = '' THEN tracked_events.home_team_id ELSE EXCLUDED.home_team_id END, home_team_name = CASE WHEN EXCLUDED.home_team_name = '' THEN tracked_events.home_team_name ELSE EXCLUDED.home_team_name END, away_team_id = CASE WHEN EXCLUDED.away_team_id = '' THEN tracked_events.away_team_id ELSE EXCLUDED.away_team_id END, away_team_name = CASE WHEN EXCLUDED.away_team_name = '' THEN tracked_events.away_team_name ELSE EXCLUDED.away_team_name END, updated_at = EXCLUDED.updated_at`
+	// 原始 SQL: INSERT INTO tracked_events (event_id, sport_id, schedule_time, home_team_id, home_team_name, away_team_id, away_team_name, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled', $8, $9) ON CONFLICT (event_id) DO UPDATE SET sport_id = CASE WHEN EXCLUDED.sport_id = '' THEN tracked_events.sport_id ELSE EXCLUDED.sport_id END, schedule_time = EXCLUDED.schedule_time, home_team_id = CASE WHEN EXCLUDED.home_team_id = '' THEN tracked_events.home_team_id ELSE EXCLUDED.home_team_id END, home_team_name = CASE WHEN EXCLUDED.home_team_name = '' THEN tracked_events.home_team_name ELSE EXCLUDED.home_team_name END, away_team_id = CASE WHEN EXCLUDED.away_team_id = '' THEN tracked_events.away_team_id ELSE EXCLUDED.away_team_id END, away_team_name = CASE WHEN EXCLUDED.away_team_name = '' THEN tracked_events.away_team_name ELSE EXCLUDED.away_team_name END, updated_at = EXCLUDED.updated_at
+	// 重构后的 SQL: 无需修改，表名和字段名均符合新规范 (tracked_events, schedule_time)
+	query := `INSERT INTO tracked_events (event_id, sport_id, schedule_time, home_team_id, home_team_name, away_team_id, away_team_name, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled', $8, $9) ON CONFLICT (event_id) DO UPDATE SET sport_id = CASE WHEN EXCLUDED.sport_id = '' THEN tracked_events.sport_id ELSE EXCLUDED.sport_id END, schedule_time = EXCLUDED.schedule_time, home_team_id = CASE WHEN EXCLUDED.home_team_id = '' THEN tracked_events.home_team_id ELSE EXCLUDED.home_team_id END, home_team_name = CASE WHEN EXCLUDED.home_team_name = '' THEN tracked_events.home_team_name ELSE EXCLUDED.home_team_name END, away_team_id = CASE WHEN EXCLUDED.away_team_id = '' THEN tracked_events.away_team_id ELSE EXCLUDED.away_team_id END, away_team_name = CASE WHEN EXCLUDED.away_team_name = '' THEN tracked_events.away_team_name ELSE EXCLUDED.away_team_name END, updated_at = EXCLUDED.updated_at`
 	
 	stored := 0
 	for _, match := range matches {
-c.logger.Printf("[DEBUG] SQL Query: %s, Args: event_id=%v, sport_id=%v, schedule_time=%v, home_team_id=%v, home_team_name=%v, away_team_id=%v, away_team_name=%v", CleanSQLQuery(query), match.EventID, match.SportID, match.ScheduleTime, match.HomeTeamID, match.HomeTeamName, match.AwayTeamID, match.AwayTeamName)
-			_, err := c.db.Exec(query,
-				match.EventID,
-				match.SportID,
-				match.ScheduleTime,
-				match.HomeTeamID,
-				match.HomeTeamName,
-				match.AwayTeamID,
-				match.AwayTeamName,
-				time.Now(),
-				time.Now(),
-			)
+		// 确保 CleanSQLQuery(query) 存在
+		_, err := c.db.Exec(query,
+			match.EventID,
+			match.SportID,
+			match.ScheduleTime,
+			match.HomeTeamID,
+			match.HomeTeamName,
+			match.AwayTeamID,
+			match.AwayTeamName,
+			time.Now(),
+			time.Now(),
+		)
 		
 		if err != nil {
 			c.logger.Printf("⚠️  Failed to store %s: %v", match.EventID, err)
@@ -421,4 +423,3 @@ func (c *ColdStart) sendNotification(total, stored int, report ValidationReport,
 		c.logger.Printf("⚠️  Failed to send notification: %v", err)
 	}
 }
-

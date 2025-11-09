@@ -51,7 +51,7 @@ func (p *OddsParser) ParseAndStoreOdds(xmlData []byte, productID int) error {
 		return fmt.Errorf("failed to parse odds_change XML: %w", err)
 	}
 	
-		// 日志已移至 odds_change_parser.go
+	// 日志已移至 odds_change_parser.go
 	
 	// 开始事务
 	tx, err := p.db.Begin()
@@ -127,8 +127,8 @@ func (p *OddsParser) storeOdds(
 ) error {
 	// 查询旧赔率
 	var oldOdds sql.NullFloat64
-	oldOddsQuery := `SELECT odds_value FROM odds WHERE market_id = $1 AND outcome_id = $2`
-	err := tx.QueryRow(oldOddsQuery, marketPK, outcome.ID).Scan(&oldOdds)
+	oldOddsQuery := `SELECT odds_value FROM odds WHERE market_id = $1 AND outcome_id = $2 AND event_id = $3`
+	err := tx.QueryRow(oldOddsQuery, marketPK, outcome.ID, eventID).Scan(&oldOdds)
 if err != nil && err != sql.ErrNoRows {
     return fmt.Errorf("failed to query old odds: %w", err)
 }
@@ -141,8 +141,8 @@ if err != nil && err != sql.ErrNoRows {
 	
 	// 查询赛事信息以构建 ReplacementContext
 	var homeTeamName, awayTeamName sql.NullString
-	teamQuery := `SELECT home_team_name, away_team_name FROM markets WHERE id = $1`
-	err = tx.QueryRow(teamQuery, marketPK).Scan(&homeTeamName, &awayTeamName)
+	teamQuery := `SELECT home_team_name, away_team_name FROM tracked_events WHERE event_id = $1`
+	err = tx.QueryRow(teamQuery, eventID).Scan(&homeTeamName, &awayTeamName)
 if err != nil && err != sql.ErrNoRows {
     // 这里的 markets 表应该总是有数据，如果没数据说明 marketPK 是错的，应该返回错误
     return fmt.Errorf("failed to query market info for ReplacementContext: %w", err)
@@ -481,7 +481,6 @@ func init() {
 	// 这个函数会在包初始化时执行
 	// 用于确保数据库表有正确的约束
 }
-
 
 
 // Forcing git to recognize changes

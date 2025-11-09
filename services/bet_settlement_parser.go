@@ -87,33 +87,29 @@ func (p *BetSettlementParser) ParseAndStore(xmlContent string) error {
 			// 存储到数据库
 			query := `
 				INSERT INTO bet_settlements (
-					event_id, producer_id, timestamp, certainty,
-						sr_market_id, specifiers, void_factor,
-							outcome_id, result, dead_heat_factor,
-							created_at
-						) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-				ON CONFLICT (event_id, sr_market_id, specifiers, outcome_id, producer_id) 
-				DO UPDATE SET
-					certainty = EXCLUDED.certainty,
-					void_factor = EXCLUDED.void_factor,
-					result = EXCLUDED.result,
-					dead_heat_factor = EXCLUDED.dead_heat_factor,
-					timestamp = EXCLUDED.timestamp,
-					created_at = NOW()
-			`
-
-			_, err := tx.Exec(
+					event_id, producer_id, product_id, timestamp, certainty,
+							sr_market_id, specifiers, void_factor, dead_heat_factor,
+								outcome_id, result, created_at
+							) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+					ON CONFLICT (event_id, sr_market_id, specifiers, outcome_id, producer_id) 
+					DO UPDATE SET
+						certainty = EXCLUDED.certainty,
+						void_factor = EXCLUDED.void_factor,
+						dead_heat_factor = EXCLUDED.dead_heat_factor,
+						result = EXCLUDED.result,
+						timestamp = EXCLUDED.timestamp,
+						created_at = NOW() err := tx.Exec(
 				query,
 				settlement.EventID,
-				settlement.ProductID,
-				settlement.Timestamp,
-					settlement.Certainty,
-						marketID,
-					market.Specifiers,
-				finalVoidFactor,
-				outcome.ID,
-				outcome.Result,
-				outcome.DeadHeatFactor,
+settlement.ProductID,
+					settlement.Timestamp,
+						settlement.Certainty,
+							marketID,
+						market.Specifiers,
+					finalVoidFactor,
+					outcome.DeadHeatFactor,
+					outcome.ID,
+					outcome.Result,
 			)
 				if err != nil {
 					p.logger.Printf("Error: failed to insert bet_settlement: %v", err)
@@ -123,9 +119,9 @@ func (p *BetSettlementParser) ParseAndStore(xmlContent string) error {
 
 		// 更新当前 market 的 status 为 -3 (Settled)
 		updateQuery := `
-				UPDATE markets 
-				SET status = -3, updated_at = NOW()
-					WHERE event_id = $1 AND sr_market_id = $2 AND specifiers = $3
+UPDATE markets 
+					SET status = -3, updated_at = NOW()
+						WHERE event_id = $1 AND sr_market_id = $2 AND specifiers = $3
 			`
 			_, err = tx.Exec(updateQuery, settlement.EventID, marketID, market.Specifiers)
 			if err != nil {

@@ -181,7 +181,7 @@ func (p *FixtureParser) ParseFixtureChange(eventID string, xmlContent string) er
 		// 如果 API 调用失败,回退到只更新 start_time
 		if fixtureChange.StartTime > 0 {
 			scheduleTime := time.UnixMilli(fixtureChange.StartTime)
-			query := `UPDATE tracked_events SET schedule_time = $1, updated_at = $2 WHERE event_id = $3`
+			query := `UPDATE tracked_events SET schedule_time = $1, updated_at = $2 WHERE event_id = $3`}],path:
 			if _, err := p.db.Exec(query, scheduleTime, time.Now(), eventID); err != nil {
 				return fmt.Errorf("failed to update schedule_time: %w", err)
 			}

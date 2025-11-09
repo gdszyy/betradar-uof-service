@@ -393,4 +393,3 @@ func (s *StaticDataService) fetchAPI(url string) ([]byte, error) {
 
 	return body, nil
 }
-

@@ -41,24 +41,28 @@ func (s *MessageStore) SaveOddsChange(eventID string, productID int, timestamp i
 }
 
 // SaveBetStop 保存投注停止
+// NOTE: SQL query updated to include new fields: groups, reason.
+// Since the Go function signature is not updated, we use placeholder values ("", "") for the new fields.
 func (s *MessageStore) SaveBetStop(eventID string, productID int, timestamp int64, xmlContent string) error {
 	query := `
-		INSERT INTO bet_stops (event_id, product_id, timestamp, xml_content)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO bet_stops (event_id, product_id, timestamp, xml_content, groups, reason)
+		VALUES ($1, $2, $3, $4, $5, $6)
 	`
 
-	_, err := s.db.Exec(query, eventID, productID, timestamp, xmlContent)
+	_, err := s.db.Exec(query, eventID, productID, timestamp, xmlContent, "", "") // Added placeholders for new fields
 	return err
 }
 
 // SaveBetSettlement 保存投注结算
+// NOTE: SQL query updated to include new fields: producer_id, sr_market_id, specifiers, outcome_id.
+// Since the Go function signature is not updated, we use placeholder values (0, "", "", "") for the new fields.
 func (s *MessageStore) SaveBetSettlement(eventID string, productID int, timestamp int64, xmlContent string) error {
 	query := `
-		INSERT INTO bet_settlements (event_id, product_id, timestamp, xml_content)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO bet_settlements (event_id, product_id, timestamp, xml_content, producer_id, sr_market_id, specifiers, outcome_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 
-	_, err := s.db.Exec(query, eventID, productID, timestamp, xmlContent)
+	_, err := s.db.Exec(query, eventID, productID, timestamp, xmlContent, 0, "", "", "") // Added placeholders for new fields
 	return err
 }
 
@@ -96,10 +100,12 @@ func (s *MessageStore) UpdateTrackedEvent(eventID string) error {
 }
 
 // UpdateEventTeamInfo 更新赛事的队伍信息、运动类型和状态
+// NOTE: SQL query updated to use 'schedule_time' instead of 'scheduled_time' (implicitly by adding it to the tracked_events table).
+// Since the Go function signature is not updated, we use NULL for schedule_time in INSERT and preserve existing value in UPDATE.
 func (s *MessageStore) UpdateEventTeamInfo(eventID, homeTeamID, homeTeamName, awayTeamID, awayTeamName, sportID, sportName, status string) error {
 	query := `
-		INSERT INTO tracked_events (event_id, home_team_id, home_team_name, away_team_id, away_team_name, sport_id, sport, status, message_count, last_message_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, NOW(), NOW())
+		INSERT INTO tracked_events (event_id, home_team_id, home_team_name, away_team_id, away_team_name, sport_id, sport, status, message_count, last_message_at, updated_at, schedule_time)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, NOW(), NOW(), NULL)
 		ON CONFLICT (event_id)
 		DO UPDATE SET
 			home_team_id = COALESCE(NULLIF($2, ''), tracked_events.home_team_id),
@@ -109,6 +115,7 @@ func (s *MessageStore) UpdateEventTeamInfo(eventID, homeTeamID, homeTeamName, aw
 			sport_id = COALESCE(NULLIF($6, ''), tracked_events.sport_id),
 			sport = COALESCE(NULLIF($7, ''), tracked_events.sport),
 			status = COALESCE(NULLIF($8, ''), tracked_events.status),
+			schedule_time = tracked_events.schedule_time,
 			updated_at = NOW()
 	`
 
@@ -395,4 +402,3 @@ func (s *MessageStore) SetEventSubscribed(eventID string, subscribed bool) error
 	_, err := s.db.Exec(query, eventID, subscribed, time.Now())
 	return err
 }
-

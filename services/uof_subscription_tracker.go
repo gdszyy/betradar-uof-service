@@ -40,14 +40,15 @@ func NewUOFSubscriptionTracker(db *sql.DB) *UOFSubscriptionTracker {
 func (t *UOFSubscriptionTracker) loadFromDatabase() {
 	// 查询最近 24 小时内有事件的比赛
 	query := `
-		SELECT DISTINCT event_id, 
-		       MIN(timestamp) as first_event,
-		       MAX(timestamp) as last_event,
-		       COUNT(*) as event_count
-		FROM tracked_events
-		WHERE timestamp > $1
-		GROUP BY event_id
-		ORDER BY last_event DESC
+			SELECT DISTINCT event_id, 
+			       MIN(last_message_at) as first_event,
+			       MAX(last_message_at) as last_event,
+			       COUNT(*) as event_count,
+			       match_status
+			FROM tracked_events
+			WHERE last_message_at > $1
+			GROUP BY event_id, match_status
+			ORDER BY last_event DESC
 	`
 	
 	since := time.Now().Add(-24 * time.Hour)
@@ -64,16 +65,17 @@ func (t *UOFSubscriptionTracker) loadFromDatabase() {
 		var firstEvent, lastEvent int64
 		var eventCount int
 		
-		if err := rows.Scan(&eventID, &firstEvent, &lastEvent, &eventCount); err != nil {
+			var matchStatus string
+			if err := rows.Scan(&eventID, &firstEvent, &lastEvent, &eventCount, &matchStatus); err != nil {
 			continue
 		}
 		
 		t.subscriptions[eventID] = &UOFSubscription{
-			EventID:     eventID,
-			BookedAt:    time.Unix(firstEvent, 0),
-			LastEventAt: time.Unix(lastEvent, 0),
-			EventCount:  eventCount,
-			MatchStatus: "unknown",
+				EventID:     eventID,
+				BookedAt:    time.Unix(firstEvent, 0),
+				LastEventAt: time.Unix(lastEvent, 0),
+				EventCount:  eventCount,
+				MatchStatus: matchStatus,
 		}
 		count++
 	}
