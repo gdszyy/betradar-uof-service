@@ -3,7 +3,30 @@ package services
 import (
 	"database/sql"
 	"time"
+	"uof-service/config"
+	"uof-service/web"
+	"github.com/streadway/amqp"
 )
+
+// AMQPConsumer AMQP 消费者
+type AMQPConsumer struct {
+	config       *config.Config
+	messageStore *MessageStore
+	wsHub        *web.Hub
+	conn         *amqp.Connection
+	channel      *amqp.Channel
+	done         chan bool
+}
+
+// NewAMQPConsumer 创建 AMQP 消费者
+func NewAMQPConsumer(cfg *config.Config, store *MessageStore, hub *web.Hub) *AMQPConsumer {
+	return &AMQPConsumer{
+		config:       cfg,
+		messageStore: store,
+		wsHub:        hub,
+		done:         make(chan bool),
+	}
+}
 
 type MessageStore struct {
 	db *sql.DB
