@@ -63,10 +63,11 @@ func (p *RollbackBetCancelProcessor) ProcessRollbackBetCancel(xmlContent string)
 
 		// 2. 恢复 market 的 status 为 1 (Active)
 		updateQuery := `
-				UPDATE markets 
-				SET status = 1, updated_at = NOW()
-				WHERE event_id = $1 AND sr_market_id = $2 AND specifiers = $3 AND producer_id = $4
-			_, err = tx.Exec(updateQuery, rollback.EventID, market.ID, market.Specifiers, rollback.ProductID)
+			UPDATE markets 
+			SET status = 1, updated_at = NOW()
+			WHERE event_id = $1 AND sr_market_id = $2 AND specifiers = $3 AND producer_id = $4
+		`
+		_, err = tx.Exec(updateQuery, rollback.EventID, market.ID, market.Specifiers, rollback.ProductID)
 		if err != nil {
 			p.logger.Printf("Warning: failed to restore market status to active: %v", err)
 		}
