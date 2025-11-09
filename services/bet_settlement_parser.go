@@ -119,10 +119,10 @@ settlement.ProductID,
 
 		// 更新当前 market 的 status 为 -3 (Settled)
 		updateQuery := `
-UPDATE markets 
-					SET status = -3, updated_at = NOW()
-						WHERE event_id = $1 AND sr_market_id = $2 AND specifiers = $3
-			`
+			UPDATE markets 
+			SET status = -3, updated_at = NOW()
+			WHERE event_id = $1 AND sr_market_id = $2 AND specifiers = $3
+		`
 			_, err = tx.Exec(updateQuery, settlement.EventID, marketID, market.Specifiers)
 			if err != nil {
 				p.logger.Printf("Warning: failed to update market status to settled: %v", err)

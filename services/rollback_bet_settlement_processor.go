@@ -80,18 +80,16 @@ func (p *RollbackBetSettlementProcessor) ProcessRollbackBetSettlement(xmlContent
 		}
 
 		// 3. 记录到 rollback_bet_settlements 表
-		// 原始查询: INSERT INTO rollback_bet_settlements (event_id, producer_id, timestamp, sr_market_id, specifiers, created_at) VALUES ($1, $2, $3, $4, $5, NOW()) ON CONFLICT (event_id, sr_market_id, specifiers, producer_id) DO UPDATE SET timestamp = EXCLUDED.timestamp, created_at = NOW()
-		// 修正: rollback_bet_settlements 表需要 product_id 字段
 		insertQuery := `
 			INSERT INTO rollback_bet_settlements (
 				event_id, producer_id, product_id, timestamp,
-				sr_market_id, specifiers,
-				created_at
-			) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+				sr_market_id, specifiers, market_count,
+				xml_content
+			) VALUES ($1, $2, $3, $4, $5, $6, 0, '')
 			ON CONFLICT (event_id, sr_market_id, specifiers, producer_id) 
 			DO UPDATE SET
 				timestamp = EXCLUDED.timestamp,
-				created_at = NOW()
+				updated_at = NOW()
 		`
 		// 原始参数: rollback.EventID, rollback.ProductID, rollback.Timestamp, market.ID, market.Specifiers
 		// 修正参数: rollback.EventID, rollback.ProductID, rollback.ProductID, rollback.Timestamp, market.ID, market.Specifiers

@@ -74,14 +74,14 @@ func (p *RollbackBetCancelProcessor) ProcessRollbackBetCancel(xmlContent string)
 		// 3. 记录到 rollback_bet_cancels 表
 		insertQuery := `
 			INSERT INTO rollback_bet_cancels (
-					event_id, producer_id, product_id, timestamp,
-					sr_market_id, specifiers,
-					created_at
-				) VALUES ($1, $2, $3, $4, $5, $6, NOW())
-				ON CONFLICT (event_id, sr_market_id, specifiers, producer_id, product_id) 
-				DO UPDATE SET
-					timestamp = EXCLUDED.timestamp,
-					created_at = NOW()
+				event_id, producer_id, product_id, timestamp,
+				sr_market_id, specifiers, market_count,
+				xml_content
+			) VALUES ($1, $2, $3, $4, $5, $6, 0, '')
+			ON CONFLICT (event_id, sr_market_id, specifiers, producer_id, product_id) 
+			DO UPDATE SET
+				timestamp = EXCLUDED.timestamp,
+				updated_at = NOW()
 		`
 		_, err = tx.Exec(
 				insertQuery,
