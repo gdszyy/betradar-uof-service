@@ -72,3 +72,5 @@ logger.Println("[API] Bulk update of existing markets/outcomes requested")
 	// "updated_outcomes": updatedOutcomes,
 	},
 	})
+
+}
