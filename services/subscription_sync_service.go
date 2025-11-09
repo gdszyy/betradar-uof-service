@@ -216,12 +216,12 @@ func (s *SubscriptionSyncService) updateSubscriptions(eventIDs []string) error {
 	// 批量更新订阅状态
 	for _, eventID := range eventIDs {
 		query := `
-			INSERT INTO tracked_events (event_id, subscribed, last_message_at)
+			INSERT INTO tracked_events (event_id, subscribed, updated_at)
 			VALUES ($1, true, $2)
 			ON CONFLICT (event_id)
 			DO UPDATE SET
-subscribed = true,
-					last_message_at = $2
+				subscribed = true,
+				updated_at = $2
 		`
 		
 		if _, err := tx.Exec(query, eventID, time.Now()); err != nil {

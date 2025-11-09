@@ -106,7 +106,7 @@ func (s *SubscriptionCleanupService) queryBookedMatches() ([]BookedMatch, error)
 	// 从数据库查询已订阅的比赛
 	// Betradar API 没有提供查询已订阅列表的端点
 	query := `
-		SELECT event_id, schedule_time, match_status
+		SELECT event_id, schedule_time, status
 		FROM tracked_events
 		WHERE subscribed = true
 		ORDER BY schedule_time DESC

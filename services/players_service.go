@@ -71,9 +71,9 @@ func (s *PlayersService) Start() error {
 // loadFromDatabase 从数据库加载球员数据
 func (s *PlayersService) loadFromDatabase() error {
 	rows, err := s.db.Query(`
-			SELECT player_id, player_name 
-			FROM players 
-			ORDER BY created_at DESC
+		SELECT player_id, player_name 
+		FROM players 
+		ORDER BY created_at DESC
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to query players: %w", err)
@@ -226,13 +226,13 @@ func (s *PlayersService) savePlayer(player *PlayerProfile) error {
 	
 	// 保存到数据库
 	_, err := s.db.Exec(`
-			INSERT INTO players (player_id, player_name, nationality, date_of_birth, updated_at)
-			VALUES ($1, $2, $3, $4, NOW())
-			ON CONFLICT (player_id) DO UPDATE
-			SET player_name = EXCLUDED.player_name,
-			    nationality = EXCLUDED.nationality,
-			    date_of_birth = EXCLUDED.date_of_birth,
-			    updated_at = NOW()
+		INSERT INTO players (player_id, player_name, nationality, date_of_birth, updated_at)
+		VALUES ($1, $2, $3, $4, NOW())
+		ON CONFLICT (player_id) DO UPDATE
+		SET player_name = EXCLUDED.player_name,
+		    nationality = EXCLUDED.nationality,
+		    date_of_birth = EXCLUDED.date_of_birth,
+		    updated_at = NOW()
 	`, player.ID, player.Name, player.Nationality, dateOfBirth)
 	
 	if err != nil {

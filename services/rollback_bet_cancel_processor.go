@@ -52,11 +52,10 @@ func (p *RollbackBetCancelProcessor) ProcessRollbackBetCancel(xmlContent string)
 	for _, market := range rollback.Market {
 		// 1. 删除 bet_cancels 表中的取消记录
 		deleteQuery := `
-				DELETE FROM bet_cancels
-				WHERE event_id = $1 AND sr_market_id = $2 AND specifiers = $3 AND producer_id = $4 AND product_id = $5
-			
+			DELETE FROM bet_cancels
+			WHERE event_id = $1 AND sr_market_id = $2 AND specifiers = $3 AND producer_id = $4
 		`
-			_, err := tx.Exec(deleteQuery, rollback.EventID, market.ID, market.Specifiers, rollback.ProductID, rollback.ProductID)
+		_, err := tx.Exec(deleteQuery, rollback.EventID, market.ID, market.Specifiers, rollback.ProductID)
 		if err != nil {
 			p.logger.Printf("Warning: failed to delete cancel record: %v", err)
 		}
@@ -65,9 +64,9 @@ func (p *RollbackBetCancelProcessor) ProcessRollbackBetCancel(xmlContent string)
 		updateQuery := `
 			UPDATE markets 
 			SET status = 1, updated_at = NOW()
-			WHERE event_id = $1 AND sr_market_id = $2 AND specifiers = $3 AND producer_id = $4
+			WHERE event_id = $1 AND sr_market_id = $2 AND specifiers = $3
 		`
-		_, err = tx.Exec(updateQuery, rollback.EventID, market.ID, market.Specifiers, rollback.ProductID)
+		_, err = tx.Exec(updateQuery, rollback.EventID, market.ID, market.Specifiers)
 		if err != nil {
 			p.logger.Printf("Warning: failed to restore market status to active: %v", err)
 		}
@@ -75,25 +74,22 @@ func (p *RollbackBetCancelProcessor) ProcessRollbackBetCancel(xmlContent string)
 		// 3. 记录到 rollback_bet_cancels 表
 		insertQuery := `
 			INSERT INTO rollback_bet_cancels (
-				event_id, producer_id, product_id, timestamp,
-				sr_market_id, specifiers, market_count,
-				xml_content
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-			ON CONFLICT (event_id, sr_market_id, specifiers, producer_id, product_id) 
+				event_id, producer_id, timestamp,
+				sr_market_id, specifiers,
+				created_at
+			) VALUES ($1, $2, $3, $4, $5, NOW())
+			ON CONFLICT (event_id, sr_market_id, specifiers, producer_id) 
 			DO UPDATE SET
 				timestamp = EXCLUDED.timestamp,
-				updated_at = NOW()
+				created_at = NOW()
 		`
 		_, err = tx.Exec(
 			insertQuery,
 			rollback.EventID,
 			rollback.ProductID,
-			rollback.ProductID,
 			rollback.Timestamp,
 			market.ID,
 			market.Specifiers,
-			0,
-			"",
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert rollback_bet_cancel: %w", err)

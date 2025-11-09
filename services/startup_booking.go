@@ -1,7 +1,7 @@
 package services
 
 import (
-	"uof-service/logger"
+"uof-service/logger"
 	"database/sql"
 	"encoding/xml"
 	"fmt"
@@ -323,3 +323,4 @@ func (s *StartupBookingService) sendStartupReport(result *BookingResult) {
 	
 	s.larkNotifier.SendText(msg)
 }
+

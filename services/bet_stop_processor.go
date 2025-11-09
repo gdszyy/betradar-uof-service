@@ -72,9 +72,9 @@ func (p *BetStopProcessor) updateMarketStatus(betStop BetStopMessage) error {
 					return fmt.Errorf("failed to extract event ID from URN: %w", err)
 				}
 				query := `
-UPDATE markets 
-						SET market_status = $1, updated_at = NOW()
-						WHERE event_id = $2
+					UPDATE markets 
+					SET status = $1, updated_at = NOW()
+					WHERE event_id = $2
 				`
 				result, err := p.db.Exec(query, targetStatus, eventID)
 			if err != nil {
@@ -96,9 +96,9 @@ UPDATE markets
 					return fmt.Errorf("failed to extract event ID from URN: %w", err)
 				}
 				query := `
-UPDATE markets 
-						SET market_status = $1, updated_at = NOW()
-						WHERE event_id = $2
+					UPDATE markets 
+					SET status = $1, updated_at = NOW()
+					WHERE event_id = $2
 				`
 				result, err := p.db.Exec(query, targetStatus, eventID)
 			if err != nil {

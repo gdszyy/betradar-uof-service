@@ -126,14 +126,14 @@ func (s *PrematchService) StorePrematchEvents(events []PrematchEvent) (int, erro
 		
 		// 插入或更新数据库
 		query := `
-INSERT INTO tracked_events (
-					event_id, sport_id, status, schedule_time, 
-					subscribed, created_at, updated_at
-				) VALUES ($1, $2, $3, $4, $5, $6, $7)
-				ON CONFLICT (event_id) DO UPDATE SET
-					status = EXCLUDED.status,
-					schedule_time = EXCLUDED.schedule_time,
-					updated_at = EXCLUDED.updated_at
+			INSERT INTO tracked_events (
+				event_id, sport_id, status, schedule_time, 
+				subscribed, created_at, updated_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7)
+			ON CONFLICT (event_id) DO UPDATE SET
+				status = EXCLUDED.status,
+				schedule_time = EXCLUDED.schedule_time,
+				updated_at = EXCLUDED.updated_at
 		`
 		
 		_, err := s.db.Exec(

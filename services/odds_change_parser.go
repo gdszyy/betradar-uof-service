@@ -231,7 +231,7 @@ func (p *OddsChangeParser) storeOddsChangeData(
 	}
 	
 	// 更新 tracked_events 表 (不再使用 ld_matches)
-query := `INSERT INTO tracked_events (event_id, home_score, away_score, match_status, status, home_team_id, away_team_id, home_team_name, away_team_name, last_message_at, created_at, updated_at, match_time) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) ON CONFLICT (event_id) DO UPDATE SET home_score = EXCLUDED.home_score, away_score = EXCLUDED.away_score, match_status = CASE WHEN EXCLUDED.match_status = '' THEN tracked_events.match_status ELSE EXCLUDED.match_status END, status = CASE WHEN EXCLUDED.status = '' THEN tracked_events.status ELSE EXCLUDED.status END, home_team_id = CASE WHEN EXCLUDED.home_team_id = '' THEN tracked_events.home_team_id ELSE EXCLUDED.home_team_id END, away_team_id = CASE WHEN EXCLUDED.away_team_id = '' THEN tracked_events.away_team_id ELSE EXCLUDED.away_team_id END, home_team_name = CASE WHEN EXCLUDED.home_team_name = '' THEN tracked_events.home_team_name ELSE EXCLUDED.home_team_name END, away_team_name = CASE WHEN EXCLUDED.away_team_name = '' THEN tracked_events.away_team_name ELSE EXCLUDED.away_team_name END, last_message_at = EXCLUDED.last_message_at, updated_at = EXCLUDED.updated_at, match_time = EXCLUDED.match_time`
+query := `INSERT INTO tracked_events (event_id, home_score, away_score, match_status, status, home_team_id, away_team_id, home_team_name, away_team_name, last_message_at, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ON CONFLICT (event_id) DO UPDATE SET home_score = EXCLUDED.home_score, away_score = EXCLUDED.away_score, match_status = CASE WHEN EXCLUDED.match_status = '' THEN tracked_events.match_status ELSE EXCLUDED.match_status END, status = CASE WHEN EXCLUDED.status = '' THEN tracked_events.status ELSE EXCLUDED.status END, home_team_id = CASE WHEN EXCLUDED.home_team_id = '' THEN tracked_events.home_team_id ELSE EXCLUDED.home_team_id END, away_team_id = CASE WHEN EXCLUDED.away_team_id = '' THEN tracked_events.away_team_id ELSE EXCLUDED.away_team_id END, home_team_name = CASE WHEN EXCLUDED.home_team_name = '' THEN tracked_events.home_team_name ELSE EXCLUDED.home_team_name END, away_team_name = CASE WHEN EXCLUDED.away_team_name = '' THEN tracked_events.away_team_name ELSE EXCLUDED.away_team_name END, last_message_at = EXCLUDED.last_message_at, updated_at = EXCLUDED.updated_at`
 
 	now := time.Now()
 	var t1Score, t2Score int
@@ -251,10 +251,10 @@ query := `INSERT INTO tracked_events (event_id, home_score, away_score, match_st
 p.logger.Printf("[DEBUG] SQL Query: %s, Args: event_id=%v, home_score=%v, away_score=%v, match_status=%v, match_time=%v, status=%v", CleanSQLQuery(query), eventID, t1Score, t2Score, finalStatus, matchTime, statusName)
 		
 		_, err := p.db.Exec(
-query,
-					eventID, t1Score, t2Score, finalStatus, statusName,
-				homeTeamID, awayTeamID, homeTeamName, awayTeamName,
-				now, now, now, matchTime,
+			query,
+				eventID, t1Score, t2Score, matchTime, statusName,
+			homeTeamID, awayTeamID, homeTeamName, awayTeamName,
+			now, now, now,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to upsert tracked_events: %w", err)

@@ -1,7 +1,7 @@
 package services
 
 import (
-	"os"
+"os"
 	"database/sql"
 	"encoding/xml"
 	"fmt"
@@ -51,30 +51,22 @@ func (p *RollbackBetSettlementProcessor) ProcessRollbackBetSettlement(xmlContent
 	// 遍历所有市场
 	for _, market := range rollback.Market {
 		// 1. 删除 bet_settlements 表中的结算记录
-		// 原始查询: DELETE FROM bet_settlements WHERE event_id = $1 AND sr_market_id = $2 AND specifiers = $3 AND producer_id = $4
-		// 修正: producer_id 应该使用 product_id，且参数顺序调整
 		deleteQuery := `
 			DELETE FROM bet_settlements
-			WHERE event_id = $1 AND product_id = $2 AND sr_market_id = $3 AND specifiers = $4
+			WHERE event_id = $1 AND sr_market_id = $2 AND specifiers = $3 AND producer_id = $4
 		`
-		// 原始参数: rollback.EventID, market.ID, market.Specifiers, rollback.ProductID
-		// 修正参数: rollback.EventID, rollback.ProductID, market.ID, market.Specifiers
-		_, err := tx.Exec(deleteQuery, rollback.EventID, rollback.ProductID, market.ID, market.Specifiers)
+		_, err := tx.Exec(deleteQuery, rollback.EventID, market.ID, market.Specifiers, rollback.ProductID)
 		if err != nil {
 			p.logger.Printf("Warning: failed to delete settlement record: %v", err)
 		}
 
 		// 2. 恢复 market 的 status 为 1 (Active)
-		// 原始查询: UPDATE markets SET status = 1, updated_at = NOW() WHERE event_id = $1 AND sr_market_id = $2 AND specifiers = $3
-		// 修正: markets 表需要 producer_id (即 product_id) 作为 WHERE 条件
 		updateQuery := `
 			UPDATE markets 
 			SET status = 1, updated_at = NOW()
-			WHERE event_id = $1 AND sr_market_id = $2 AND specifiers = $3 AND producer_id = $4
+			WHERE event_id = $1 AND sr_market_id = $2 AND specifiers = $3
 		`
-		// 原始参数: rollback.EventID, market.ID, market.Specifiers
-		// 修正参数: rollback.EventID, market.ID, market.Specifiers, rollback.ProductID
-		_, err = tx.Exec(updateQuery, rollback.EventID, market.ID, market.Specifiers, rollback.ProductID)
+		_, err = tx.Exec(updateQuery, rollback.EventID, market.ID, market.Specifiers)
 		if err != nil {
 			p.logger.Printf("Warning: failed to restore market status to active: %v", err)
 		}
@@ -82,25 +74,22 @@ func (p *RollbackBetSettlementProcessor) ProcessRollbackBetSettlement(xmlContent
 		// 3. 记录到 rollback_bet_settlements 表
 		insertQuery := `
 			INSERT INTO rollback_bet_settlements (
-				event_id, producer_id, product_id, timestamp,
-				sr_market_id, specifiers, market_count,
-				xml_content
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+				event_id, producer_id, timestamp,
+				sr_market_id, specifiers,
+				created_at
+			) VALUES ($1, $2, $3, $4, $5, NOW())
 			ON CONFLICT (event_id, sr_market_id, specifiers, producer_id) 
 			DO UPDATE SET
 				timestamp = EXCLUDED.timestamp,
-				updated_at = NOW()
+				created_at = NOW()
 		`
 		_, err = tx.Exec(
 			insertQuery,
 			rollback.EventID,
 			rollback.ProductID,
-			rollback.ProductID,
 			rollback.Timestamp,
 			market.ID,
 			market.Specifiers,
-			0,
-			"",
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert rollback_bet_settlement: %w", err)
@@ -118,3 +107,4 @@ func (p *RollbackBetSettlementProcessor) ProcessRollbackBetSettlement(xmlContent
 
 	return nil
 }
+

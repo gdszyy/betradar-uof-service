@@ -64,7 +64,7 @@ func (pm *ProducerMonitor) Stop() {
 // checkProducers 检查所有 Producer 的健康状态
 func (pm *ProducerMonitor) checkProducers() {
 	query := `
-		SELECT producer_id, last_alive, subscribed
+		SELECT product_id, last_alive, subscribed
 		FROM producer_status
 		WHERE last_alive IS NOT NULL
 	`
@@ -130,10 +130,10 @@ func (pm *ProducerMonitor) sendProducerDownAlert(producerID int, downTime time.D
 // GetProducerStatus 获取所有 Producer 的健康状态
 func (pm *ProducerMonitor) GetProducerStatus() ([]ProducerStatus, error) {
 	query := `
-		SELECT producer_id, last_alive, subscribed
+		SELECT product_id, last_alive, subscribed
 		FROM producer_status
 		WHERE last_alive IS NOT NULL
-		ORDER BY producer_id
+		ORDER BY product_id
 	`
 	
 	rows, err := pm.db.Query(query)
