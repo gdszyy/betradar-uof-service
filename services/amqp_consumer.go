@@ -4,27 +4,77 @@ import (
 	"database/sql"
 	"time"
 	"uof-service/config"
-	"uof-service/web"
 	"github.com/streadway/amqp"
 )
 
+// MessageBroadcaster 接口用于广播消息，避免循环依赖
+type MessageBroadcaster interface {
+	Broadcast(msg interface{})
+}
+
 // AMQPConsumer AMQP 消费者
 type AMQPConsumer struct {
-	config       *config.Config
-	messageStore *MessageStore
-	wsHub        *web.Hub
-	conn         *amqp.Connection
-	channel      *amqp.Channel
-	done         chan bool
+	config               *config.Config
+	messageStore         *MessageStore
+	broadcaster          MessageBroadcaster
+	recoveryManager      *RecoveryManager
+	notifier             *LarkNotifier
+	statsTracker         *MessageStatsTracker
+	matchMonitor         *MatchMonitor
+	fixtureParser        *FixtureParser
+	oddsChangeParser     *OddsChangeParser
+	oddsParser           *OddsParser
+	betSettlementParser         *BetSettlementParser
+	betStopProcessor            *BetStopProcessor
+	betCancelProcessor          *BetCancelProcessor
+	rollbackBetSettlementProc   *RollbackBetSettlementProcessor
+	rollbackBetCancelProc       *RollbackBetCancelProcessor
+	srnMappingService           *SRNMappingService
+	fixtureService              *FixtureService
+	marketDescService           *MarketDescriptionsService
+	conn                 *amqp.Connection
+	channel              *amqp.Channel
+	done                 chan bool
 }
 
 // NewAMQPConsumer 创建 AMQP 消费者
-func NewAMQPConsumer(cfg *config.Config, store *MessageStore, hub *web.Hub) *AMQPConsumer {
+func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster MessageBroadcaster, marketDescService *MarketDescriptionsService) *AMQPConsumer {
+	notifier := NewLarkNotifier(cfg.LarkWebhook)
+	statsTracker := NewMessageStatsTracker(notifier, 5*time.Minute)
+	
+	// 初始化解析器
+	srnMappingService := NewSRNMappingService(cfg.UOFAPIToken, cfg.APIBaseURL, store.db)
+	fixtureParser := NewFixtureParser(store.db, srnMappingService, cfg.APIBaseURL, cfg.AccessToken)
+	oddsChangeParser := NewOddsChangeParser(store.db)
+	oddsParser := NewOddsParser(store.db, marketDescService)
+	betSettlementParser := NewBetSettlementParser(store.db)
+	betStopProcessor := NewBetStopProcessor(store.db)
+	betCancelProcessor := NewBetCancelProcessor(store.db)
+	rollbackBetSettlementProc := NewRollbackBetSettlementProcessor(store.db)
+	rollbackBetCancelProc := NewRollbackBetCancelProcessor(store.db)
+	fixtureService := NewFixtureService(cfg.AccessToken, cfg.APIBaseURL, store.db)
+	matchMonitor := NewMatchMonitor(cfg, store.db)
+	
 	return &AMQPConsumer{
-		config:       cfg,
-		messageStore: store,
-		wsHub:        hub,
-		done:         make(chan bool),
+		config:               cfg,
+		messageStore:         store,
+		broadcaster:          broadcaster,
+		recoveryManager:      NewRecoveryManager(store.db),
+		notifier:             notifier,
+		statsTracker:         statsTracker,
+		matchMonitor:         matchMonitor,
+		fixtureParser:        fixtureParser,
+		oddsChangeParser:     oddsChangeParser,
+		oddsParser:           oddsParser,
+		betSettlementParser:  betSettlementParser,
+		betStopProcessor:     betStopProcessor,
+		betCancelProcessor:   betCancelProcessor,
+		rollbackBetSettlementProc: rollbackBetSettlementProc,
+		rollbackBetCancelProc:     rollbackBetCancelProc,
+		srnMappingService:    srnMappingService,
+		fixtureService:       fixtureService,
+		marketDescService:    marketDescService,
+		done:                 make(chan bool),
 	}
 }
 
