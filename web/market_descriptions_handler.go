@@ -50,19 +50,19 @@ logger.Println("[API] Force refresh of market descriptions requested")
 func (h *MarketDescriptionsHandler) HandleBulkUpdate(w http.ResponseWriter, r *http.Request) {
 logger.Println("[API] Bulk update of existing markets/outcomes requested")
 	
-	err := h.service.UpdateExistingMarkets()
+	updatedMarkets, updatedOutcomes, err := h.service.UpdateExistingMarkets()
 	if err != nil {
-	logger.Printf("[API] ⚠️  Failed to bulk update: %v", err)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusInternalServerError)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-	"status":  "error",
-	"message": err.Error(),
-	})
-	return
+		logger.Printf("[API] ⚠️  Failed to bulk update: %v", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":  "error",
+			"message": err.Error(),
+		})
+		return
 	}
 	
-	logger.Printf("[API] ✅ Bulk update completed")
+	logger.Printf("[API] ✅ Bulk update completed: %d markets, %d outcomes", updatedMarkets, updatedOutcomes)
 	
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
