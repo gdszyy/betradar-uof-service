@@ -21,16 +21,6 @@ type MessageBroadcaster interface {
 	Broadcast(msg interface{})
 }
 
-// MessageStore 消息存储服务
-type MessageStore struct {
-	db *sql.DB
-}
-
-// NewMessageStore 创建消息存储服务
-func NewMessageStore(db *sql.DB) *MessageStore {
-	return &MessageStore{db: db}
-}
-
 type AMQPConsumer struct {
 	config               *config.Config
 	messageStore         *MessageStore
