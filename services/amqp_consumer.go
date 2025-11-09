@@ -3,7 +3,6 @@ package services
 import (
 	"bytes"
 	"crypto/tls"
-	"database/sql"
 	"encoding/xml"
 	"fmt"
 	"io"

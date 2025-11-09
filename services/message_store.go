@@ -95,6 +95,50 @@ func (s *MessageStore) UpdateTrackedEvent(eventID string) error {
 	return err
 }
 
+// UpdateEventTeamInfo 更新赛事的队伍信息、运动类型和状态
+func (s *MessageStore) UpdateEventTeamInfo(eventID, homeTeamID, homeTeamName, awayTeamID, awayTeamName, sportID, sportName, status string) error {
+	query := `
+		INSERT INTO tracked_events (event_id, home_team_id, home_team_name, away_team_id, away_team_name, sport_id, sport, status, message_count, last_message_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, NOW(), NOW())
+		ON CONFLICT (event_id)
+		DO UPDATE SET
+			home_team_id = COALESCE(NULLIF($2, ''), tracked_events.home_team_id),
+			home_team_name = COALESCE(NULLIF($3, ''), tracked_events.home_team_name),
+			away_team_id = COALESCE(NULLIF($4, ''), tracked_events.away_team_id),
+			away_team_name = COALESCE(NULLIF($5, ''), tracked_events.away_team_name),
+			sport_id = COALESCE(NULLIF($6, ''), tracked_events.sport_id),
+			sport = COALESCE(NULLIF($7, ''), tracked_events.sport),
+			status = COALESCE(NULLIF($8, ''), tracked_events.status),
+			updated_at = NOW()
+	`
+
+	_, err := s.db.Exec(query, eventID, homeTeamID, homeTeamName, awayTeamID, awayTeamName, sportID, sportName, status)
+	return err
+}
+
+// HasTeamInfo 检查赛事是否有队伍信息
+func (s *MessageStore) HasTeamInfo(eventID string) (bool, error) {
+	var hasInfo bool
+	query := `
+		SELECT 
+			CASE WHEN home_team_name IS NOT NULL AND home_team_name != '' 
+			     AND away_team_name IS NOT NULL AND away_team_name != '' 
+			THEN true ELSE false END
+		FROM tracked_events
+		WHERE event_id = $1
+	`
+	
+	err := s.db.QueryRow(query, eventID).Scan(&hasInfo)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	
+	return hasInfo, nil
+}
+
 // GetMessages 获取消息列表
 func (s *MessageStore) GetMessages(limit, offset int, eventID, messageType string) ([]map[string]interface{}, error) {
 	query := `
@@ -260,5 +304,95 @@ func (s *MessageStore) GetEventMessages(eventID string) ([]map[string]interface{
 	}
 
 	return messages, nil
+}
+
+
+
+// SaveRecoveryInitiated 保存恢复请求初始化记录
+func (s *MessageStore) SaveRecoveryInitiated(requestID, productID, nodeID int) error {
+	query := `
+		INSERT INTO recovery_status (request_id, product_id, node_id, status, created_at)
+		VALUES ($1, $2, $3, 'initiated', $4)
+	`
+	_, err := s.db.Exec(query, requestID, productID, nodeID, time.Now())
+	return err
+}
+
+// UpdateRecoveryCompleted 更新恢复完成状态
+func (s *MessageStore) UpdateRecoveryCompleted(requestID, productID int, timestamp int64) error {
+	query := `
+		UPDATE recovery_status
+		SET status = 'completed', timestamp = $3, completed_at = $4
+		WHERE request_id = $1 AND product_id = $2
+	`
+	_, err := s.db.Exec(query, requestID, productID, timestamp, time.Now())
+	return err
+}
+
+// GetRecoveryStatus 获取恢复状态列表
+func (s *MessageStore) GetRecoveryStatus(limit int) ([]map[string]interface{}, error) {
+	query := `
+		SELECT id, request_id, product_id, node_id, status, timestamp, created_at, completed_at
+		FROM recovery_status
+		ORDER BY created_at DESC
+		LIMIT $1
+	`
+
+	rows, err := s.db.Query(query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var statuses []map[string]interface{}
+	for rows.Next() {
+		var (
+			id          int64
+			requestID   int
+			productID   int
+			nodeID      int
+			status      string
+			timestamp   sql.NullInt64
+			createdAt   time.Time
+			completedAt sql.NullTime
+		)
+
+		if err := rows.Scan(&id, &requestID, &productID, &nodeID, &status, &timestamp, &createdAt, &completedAt); err != nil {
+			return nil, err
+		}
+
+		s := map[string]interface{}{
+			"id":         id,
+			"request_id": requestID,
+			"product_id": productID,
+			"node_id":    nodeID,
+			"status":     status,
+			"created_at": createdAt,
+		}
+
+		if timestamp.Valid {
+			s["timestamp"] = timestamp.Int64
+		}
+		if completedAt.Valid {
+			s["completed_at"] = completedAt.Time
+		}
+
+		statuses = append(statuses, s)
+	}
+
+	return statuses, nil
+}
+
+
+// SetEventSubscribed 设置赛事的订阅状态
+func (s *MessageStore) SetEventSubscribed(eventID string, subscribed bool) error {
+	query := `
+		UPDATE tracked_events
+		SET subscribed = $2, updated_at = $3
+		WHERE event_id = $1
+	`
+	
+	_, err := s.db.Exec(query, eventID, subscribed, time.Now())
+	return err
 }
 
