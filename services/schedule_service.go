@@ -67,12 +67,11 @@ func (s *ScheduleService) Start() error {
 	return nil
 }
 
-// FetchUpcomingSchedule 获取未来 3 天的赛程
+// FetchUpcomingSchedule 获取未来的赛程（使用 pre/schedule 端点）
 func (s *ScheduleService) FetchUpcomingSchedule() ([]string, error) {
-// today := time.Now().Format("2006-01-02")
-	// 注意: Schedule API 在 staging 环境下可能不可用,但我们保留代码
-		// 将 limit=3 替换为 days=7, 扩大预加载范围
-		url := fmt.Sprintf("%s/sports/en/schedules/schedule.xml?days=7", s.apiBaseURL)
+	// 使用正确的 API 端点: /schedules/pre/schedule.xml
+	// 参数: start=0, limit=100 （获取前 100 场未来比赛）
+	url := fmt.Sprintf("%s/sports/en/schedules/pre/schedule.xml?start=0&limit=100", s.apiBaseURL)
 
 	logger.Printf("[Schedule] 📥 Fetching upcoming schedule from: %s", url)
 
