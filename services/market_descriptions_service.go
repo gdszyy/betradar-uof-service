@@ -531,12 +531,12 @@ func (s *MarketDescriptionsService) GetOutcomeName(marketID string, outcomeID st
 		if s.playersService != nil {
 			// 解锁以调用 playersService
 			s.mu.RUnlock()
-			profile, err := s.playersService.GetPlayerProfile(outcomeID)
+			playerName := s.playersService.GetPlayerName(outcomeID)
 			s.mu.RLock()
 			
-			if err == nil && profile != nil {
-				return profile.Name
-			}
+			// GetPlayerName 总是返回一个值,如果找不到会返回 "Player {id}"
+			// 我们直接返回这个值
+			return playerName
 		}
 		// 如果找不到球员信息,返回球员 ID (不输出警告,因为这是正常情况)
 		return outcomeID
