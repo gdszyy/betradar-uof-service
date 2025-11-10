@@ -291,7 +291,7 @@ CREATE INDEX IF NOT EXISTS idx_recovery_status_status ON recovery_status(status)
 
 -- 15. Market Descriptions Table (盘口描述缓存)
 CREATE TABLE IF NOT EXISTS market_descriptions (
-    market_id VARCHAR(50) PRIMARY KEY,
+    market_id VARCHAR(200) PRIMARY KEY,
     market_name TEXT NOT NULL,
     groups TEXT,
     specifiers TEXT,
@@ -301,8 +301,8 @@ CREATE TABLE IF NOT EXISTS market_descriptions (
 -- 16. Outcome Descriptions Table (结果描述缓存)
 CREATE TABLE IF NOT EXISTS outcome_descriptions (
     id SERIAL PRIMARY KEY,
-    market_id VARCHAR(50) NOT NULL,
-    outcome_id VARCHAR(50) NOT NULL,
+    market_id VARCHAR(200) NOT NULL,
+    outcome_id VARCHAR(200) NOT NULL,
     outcome_name TEXT NOT NULL,
     UNIQUE(market_id, outcome_id)
 );
@@ -312,8 +312,8 @@ CREATE INDEX IF NOT EXISTS idx_outcome_descriptions_market_id ON outcome_descrip
 -- 17. Mapping Outcomes Table (结果映射表)
 CREATE TABLE IF NOT EXISTS mapping_outcomes (
     id SERIAL PRIMARY KEY,
-    market_id VARCHAR(50) NOT NULL,
-    outcome_id VARCHAR(50) NOT NULL,
+    market_id VARCHAR(200) NOT NULL,
+    outcome_id VARCHAR(200) NOT NULL,
     product_outcome_name TEXT,
     product_id INTEGER,
     sport_id VARCHAR(50),
