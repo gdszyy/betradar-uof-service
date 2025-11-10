@@ -914,15 +914,3 @@ func (s *MarketDescriptionsService) GetMarketNameTemplate(marketID string) (stri
 	return market.Name, nil
 }
 
-// GetMarketSpecifiers 获取 market 的 specifier 定义
-func (s *MarketDescriptionsService) GetMarketSpecifiers(marketID string) ([]SpecifierDescription, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	market, exists := s.markets[marketID]
-	if !exists {
-		return nil, fmt.Errorf("market %s not found", marketID)
-	}
-
-	return market.Specifiers, nil
-}
