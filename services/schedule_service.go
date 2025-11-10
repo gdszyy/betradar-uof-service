@@ -28,7 +28,7 @@ type TournamentScheduleResponse struct {
 
 // SportEventSummaryResponse API 响应
 type SportEventSummaryResponse struct {
-	XMLName xml.Name `xml:"sport_event_summary"`
+	XMLName xml.Name `xml:"match_summary"`
 	SportEvent struct {
 		ID string `xml:"id,attr"`
 	} `xml:"sport_event"`
