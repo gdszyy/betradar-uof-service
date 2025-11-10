@@ -525,7 +525,24 @@ func (s *MarketDescriptionsService) GetOutcomeName(marketID string, outcomeID st
 		}
 	}
 	
-	// 最终降级
+	// 检查是否是球员市场 (outcomeID 是球员 URN)
+	if strings.HasPrefix(outcomeID, "sr:player:") {
+		// 尝试从 PlayersService 获取球员姓名
+		if s.playersService != nil {
+			// 解锁以调用 playersService
+			s.mu.RUnlock()
+			profile, err := s.playersService.GetPlayerProfile(outcomeID)
+			s.mu.RLock()
+			
+			if err == nil && profile != nil {
+				return profile.Name
+			}
+		}
+		// 如果找不到球员信息,返回球员 ID (不输出警告,因为这是正常情况)
+		return outcomeID
+	}
+	
+	// 对于非球员市场,输出警告日志
 	logger.Printf("[MarketDescService] ⚠️  Outcome name not found: marketID=%s, outcomeID=%s, specifiers=%s", marketID, outcomeID, specifiers)
 	return outcomeID
 }
