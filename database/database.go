@@ -352,7 +352,7 @@ func Migrate(db *sql.DB) error {
     product_outcome_name TEXT,
     product_id INTEGER,
     sport_id VARCHAR(50),
-    UNIQUE (market_id, outcome_id, product_id, sport_id)
+    UNIQUE (market_id, outcome_id)
 );`,
 		
 	}
