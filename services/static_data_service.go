@@ -64,15 +64,15 @@ func (s *StaticDataService) LoadAllStaticData() error {
 		logger.Errorf("[StaticData] ⚠️  Failed to load sports: %v", err)
 	}
 
-	// 加载 Categories
-	if err := s.LoadCategories(); err != nil {
-		logger.Errorf("[StaticData] ⚠️  Failed to load categories: %v", err)
-	}
+	// 加载 Categories (需要按 sport 查询,暂时禁用)
+	// if err := s.LoadCategories(); err != nil {
+	// 	logger.Errorf("[StaticData] ⚠️  Failed to load categories: %v", err)
+	// }
 
-	// 加载 Tournaments
-	if err := s.LoadTournaments(); err != nil {
-		logger.Errorf("[StaticData] ⚠️  Failed to load tournaments: %v", err)
-	}
+	// 加载 Tournaments (需要按 sport/category 查询,暂时禁用)
+	// if err := s.LoadTournaments(); err != nil {
+	// 	logger.Errorf("[StaticData] ⚠️  Failed to load tournaments: %v", err)
+	// }
 
 	// 加载 Void Reasons
 	if err := s.LoadVoidReasons(); err != nil {
@@ -90,7 +90,7 @@ func (s *StaticDataService) LoadAllStaticData() error {
 
 // LoadSports 加载体育类型
 func (s *StaticDataService) LoadSports() error {
-	url := fmt.Sprintf("%s/descriptions/en/sports.xml", s.apiBaseURL)
+	url := fmt.Sprintf("%s/sports/en/sports.xml", s.apiBaseURL)
 	logger.Printf("[StaticData] 📥 Loading sports from: %s", url)
 
 	body, err := s.fetchAPI(url)
@@ -263,7 +263,7 @@ func (s *StaticDataService) LoadTournaments() error {
 
 // LoadVoidReasons 加载作废原因
 func (s *StaticDataService) LoadVoidReasons() error {
-	url := fmt.Sprintf("%s/descriptions/en/void_reasons.xml", s.apiBaseURL)
+	url := fmt.Sprintf("%s/descriptions/void_reasons.xml", s.apiBaseURL)
 	logger.Printf("[StaticData] 📥 Loading void reasons from: %s", url)
 
 	body, err := s.fetchAPI(url)
@@ -316,7 +316,7 @@ func (s *StaticDataService) LoadVoidReasons() error {
 
 // LoadBetstopReasons 加载停止投注原因
 func (s *StaticDataService) LoadBetstopReasons() error {
-	url := fmt.Sprintf("%s/descriptions/en/betstop_reasons.xml", s.apiBaseURL)
+	url := fmt.Sprintf("%s/descriptions/betstop_reasons.xml", s.apiBaseURL)
 	logger.Printf("[StaticData] 📥 Loading betstop reasons from: %s", url)
 
 	body, err := s.fetchAPI(url)
