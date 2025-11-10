@@ -62,7 +62,7 @@ type APITournament struct {
 
 // TournamentsList 联赛列表
 type TournamentsList struct {
-	XMLName     xml.Name         `xml:"tournaments"`
+	XMLName     xml.Name         `xml:"sport_tournaments"`
 	Tournaments []APITournament `xml:"tournament"`
 }
 

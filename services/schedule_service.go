@@ -20,7 +20,7 @@ type ScheduleService struct {
 
 // TournamentScheduleResponse API 响应
 type TournamentScheduleResponse struct {
-	XMLName xml.Name `xml:"tournament_schedule"`
+	XMLName xml.Name `xml:"schedule"`
 	SportEvents []struct {
 		ID string `xml:"id,attr"`
 	} `xml:"sport_event"`
