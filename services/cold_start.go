@@ -243,7 +243,7 @@ query := `INSERT INTO tracked_events (event_id, sport_id, schedule_time, home_te
 	
 	stored := 0
 	for _, match := range matches {
-c.logger.Printf("[DEBUG] SQL Query: %s, Args: event_id=%v, sport_id=%v, schedule_time=%v, home_team_id=%v, home_team_name=%v, away_team_id=%v, away_team_name=%v", CleanSQLQuery(query), match.EventID, match.SportID, match.ScheduleTime, match.HomeTeamID, match.HomeTeamName, match.AwayTeamID, match.AwayTeamName)
+	// c.logger.Printf("[DEBUG] SQL Query: %s, Args: event_id=%v, sport_id=%v, schedule_time=%v, home_team_id=%v, home_team_name=%v, away_team_id=%v, away_team_name=%v", CleanSQLQuery(query), match.EventID, match.SportID, match.ScheduleTime, match.HomeTeamID, match.HomeTeamName, match.AwayTeamID, match.AwayTeamName)
 			_, err := c.db.Exec(query,
 				match.EventID,
 				match.SportID,

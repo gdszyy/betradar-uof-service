@@ -248,7 +248,7 @@ query := `INSERT INTO tracked_events (event_id, home_score, away_score, match_st
 		finalStatus = status
 	}
 
-p.logger.Printf("[DEBUG] SQL Query: %s, Args: event_id=%v, home_score=%v, away_score=%v, match_status=%v, match_time=%v, status=%v", CleanSQLQuery(query), eventID, t1Score, t2Score, finalStatus, matchTime, statusName)
+	// p.logger.Printf("[DEBUG] SQL Query: %s, Args: event_id=%v, home_score=%v, away_score=%v, match_status=%v, match_time=%v, status=%v", CleanSQLQuery(query), eventID, t1Score, t2Score, finalStatus, matchTime, statusName)
 		
 		_, err := p.db.Exec(
 			query,
