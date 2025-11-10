@@ -77,13 +77,20 @@ func (c *SportradarAPIClient) GetAllSports() (*SportsList, error) {
 	}
 	c.sportsCacheMutex.RUnlock()
 	
-	// 构建 URL
-	url := fmt.Sprintf("%s/sports/en/sports.xml?api_key=%s", c.baseURL, c.accessToken)
+	// 构建 URL（不包含 api_key）
+	url := fmt.Sprintf("%s/sports/en/sports.xml", c.baseURL)
 	
 	log.Printf("[SportradarAPI] Fetching all sports from: %s", url)
 	
+	// 创建请求并添加认证 Header
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("x-access-token", c.accessToken)
+	
 	// 发起请求
-	resp, err := c.httpClient.Get(url)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch sports: %w", err)
 	}
@@ -131,13 +138,20 @@ func (c *SportradarAPIClient) GetTournamentsBySport(sportID string) (*Tournament
 	}
 	c.tournamentsCacheMutex.RUnlock()
 	
-	// 构建 URL
-	url := fmt.Sprintf("%s/sports/en/sports/%s/tournaments.xml?api_key=%s", c.baseURL, sportID, c.accessToken)
+	// 构建 URL（不包含 api_key）
+	url := fmt.Sprintf("%s/sports/en/sports/%s/tournaments.xml", c.baseURL, sportID)
 	
 	log.Printf("[SportradarAPI] Fetching tournaments for sport %s from: %s", sportID, url)
 	
+	// 创建请求并添加认证 Header
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("x-access-token", c.accessToken)
+	
 	// 发起请求
-	resp, err := c.httpClient.Get(url)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch tournaments: %w", err)
 	}
