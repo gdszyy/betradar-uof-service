@@ -882,3 +882,47 @@ func (s *MarketDescriptionsService) UpdateExistingMarkets() (int, int, error) {
 	return marketCount, outcomeCount, nil
 }
 
+
+// GetOutcomeNameTemplate 获取 outcome 名称模板
+func (s *MarketDescriptionsService) GetOutcomeNameTemplate(marketID string, outcomeID string) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	outcomes, exists := s.outcomes[marketID]
+	if !exists {
+		return "", fmt.Errorf("market %s not found", marketID)
+	}
+
+	outcome, exists := outcomes[outcomeID]
+	if !exists {
+		return "", fmt.Errorf("outcome %s not found in market %s", outcomeID, marketID)
+	}
+
+	return outcome.Name, nil
+}
+
+// GetMarketNameTemplate 获取 market 名称模板
+func (s *MarketDescriptionsService) GetMarketNameTemplate(marketID string) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	market, exists := s.markets[marketID]
+	if !exists {
+		return "", fmt.Errorf("market %s not found", marketID)
+	}
+
+	return market.Name, nil
+}
+
+// GetMarketSpecifiers 获取 market 的 specifier 定义
+func (s *MarketDescriptionsService) GetMarketSpecifiers(marketID string) ([]SpecifierDescription, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	market, exists := s.markets[marketID]
+	if !exists {
+		return nil, fmt.Errorf("market %s not found", marketID)
+	}
+
+	return market.Specifiers, nil
+}
