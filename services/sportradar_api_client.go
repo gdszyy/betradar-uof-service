@@ -46,14 +46,13 @@ type APISport struct {
 // SportsList 体育类型列表
 type SportsList struct {
 	XMLName xml.Name   `xml:"sports"`
-	Sports  []APISport `xml:"sports>sport"`
+	Sports  []APISport `xml:"sport"`
 }
 
 // APITournament 联赛/赛事（API响应）
 type APITournament struct {
 	ID       string `xml:"id,attr"`
 	Name     string `xml:"name,attr"`
-	SportID  string `xml:"sport>id,attr"`
 	Category struct {
 		ID   string `xml:"id,attr"`
 		Name string `xml:"name,attr"`
@@ -62,31 +61,8 @@ type APITournament struct {
 
 // TournamentsList 联赛列表
 type TournamentsList struct {
-	XMLName     xml.Name         `xml:"sport_tournaments"`
-	// 修正：根据日志，tournament 标签可能直接在 sport_tournaments 下，也可能在 tournaments 标签下。
-	// 考虑到 Go XML 解析器的行为，如果直接在根标签下，应该使用 `xml:"tournament"`。
-	// 如果 XML 结构是 <sport_tournaments><tournaments><tournament>...</tournament></tournaments></sport_tournaments>
-	// 则应该使用 `xml:"tournaments>tournament"`。
-	// 根据用户提供的日志，XML结构是 <sport_tournaments>...<tournaments><tournament>...</tournament></tournaments></sport_tournaments>
-	// 但用户说“sport_tournaments 标签下直接包含了 tournament 标签”，这与日志不符。
-	// 考虑到 Go XML 解析的灵活性，如果直接使用 `xml:"tournament"` 无法解析，可能是因为 XML 结构是嵌套的。
-	// 让我们尝试将标签路径改为 `xml:"tournaments>tournament"`，以匹配日志中的嵌套结构。
-	// 
-	// 重新分析用户提供的日志：
-	// <sport_tournaments ...>
-	//     <sport id="sr:sport:109" name="ESport Counter-Strike"/>
-	//     <tournaments>
-	//         <tournament id="sr:tournament:2392" name="ESL Pro League">
-	//             ...
-	//         </tournament>
-	//     </tournaments>
-	// </sport_tournaments>
-	// 
-	// 原始代码：
-	// Tournaments []APITournament `xml:"tournament"`
-	// 
-	// 原始代码的标签是错误的，它期望 <sport_tournaments><tournament>...</sport_tournaments>
-	// 正确的标签应该是 `xml:"tournaments>tournament"`
+	XMLName     xml.Name        `xml:"sport_tournaments"`
+	Sport       APISport        `xml:"sport"`
 	Tournaments []APITournament `xml:"tournaments>tournament"`
 }
 
@@ -126,17 +102,17 @@ func (c *SportradarAPIClient) GetAllSports() (*SportsList, error) {
 		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 	
-// 解析 XML
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read response body: %w", err)
-			}
-			
-			// 记录返回的 XML
-			log.Printf("[SportradarAPI] External URL returned XML: %s", string(body))
-			
-		var sportsList SportsList
-		if err := xml.Unmarshal(body, &sportsList); err != nil {
+	// 解析 XML
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+	
+	// 记录返回的 XML
+	log.Printf("[SportradarAPI] External URL returned XML: %s", string(body))
+	
+	var sportsList SportsList
+	if err := xml.Unmarshal(body, &sportsList); err != nil {
 		return nil, fmt.Errorf("failed to parse XML: %w", err)
 	}
 	
@@ -148,11 +124,11 @@ func (c *SportradarAPIClient) GetAllSports() (*SportsList, error) {
 	c.sportsCacheTime = time.Now()
 	c.sportsCacheMutex.Unlock()
 	
-		return &sportsList, nil
-	}
-	
-	// GetTournamentsBySport 获取指定体育类型的联赛列表
-	func (c *SportradarAPIClient) GetTournamentsBySport(sportID string) (*TournamentsList, error) {
+	return &sportsList, nil
+}
+
+// GetTournamentsBySport 获取指定体育类型的联赛列表
+func (c *SportradarAPIClient) GetTournamentsBySport(sportID string) (*TournamentsList, error) {
 	// 检查缓存 (缓存 30 分钟)
 	c.tournamentsCacheMutex.RLock()
 	if cached, ok := c.tournamentsCache[sportID]; ok {
@@ -213,11 +189,11 @@ func (c *SportradarAPIClient) GetAllSports() (*SportsList, error) {
 	c.tournamentsCacheTime[sportID] = time.Now()
 	c.tournamentsCacheMutex.Unlock()
 	
-		return &tournamentsList, nil
-	}
-	
-	// GetAllTournaments 获取所有体育类型的联赛列表
-	func (c *SportradarAPIClient) GetAllTournaments() (map[string]*TournamentsList, error) {
+	return &tournamentsList, nil
+}
+
+// GetAllTournaments 获取所有体育类型的联赛列表
+func (c *SportradarAPIClient) GetAllTournaments() (map[string]*TournamentsList, error) {
 	// 先获取所有体育类型
 	sportsList, err := c.GetAllSports()
 	if err != nil {
