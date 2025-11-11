@@ -80,7 +80,8 @@ func (c *SportradarAPIClient) GetAllSports() (*SportsList, error) {
 	// 构建 URL（不包含 api_key）
 	url := fmt.Sprintf("%s/sports/en/sports.xml", c.baseURL)
 	
-	log.Printf("[SportradarAPI] Fetching all sports from: %s", url)
+	// 记录请求的 URL
+	log.Printf("[SportradarAPI] Calling external URL address: %s", url)
 	
 	// 创建请求并添加认证 Header
 	req, err := http.NewRequest("GET", url, nil)
@@ -101,19 +102,17 @@ func (c *SportradarAPIClient) GetAllSports() (*SportsList, error) {
 		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 	
-		// 解析 XML
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read response body: %w", err)
-		}
-		
-
-		
-
-		
-
-	var sportsList SportsList
-	if err := xml.Unmarshal(body, &sportsList); err != nil {
+// 解析 XML
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read response body: %w", err)
+			}
+			
+			// 记录返回的 XML
+			log.Printf("[SportradarAPI] External URL returned XML: %s", string(body))
+			
+		var sportsList SportsList
+		if err := xml.Unmarshal(body, &sportsList); err != nil {
 		return nil, fmt.Errorf("failed to parse XML: %w", err)
 	}
 	
@@ -146,7 +145,7 @@ func (c *SportradarAPIClient) GetAllSports() (*SportsList, error) {
 	// 构建 URL（不包含 api_key）
 	url := fmt.Sprintf("%s/sports/en/sports/%s/tournaments.xml", c.baseURL, sportID)
 	
-	// 1. 调用外部url地址
+	// 记录请求的 URL
 	log.Printf("[SportradarAPI] Calling external URL address: %s", url)
 	
 	// 创建请求并添加认证 Header
@@ -174,7 +173,7 @@ func (c *SportradarAPIClient) GetAllSports() (*SportsList, error) {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 	
-	// 2. 外部url返回的xml
+	// 记录返回的 XML
 	log.Printf("[SportradarAPI] External URL returned XML: %s", string(body))
 	
 	var tournamentsList TournamentsList
