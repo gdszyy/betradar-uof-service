@@ -177,13 +177,14 @@ func (s *StaticDataService) LoadCategories() error {
 			continue
 		}
 
-		var categoriesData struct {
-			Categories []struct {
-				ID          string `xml:"id,attr"`
-				Name        string `xml:"name,attr"`
-				CountryCode string `xml:"country_code,attr"`
-			} `xml:"category"`
-		}
+			var categoriesData struct {
+				XMLName xml.Name `xml:"sport_categories"`
+				Categories []struct {
+					ID          string `xml:"id,attr"`
+					Name        string `xml:"name,attr"`
+					CountryCode string `xml:"country_code,attr"`
+				} `xml:"categories>category"`
+			}
 
 		if err := xml.Unmarshal(body, &categoriesData); err != nil {
 			logger.Errorf("[StaticData] ⚠️  Failed to parse categories XML for %s: %v", sportID, err)
