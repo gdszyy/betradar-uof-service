@@ -101,12 +101,17 @@ func (c *SportradarAPIClient) GetAllSports() (*SportsList, error) {
 		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 	
-	// 解析 XML
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-	
+		// 解析 XML
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read response body: %w", err)
+		}
+		
+
+		
+
+		
+
 	var sportsList SportsList
 	if err := xml.Unmarshal(body, &sportsList); err != nil {
 		return nil, fmt.Errorf("failed to parse XML: %w", err)
@@ -120,11 +125,11 @@ func (c *SportradarAPIClient) GetAllSports() (*SportsList, error) {
 	c.sportsCacheTime = time.Now()
 	c.sportsCacheMutex.Unlock()
 	
-	return &sportsList, nil
-}
-
-// GetTournamentsBySport 获取指定体育类型的联赛列表
-func (c *SportradarAPIClient) GetTournamentsBySport(sportID string) (*TournamentsList, error) {
+		return &sportsList, nil
+	}
+	
+	// GetTournamentsBySport 获取指定体育类型的联赛列表
+	func (c *SportradarAPIClient) GetTournamentsBySport(sportID string) (*TournamentsList, error) {
 	// 检查缓存 (缓存 30 分钟)
 	c.tournamentsCacheMutex.RLock()
 	if cached, ok := c.tournamentsCache[sportID]; ok {
@@ -141,7 +146,8 @@ func (c *SportradarAPIClient) GetTournamentsBySport(sportID string) (*Tournament
 	// 构建 URL（不包含 api_key）
 	url := fmt.Sprintf("%s/sports/en/sports/%s/tournaments.xml", c.baseURL, sportID)
 	
-	log.Printf("[SportradarAPI] Fetching tournaments for sport %s from: %s", sportID, url)
+	// 1. 调用外部url地址
+	log.Printf("[SportradarAPI] Calling external URL address: %s", url)
 	
 	// 创建请求并添加认证 Header
 	req, err := http.NewRequest("GET", url, nil)
@@ -168,6 +174,9 @@ func (c *SportradarAPIClient) GetTournamentsBySport(sportID string) (*Tournament
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 	
+	// 2. 外部url返回的xml
+	log.Printf("[SportradarAPI] External URL returned XML: %s", string(body))
+	
 	var tournamentsList TournamentsList
 	if err := xml.Unmarshal(body, &tournamentsList); err != nil {
 		return nil, fmt.Errorf("failed to parse XML: %w", err)
@@ -181,11 +190,11 @@ func (c *SportradarAPIClient) GetTournamentsBySport(sportID string) (*Tournament
 	c.tournamentsCacheTime[sportID] = time.Now()
 	c.tournamentsCacheMutex.Unlock()
 	
-	return &tournamentsList, nil
-}
-
-// GetAllTournaments 获取所有体育类型的联赛列表
-func (c *SportradarAPIClient) GetAllTournaments() (map[string]*TournamentsList, error) {
+		return &tournamentsList, nil
+	}
+	
+	// GetAllTournaments 获取所有体育类型的联赛列表
+	func (c *SportradarAPIClient) GetAllTournaments() (map[string]*TournamentsList, error) {
 	// 先获取所有体育类型
 	sportsList, err := c.GetAllSports()
 	if err != nil {
@@ -196,6 +205,7 @@ func (c *SportradarAPIClient) GetAllTournaments() (map[string]*TournamentsList, 
 	allTournaments := make(map[string]*TournamentsList)
 	
 	for _, sport := range sportsList.Sports {
+		// GetAllTournaments 依赖 GetTournamentsBySport，而 GetTournamentsBySport 已经添加了日志
 		tournaments, err := c.GetTournamentsBySport(sport.ID)
 		if err != nil {
 			log.Printf("[SportradarAPI] Failed to get tournaments for sport %s: %v", sport.ID, err)
@@ -207,4 +217,3 @@ func (c *SportradarAPIClient) GetAllTournaments() (map[string]*TournamentsList, 
 	
 	return allTournaments, nil
 }
-
