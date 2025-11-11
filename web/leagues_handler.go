@@ -142,26 +142,18 @@ type LeagueStats struct {
 }
 
 // getLeagueStats 获取联赛统计信息
-	// 通过查询 tracked_events 表,匹配 srn_id 来统计
+	// 通过查询 tracked_events 表,匹配 event_id 来统计 (原 srn_id 字段存储了 event_id)
 	func (s *Server) getLeagueStats(leagueID string) (*LeagueStats, error) {
-		// 由于 srn_id 字段目前为空,我们暂时返回 0
-		// TODO: 修复 srn_id 填充逻辑后,使用真实查询
+		// 根据用户反馈，tracked_events 的 srn_id 字段实际存储了 event_id，
+		// 且 event_id 包含 leagueID (sr:tournament:xxx)
 		
-		// 临时返回零统计信息，直到 srn_id 填充逻辑修复
-		return &LeagueStats{
-			TotalMatches:    0,
-			LiveMatches:     0,
-			UpcomingMatches: 0,
-		}, nil
-		
-		/*
 		query := `
 			SELECT 
 				COUNT(*) as total_matches,
 				COUNT(CASE WHEN status = 'active' AND match_status IS NOT NULL THEN 1 END) as live_matches,
 				COUNT(CASE WHEN status = 'active' AND match_status IS NULL AND schedule_time > NOW() THEN 1 END) as upcoming_matches
 			FROM tracked_events
-			WHERE srn_id LIKE $1
+			WHERE event_id LIKE $1
 		`
 		
 		var stats LeagueStats
@@ -176,7 +168,6 @@ type LeagueStats struct {
 		}
 		
 		return &stats, nil
-		*/
 	}
 
 // calculatePopularity 计算联赛热门度 (0-100)
