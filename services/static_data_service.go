@@ -143,60 +143,89 @@ func (s *StaticDataService) LoadSports() error {
 
 // LoadCategories 加载分类
 func (s *StaticDataService) LoadCategories() error {
-	url := fmt.Sprintf("%s/descriptions/en/categories.xml", s.apiBaseURL)
-	logger.Printf("[StaticData] 📥 Loading categories from: %s", url)
-
-	body, err := s.fetchAPI(url)
+	// 先从数据库获取所有 sports
+	rows, err := s.db.Query("SELECT id FROM sports")
 	if err != nil {
-		return fmt.Errorf("failed to fetch categories: %w", err)
+		return fmt.Errorf("failed to query sports: %w", err)
 	}
+	defer rows.Close()
 
-	var categoriesData struct {
-		Categories []struct {
-			ID          string `xml:"id,attr"`
-			Name        string `xml:"name,attr"`
-			CountryCode string `xml:"country_code,attr"`
-			Sport       struct {
-				ID string `xml:"id,attr"`
-			} `xml:"sport"`
-		} `xml:"category"`
-	}
-
-	if err := xml.Unmarshal(body, &categoriesData); err != nil {
-		return fmt.Errorf("failed to parse categories XML: %w", err)
-	}
-
-	// 存储到数据库
-	tx, err := s.db.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	count := 0
-	for _, category := range categoriesData.Categories {
-		_, err := tx.Exec(`
-			INSERT INTO categories (id, sport_id, name, country_code, updated_at)
-			VALUES ($1, $2, $3, $4, NOW())
-			ON CONFLICT (id) DO UPDATE SET
-				sport_id = EXCLUDED.sport_id,
-				name = EXCLUDED.name,
-				country_code = EXCLUDED.country_code,
-				updated_at = NOW()
-		`, category.ID, category.Sport.ID, category.Name, category.CountryCode)
-
-		if err != nil {
-			logger.Errorf("[StaticData] ⚠️  Failed to insert category %s: %v", category.ID, err)
+	var sportIDs []string
+	for rows.Next() {
+		var sportID string
+		if err := rows.Scan(&sportID); err != nil {
 			continue
 		}
-		count++
+		sportIDs = append(sportIDs, sportID)
 	}
 
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
+	if len(sportIDs) == 0 {
+		return fmt.Errorf("no sports found in database, please load sports first")
 	}
 
-	logger.Printf("[StaticData] ✅ Loaded %d categories", count)
+	logger.Printf("[StaticData] 📥 Loading categories for %d sports...", len(sportIDs))
+
+	totalCount := 0
+	for _, sportID := range sportIDs {
+		// 按 sport 查询 categories
+		url := fmt.Sprintf("%s/sports/%s/categories.xml", s.apiBaseURL, sportID)
+		
+		body, err := s.fetchAPI(url)
+		if err != nil {
+			logger.Errorf("[StaticData] ⚠️  Failed to fetch categories for %s: %v", sportID, err)
+			continue
+		}
+
+		var categoriesData struct {
+			Categories []struct {
+				ID          string `xml:"id,attr"`
+				Name        string `xml:"name,attr"`
+				CountryCode string `xml:"country_code,attr"`
+			} `xml:"category"`
+		}
+
+		if err := xml.Unmarshal(body, &categoriesData); err != nil {
+			logger.Errorf("[StaticData] ⚠️  Failed to parse categories XML for %s: %v", sportID, err)
+			continue
+		}
+
+		// 存储到数据库
+		tx, err := s.db.Begin()
+		if err != nil {
+			logger.Errorf("[StaticData] ⚠️  Failed to begin transaction for %s: %v", sportID, err)
+			continue
+		}
+
+		count := 0
+		for _, category := range categoriesData.Categories {
+			_, err := tx.Exec(`
+				INSERT INTO categories (id, sport_id, name, country_code, updated_at)
+				VALUES ($1, $2, $3, $4, NOW())
+				ON CONFLICT (id) DO UPDATE SET
+					sport_id = EXCLUDED.sport_id,
+					name = EXCLUDED.name,
+					country_code = EXCLUDED.country_code,
+					updated_at = NOW()
+			`, category.ID, sportID, category.Name, category.CountryCode)
+
+			if err != nil {
+				logger.Errorf("[StaticData] ⚠️  Failed to insert category %s: %v", category.ID, err)
+				continue
+			}
+			count++
+		}
+
+		if err := tx.Commit(); err != nil {
+			logger.Errorf("[StaticData] ⚠️  Failed to commit transaction for %s: %v", sportID, err)
+			tx.Rollback()
+			continue
+		}
+
+		logger.Printf("[StaticData] ✅ Loaded %d categories for %s", count, sportID)
+		totalCount += count
+	}
+
+	logger.Printf("[StaticData] ✅ Total loaded %d categories", totalCount)
 	return nil
 }
 
