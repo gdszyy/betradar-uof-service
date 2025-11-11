@@ -64,15 +64,15 @@ func (s *StaticDataService) LoadAllStaticData() error {
 		logger.Errorf("[StaticData] ⚠️  Failed to load sports: %v", err)
 	}
 
-	// 加载 Categories (需要按 sport 查询,暂时禁用)
-	// if err := s.LoadCategories(); err != nil {
-	// 	logger.Errorf("[StaticData] ⚠️  Failed to load categories: %v", err)
-	// }
+	// 加载 Categories
+	if err := s.LoadCategories(); err != nil {
+		logger.Errorf("[StaticData] ⚠️  Failed to load categories: %v", err)
+	}
 
-	// 加载 Tournaments (需要按 sport/category 查询,暂时禁用)
-	// if err := s.LoadTournaments(); err != nil {
-	// 	logger.Errorf("[StaticData] ⚠️  Failed to load tournaments: %v", err)
-	// }
+	// 加载 Tournaments
+	if err := s.LoadTournaments(); err != nil {
+		logger.Errorf("[StaticData] ⚠️  Failed to load tournaments: %v", err)
+	}
 
 	// 加载 Void Reasons
 	if err := s.LoadVoidReasons(); err != nil {
