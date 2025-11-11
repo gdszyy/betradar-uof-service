@@ -11,13 +11,18 @@ import (
 	"unicode"
 )
 
-// LeagueInfo 联赛信息
-type LeagueInfo struct {
+	// CategoryInfo 类别信息
+	type CategoryInfo struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+
+	// LeagueInfo 联赛信息
+	type LeagueInfo struct {
 	LeagueID        string  `json:"league_id"`         // 联赛 ID (sr:tournament:xxx)
 	LeagueName      string  `json:"league_name"`       // 联赛名称
 	SportID         string  `json:"sport_id"`          // 体育类型 ID
-	CategoryID      string  `json:"category_id"`       // 类别 ID (地域/分组)
-	CategoryName    string  `json:"category_name"`     // 类别名称
+		Category CategoryInfo `json:"category"` // 类别信息 (地域/分组)
 	TotalMatches    int     `json:"total_matches"`     // 总比赛数
 	LiveMatches     int     `json:"live_matches"`      // Live 比赛数
 	UpcomingMatches int     `json:"upcoming_matches"`  // 即将开始的比赛数
@@ -78,11 +83,13 @@ func (s *Server) getLeaguesInfo(sportID string) ([]LeagueInfo, error) {
 		
 			for _, tournament := range tournaments.Tournaments {
 					league := LeagueInfo{
-						LeagueID:     tournament.ID,
-						LeagueName:   extractEnglishName(tournament.Name),
-						SportID:      sportID,
-						CategoryID:   tournament.Category.ID,
-						CategoryName: extractEnglishName(tournament.Category.Name),
+							LeagueID:     tournament.ID,
+							LeagueName:   extractEnglishName(tournament.Name),
+							SportID:      sportID,
+							Category: CategoryInfo{
+								ID:   tournament.Category.ID,
+								Name: extractEnglishName(tournament.Category.Name),
+							},
 					}
 			
 			// 获取统计信息
@@ -111,8 +118,10 @@ func (s *Server) getLeaguesInfo(sportID string) ([]LeagueInfo, error) {
 					LeagueID:     tournament.ID,
 					LeagueName:   extractEnglishName(tournament.Name),
 					SportID:      sportID,
-					CategoryID:   tournament.Category.ID,
-					CategoryName: extractEnglishName(tournament.Category.Name),
+						Category: CategoryInfo{
+							ID:   tournament.Category.ID,
+							Name: extractEnglishName(tournament.Category.Name),
+						},
 				}
 				
 				// 获取统计信息
