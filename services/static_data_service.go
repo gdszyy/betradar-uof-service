@@ -167,8 +167,9 @@ func (s *StaticDataService) LoadCategories() error {
 
 	totalCount := 0
 	for _, sportID := range sportIDs {
-		// 按 sport 查询 categories
-		url := fmt.Sprintf("%s/sports/%s/categories.xml", s.apiBaseURL, sportID)
+// 按 sport 查询 categories
+			// 官方文档规范: /sports/{language}/sports/{sport_id}/categories.xml
+			url := fmt.Sprintf("%s/sports/en/sports/%s/categories.xml", s.apiBaseURL, sportID)
 		
 		body, err := s.fetchAPI(url)
 		if err != nil {
