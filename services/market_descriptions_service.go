@@ -693,49 +693,15 @@ func (s *MarketDescriptionsService) UpdateAllMarketAndOutcomeNames() error {
 			// log and continue
 		}
 		marketUpdateCount++
-	}
-	
-	// 更新 outcomes 表 (分批处理)
-	outcomeRows, err := tx.Query(`
-		SELECT id, market_id, outcome_id, specifiers
-		FROM outcomes
-		WHERE outcome_name IS NULL OR outcome_name = ''
-		LIMIT 50000
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to query outcomes to update: %w", err)
-	}
-	defer outcomeRows.Close()
-	
-	outcomeStmt, err := tx.Prepare("UPDATE outcomes SET outcome_name = $1 WHERE id = $2")
-	if err != nil {
-		return fmt.Errorf("failed to prepare outcome update statement: %w", err)
-	}
-	defer outcomeStmt.Close()
-	
-	outcomeUpdateCount := 0
-	for outcomeRows.Next() {
-		var id int
-		var marketID, outcomeID, specifiers string
-		if err := outcomeRows.Scan(&id, &marketID, &outcomeID, &specifiers); err != nil {
-			continue
 		}
 		
-		outcomeName := s.GetOutcomeName(marketID, outcomeID, specifiers, nil) // ctx is often not needed here
-		
-		if _, err := outcomeStmt.Exec(outcomeName, id); err != nil {
-			// log and continue
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("failed to commit name updates: %w", err)
 		}
-		outcomeUpdateCount++
-	}
-	
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit name updates: %w", err)
-	}
-	
-	if marketUpdateCount > 0 || outcomeUpdateCount > 0 {
-		logger.Printf("[MarketDescService] ✅ Batch updated %d market names and %d outcome names", marketUpdateCount, outcomeUpdateCount)
-	}
+		
+		if marketUpdateCount > 0 {
+			logger.Printf("[MarketDescService] ✅ Batch updated %d market names", marketUpdateCount)
+		}
 	
 	return nil
 }
@@ -851,18 +817,17 @@ func (s *MarketDescriptionsService) UpdateExistingMarkets() (int, int, error) {
 		marketCount++
 	}
 	
-	// 更新 outcomes 表 (如果存在)
-	outcomeCount := 0
-	outcomeRows, err := tx.Query(`
-		SELECT o.id, m.sr_market_id, o.outcome_id, m.specifiers
-		FROM odds o
-		JOIN markets m ON o.market_id = m.id
-		WHERE o.outcome_name IS NULL OR o.outcome_name = '' OR o.outcome_name = 'Unknown Outcome'
-		LIMIT 50000
-	`)
-	if err != nil {
-		// outcomes 表可能不存在或结构不同,不返回错误
-		logger.Printf("[MarketDescriptions] ⚠️  Failed to query outcomes (may not exist): %v", err)
+		// 更新 odds 表中的 outcome_name 字段
+		outcomeCount := 0
+		outcomeRows, err := tx.Query(`
+			SELECT o.id, m.sr_market_id, o.outcome_id, m.specifiers
+			FROM odds o
+			JOIN markets m ON o.market_id = m.id
+			WHERE o.outcome_name IS NULL OR o.outcome_name = '' OR o.outcome_name = 'Unknown Outcome'
+			LIMIT 50000
+		`)
+		if err != nil {
+			logger.Printf("[MarketDescriptions] ⚠️  Failed to query odds for outcome name update: %v", err)
 	} else {
 		defer outcomeRows.Close()
 		

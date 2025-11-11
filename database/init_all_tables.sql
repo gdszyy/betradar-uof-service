@@ -157,20 +157,6 @@ CREATE TABLE IF NOT EXISTS odds_changes (
 CREATE INDEX IF NOT EXISTS idx_odds_changes_event_id ON odds_changes(event_id);
 CREATE INDEX IF NOT EXISTS idx_odds_changes_timestamp ON odds_changes(timestamp);
 
--- 7. Outcomes Table (结果表)
-CREATE TABLE IF NOT EXISTS outcomes (
-    id SERIAL PRIMARY KEY,
-    market_id INTEGER REFERENCES markets(id) ON DELETE CASCADE,
-    outcome_id VARCHAR(200) NOT NULL,
-    outcome_name VARCHAR(200),
-    specifiers TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_outcomes_market_id ON outcomes(market_id);
-CREATE INDEX IF NOT EXISTS idx_outcomes_outcome_id ON outcomes(outcome_id);
-
 -- ============================================================================
 -- Bet Settlement & Cancel Tables
 -- ============================================================================

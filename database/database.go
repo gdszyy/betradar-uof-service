@@ -117,27 +117,7 @@ func Migrate(db *sql.DB) error {
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );`,
-		
-		// 赛程表
-		`CREATE TABLE IF NOT EXISTS scheduled_events (
-    id BIGSERIAL PRIMARY KEY,
-    event_id VARCHAR(100) NOT NULL UNIQUE,
-    sport_id VARCHAR(50),
-    sport_name VARCHAR(255),
-    category_id VARCHAR(50),
-    category_name VARCHAR(255),
-    tournament_id VARCHAR(50),
-    tournament_name VARCHAR(255),
-    home_team_id VARCHAR(100),
-    home_team_name VARCHAR(255),
-    away_team_id VARCHAR(100),
-    away_team_name VARCHAR(255),
-    scheduled_time TIMESTAMP,
-    status VARCHAR(50),
-    live_odds VARCHAR(20),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);`,
+
 		
 		// 盘口表
 		`CREATE TABLE IF NOT EXISTS markets (
@@ -186,17 +166,7 @@ func Migrate(db *sql.DB) error {
     timestamp BIGINT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );`,
-		
-		// 结果表 (静态定义)
-		`CREATE TABLE IF NOT EXISTS outcomes (
-    id SERIAL PRIMARY KEY,
-    market_id INTEGER NOT NULL,
-    outcome_id VARCHAR(200) NOT NULL,
-    outcome_name VARCHAR(200),
-    specifiers TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);`,
+
 		
 		// UOF 原始消息存储
 		`CREATE TABLE IF NOT EXISTS uof_messages (
@@ -393,9 +363,6 @@ func Migrate(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_tournaments_sport_id ON tournaments(sport_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_tournaments_category_id ON tournaments(category_id)`,
 		
-		`CREATE INDEX IF NOT EXISTS idx_scheduled_events_event_id ON scheduled_events(event_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_scheduled_events_sport_id ON scheduled_events(sport_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_scheduled_events_scheduled_time ON scheduled_events(scheduled_time)`,
 		
 		`CREATE INDEX IF NOT EXISTS idx_recovery_status_request_id ON recovery_status(request_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_recovery_status_product_id ON recovery_status(product_id)`,
