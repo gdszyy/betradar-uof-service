@@ -63,7 +63,31 @@ type APITournament struct {
 // TournamentsList 联赛列表
 type TournamentsList struct {
 	XMLName     xml.Name         `xml:"sport_tournaments"`
-	Tournaments []APITournament `xml:"tournament"`
+	// 修正：根据日志，tournament 标签可能直接在 sport_tournaments 下，也可能在 tournaments 标签下。
+	// 考虑到 Go XML 解析器的行为，如果直接在根标签下，应该使用 `xml:"tournament"`。
+	// 如果 XML 结构是 <sport_tournaments><tournaments><tournament>...</tournament></tournaments></sport_tournaments>
+	// 则应该使用 `xml:"tournaments>tournament"`。
+	// 根据用户提供的日志，XML结构是 <sport_tournaments>...<tournaments><tournament>...</tournament></tournaments></sport_tournaments>
+	// 但用户说“sport_tournaments 标签下直接包含了 tournament 标签”，这与日志不符。
+	// 考虑到 Go XML 解析的灵活性，如果直接使用 `xml:"tournament"` 无法解析，可能是因为 XML 结构是嵌套的。
+	// 让我们尝试将标签路径改为 `xml:"tournaments>tournament"`，以匹配日志中的嵌套结构。
+	// 
+	// 重新分析用户提供的日志：
+	// <sport_tournaments ...>
+	//     <sport id="sr:sport:109" name="ESport Counter-Strike"/>
+	//     <tournaments>
+	//         <tournament id="sr:tournament:2392" name="ESL Pro League">
+	//             ...
+	//         </tournament>
+	//     </tournaments>
+	// </sport_tournaments>
+	// 
+	// 原始代码：
+	// Tournaments []APITournament `xml:"tournament"`
+	// 
+	// 原始代码的标签是错误的，它期望 <sport_tournaments><tournament>...</sport_tournaments>
+	// 正确的标签应该是 `xml:"tournaments>tournament"`
+	Tournaments []APITournament `xml:"tournaments>tournament"`
 }
 
 // GetAllSports 获取所有体育类型
