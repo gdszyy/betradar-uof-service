@@ -46,7 +46,7 @@ type APISport struct {
 // SportsList 体育类型列表
 type SportsList struct {
 	XMLName xml.Name   `xml:"sports"`
-	Sports  []APISport `xml:"sport"`
+	Sports  []APISport `xml:"sports>sport"`
 }
 
 // APITournament 联赛/赛事（API响应）
