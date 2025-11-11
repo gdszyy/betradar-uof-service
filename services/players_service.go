@@ -73,7 +73,7 @@ func (s *PlayersService) loadFromDatabase() error {
 	rows, err := s.db.Query(`
 		SELECT player_id, player_name 
 		FROM players 
-		ORDER BY created_at DESC
+			
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to query players: %w", err)

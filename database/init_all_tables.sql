@@ -377,6 +377,7 @@ CREATE TABLE IF NOT EXISTS players (
     player_name VARCHAR(200) NOT NULL,
     nationality VARCHAR(10),
     date_of_birth DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
