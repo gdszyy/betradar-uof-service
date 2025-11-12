@@ -31,13 +31,13 @@ func NewAMQPConnector(cfg *config.Config) *AMQPConnector {
 
 // getBookmakerInfo 从 API 获取 bookmaker ID 和 virtual host
 func (c *AMQPConnector) getBookmakerInfo() (string, string, error) {
-	url := fmt.Sprintf("%s/v1/users/me.xml", c.config.APIBaseURL)
+	url := fmt.Sprintf("%s/v1/users/whoami.xml", c.config.APIBaseURL)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+c.config.AccessToken)
+	req.Header.Set("x-access-token", c.config.AccessToken)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
