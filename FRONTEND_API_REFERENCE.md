@@ -2,9 +2,9 @@
 
 > **Betradar UOF Service - 前端开发者参考手册**
 > 
-> 版本: v2.0  
-> 更新时间: 2025-10-24  
-> Base URL: `https://your-service.railway.app/api`
+> 版本: v2.1  
+> 更新时间: 2025-11-11  
+> Base URL: `https://betradar-uof-service-production.up.railway.app/api`},{find:
 
 ---
 
