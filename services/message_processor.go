@@ -2,7 +2,6 @@ package services
 
 import (
 	"encoding/xml"
-	"time"
 
 	"uof-service/config"
 	"uof-service/logger"
