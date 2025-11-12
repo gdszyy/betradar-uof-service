@@ -19,67 +19,37 @@ type MessageBroadcaster interface {
 // AMQPConsumer 负责处理从 AMQPConnector 接收到的消息
 type AMQPConsumer struct {
 	config                    *config.Config
+	// AMQPConsumer 现在作为 Ingestor，只负责将消息转发到 Broker
+	broker MessageBroker // 新增：抽象的消息队列接口
+	
+	// 保留部分核心依赖
 	messageStore              *MessageStore
-	broadcaster               MessageBroadcaster
 	recoveryManager           *RecoveryManager
 	notifier                  *LarkNotifier
 	statsTracker              *MessageStatsTracker
-	matchMonitor              *MatchMonitor
-	fixtureParser             *FixtureParser
-	oddsChangeParser          *OddsChangeParser
-	oddsParser                *OddsParser
-	betSettlementParser       *BetSettlementParser
-	betStopProcessor          *BetStopProcessor
-	betCancelProcessor        *BetCancelProcessor
-	rollbackBetSettlementProc *RollbackBetSettlementProcessor
-	rollbackBetCancelProc     *RollbackBetCancelProcessor
-	srnMappingService         *SRNMappingService
-	fixtureService            *FixtureService
-	marketDescService         *MarketDescriptionsService
+	
+	// 移除所有业务处理器依赖
+	// fixtureParser             *FixtureParser
+	// oddsChangeParser          *OddsChangeParser
+	// ...
+
 	done                      chan bool
 }
 
 // NewAMQPConsumer 创建 AMQPConsumer 实例
-func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broadcaster MessageBroadcaster, marketDescService *MarketDescriptionsService) *AMQPConsumer {
+// AMQPConsumer 现在作为 Ingestor，只依赖于 Broker 和少量核心服务
+func NewAMQPConsumer(cfg *config.Config, store *MessageStore, broker MessageBroker) *AMQPConsumer {
 	notifier := NewLarkNotifier(cfg.LarkWebhook)
 	statsTracker := NewMessageStatsTracker(notifier, 5*time.Minute)
 
-	// 初始化解析器
-	srnMappingService := NewSRNMappingService(cfg.UOFAPIToken, cfg.APIBaseURL, store.db)
-	fixtureParser := NewFixtureParser(store.db, srnMappingService, cfg.APIBaseURL, cfg.AccessToken)
-	oddsChangeParser := NewOddsChangeParser(store.db)
-	oddsParser := NewOddsParser(store.db, marketDescService)
-	betSettlementParser := NewBetSettlementParser(store.db)
-	betStopProcessor := NewBetStopProcessor(store.db)
-	betCancelProcessor := NewBetCancelProcessor(store.db)
-	rollbackBetSettlementProc := NewRollbackBetSettlementProcessor(store.db)
-	rollbackBetCancelProc := NewRollbackBetCancelProcessor(store.db)
-	fixtureService := NewFixtureService(cfg.UOFAPIToken, cfg.APIBaseURL)
-
-	// 从数据库加载 SRN mapping 缓存
-	if err := srnMappingService.LoadCacheFromDB(); err != nil {
-		logger.Errorf("Warning: failed to load SRN mapping cache: %v", err)
-	}
-
 	return &AMQPConsumer{
-		config:                    cfg,
-		messageStore:              store,
-		broadcaster:               broadcaster,
-		recoveryManager:           NewRecoveryManager(cfg, store),
-		notifier:                  notifier,
-		statsTracker:              statsTracker,
-		fixtureParser:             fixtureParser,
-		oddsChangeParser:          oddsChangeParser,
-		oddsParser:                oddsParser,
-		betSettlementParser:       betSettlementParser,
-		betStopProcessor:          betStopProcessor,
-		betCancelProcessor:        betCancelProcessor,
-		rollbackBetSettlementProc: rollbackBetSettlementProc,
-		rollbackBetCancelProc:     rollbackBetCancelProc,
-		srnMappingService:         srnMappingService,
-		fixtureService:            fixtureService,
-		marketDescService:         marketDescService,
-		done:                      make(chan bool),
+		config:          cfg,
+		messageStore:    store,
+		broker:          broker, // 注入 Broker
+		recoveryManager: NewRecoveryManager(cfg, store),
+		notifier:        notifier,
+		statsTracker:    statsTracker,
+		done:            make(chan bool),
 	}
 }
 
@@ -139,48 +109,37 @@ func (c *AMQPConsumer) processMessage(msg amqp.Delivery) {
 		c.statsTracker.Record(messageType)
 	}
 
-	// 存储到数据库
+	// 存储到数据库 (Ingestor 仍然负责存储原始消息)
 	if err := c.messageStore.SaveMessage(messageType, eventID, productID, sportID, routingKey, xmlContent, timestamp); err != nil {
 		logger.Errorf("Failed to save message: %v", err)
 	}
 
-	// 广播到WebSocket客户端 (包含基本数据)
-	if c.broadcaster != nil {
-		data := c.extractMessageData(messageType, xmlContent)
-		c.broadcaster.Broadcast(map[string]interface{}{
-			"type":         "message",
-			"message_type": messageType,
-			"event_id":     eventID,
-			"product_id":   productID,
-			"routing_key":  routingKey,
-			"timestamp":    timestamp,
-			"data":         data,
-		})
+	// -------------------------------------------------------------------
+	// 核心修改：将消息转发到 Broker
+	// -------------------------------------------------------------------
+	if c.broker != nil && messageType != "" {
+		topic := GetTopicName(messageType)
+		brokerMsg := BrokerMessage{
+			Topic: topic,
+			Key:   eventID, // 使用 eventID 作为 Key，确保同一赛事的顺序性
+			Value: msg.Body, // 发送原始字节，避免二次转换
+		}
+		if err := c.broker.Produce(brokerMsg); err != nil {
+			logger.Errorf("Failed to produce message to broker topic %s: %v", topic, err)
+		}
 	}
-
-	// 处理特定消息类型
+	// -------------------------------------------------------------------
+	
+	// 仅保留 Ingestor 必须处理的逻辑：alive 和 snapshot_complete
 	switch messageType {
 	case "alive":
 		c.handleAlive(xmlContent)
-	case "odds_change":
-		c.handleOddsChange(eventID, productID, xmlContent, timestamp)
-	case "bet_stop":
-		c.handleBetStop(eventID, productID, xmlContent, timestamp)
-	case "bet_settlement":
-		c.handleBetSettlement(eventID, productID, xmlContent, timestamp)
-	case "bet_cancel":
-		c.handleBetCancel(eventID, productID, xmlContent, timestamp)
-	case "fixture":
-		c.handleFixture(eventID, productID, xmlContent, timestamp)
-	case "fixture_change":
-		c.handleFixtureChange(eventID, productID, xmlContent, timestamp)
-	case "rollback_bet_settlement":
-		c.handleRollbackBetSettlement(eventID, productID, xmlContent, timestamp)
-	case "rollback_bet_cancel":
-		c.handleRollbackBetCancel(eventID, productID, xmlContent, timestamp)
 	case "snapshot_complete":
 		c.handleSnapshotComplete(xmlContent)
 	}
+	
+	// 移除 WebSocket 广播逻辑，这应该由 MessageProcessor 或单独的模块处理
+	// 移除所有业务处理逻辑 (odds_change, bet_stop, fixture, etc.)
 }
 
 // parseMessage 解析消息基本信息
@@ -246,61 +205,7 @@ func (c *AMQPConsumer) handleAlive(xmlContent string) {
 	}
 }
 
-// handleOddsChange 处理 odds_change 消息
-func (c *AMQPConsumer) handleOddsChange(eventID string, productID *int, xmlContent string, timestamp int64) {
-	if err := c.oddsChangeParser.ParseAndStore(xmlContent); err != nil {
-		logger.Errorf("Failed to handle odds_change: %v", err)
-	}
-}
-
-// handleBetStop 处理 bet_stop 消息
-func (c *AMQPConsumer) handleBetStop(eventID string, productID *int, xmlContent string, timestamp int64) {
-	if err := c.betStopProcessor.ProcessBetStop(xmlContent); err != nil {
-		logger.Errorf("Failed to handle bet_stop: %v", err)
-	}
-}
-
-// handleBetSettlement 处理 bet_settlement 消息
-func (c *AMQPConsumer) handleBetSettlement(eventID string, productID *int, xmlContent string, timestamp int64) {
-	if err := c.betSettlementParser.ParseAndStore(xmlContent); err != nil {
-		logger.Errorf("Failed to handle bet_settlement: %v", err)
-	}
-}
-
-// handleBetCancel 处理 bet_cancel 消息
-func (c *AMQPConsumer) handleBetCancel(eventID string, productID *int, xmlContent string, timestamp int64) {
-	if err := c.betCancelProcessor.ProcessBetCancel(xmlContent); err != nil {
-		logger.Errorf("Failed to handle bet_cancel: %v", err)
-	}
-}
-
-// handleFixture 处理 fixture 消息
-func (c *AMQPConsumer) handleFixture(eventID string, productID *int, xmlContent string, timestamp int64) {
-	if err := c.fixtureParser.ParseAndStore(xmlContent); err != nil {
-		logger.Errorf("Failed to handle fixture: %v", err)
-	}
-}
-
-// handleFixtureChange 处理 fixture_change 消息
-func (c *AMQPConsumer) handleFixtureChange(eventID string, productID *int, xmlContent string, timestamp int64) {
-	if err := c.fixtureParser.ParseFixtureChange(eventID, xmlContent); err != nil {
-		logger.Errorf("Failed to handle fixture_change: %v", err)
-	}
-}
-
-// handleRollbackBetSettlement 处理 rollback_bet_settlement 消息
-func (c *AMQPConsumer) handleRollbackBetSettlement(eventID string, productID *int, xmlContent string, timestamp int64) {
-	if err := c.rollbackBetSettlementProc.ProcessRollbackBetSettlement(xmlContent); err != nil {
-		logger.Errorf("Failed to handle rollback_bet_settlement: %v", err)
-	}
-}
-
-// handleRollbackBetCancel 处理 rollback_bet_cancel 消息
-func (c *AMQPConsumer) handleRollbackBetCancel(eventID string, productID *int, xmlContent string, timestamp int64) {
-	if err := c.rollbackBetCancelProc.ProcessRollbackBetCancel(xmlContent); err != nil {
-		logger.Errorf("Failed to handle rollback_bet_cancel: %v", err)
-	}
-}
+// 移除所有业务处理函数，它们将被 MessageProcessor 模块取代
 
 // handleSnapshotComplete 处理 snapshot_complete 消息
 func (c *AMQPConsumer) handleSnapshotComplete(xmlContent string) {

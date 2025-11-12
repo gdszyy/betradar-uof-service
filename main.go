@@ -130,29 +130,68 @@ func main() {
 	statsTracker := services.NewMessageStatsTracker(larkNotifier, 5*time.Minute)
 	go statsTracker.StartPeriodicReport()
 
-		// 创建 AMQP 连接器
-		amqpConnector := services.NewAMQPConnector(cfg)
-
-		// 启动 AMQP 连接器并获取消息通道
-		msgs, err := amqpConnector.Start()
-		if err != nil {
-			logger.Fatalf("Failed to start AMQP connector: %v", err)
-		}
-
-		// 启动 AMQP 消费者 (消息处理层)
-		amqpConsumer := services.NewAMQPConsumer(cfg, messageStore, wsHub, marketDescService)
-		
-		// 设置消息统计回调
-		amqpConsumer.SetStatsTracker(statsTracker)
-		
-		go func() {
-			if err := amqpConsumer.Start(msgs); err != nil {
-				logger.Fatalf("AMQP consumer error: %v", err)
-				larkNotifier.NotifyError("AMQP Consumer", err.Error())
-			}
-		}()
+			// -------------------------------------------------------------------
+			// 1. 启动 Broker (Kafka 替代模块)
+			// -------------------------------------------------------------------
+			broker := services.NewInMemoryBroker()
+			defer broker.Close()
+			logger.Println("[Broker] ✅ In-Memory Broker started")
+			
+			// -------------------------------------------------------------------
+			// 2. 启动 UOF Ingestor (AMQP Connector + AMQP Consumer)
+			// -------------------------------------------------------------------
+			// 创建 AMQP 连接器
+			amqpConnector := services.NewAMQPConnector(cfg)
 	
-		logger.Println("AMQP consumer started")
+			// 启动 AMQP 连接器并获取消息通道
+			msgs, err := amqpConnector.Start()
+			if err != nil {
+				logger.Fatalf("Failed to start AMQP connector: %v", err)
+			}
+	
+			// 启动 AMQP 消费者 (Ingestor 层)
+			// 注意：这里不再需要 wsHub 和 marketDescService，因为业务逻辑已迁移
+			amqpConsumer := services.NewAMQPConsumer(cfg, messageStore, broker) 
+			
+			// 设置消息统计回调
+			amqpConsumer.SetStatsTracker(statsTracker)
+			
+			go func() {
+				if err := amqpConsumer.Start(msgs); err != nil {
+					logger.Fatalf("AMQP consumer error: %v", err)
+					larkNotifier.NotifyError("AMQP Consumer", err.Error())
+				}
+			}()
+		
+			logger.Println("[Ingestor] ✅ AMQP Ingestor started")
+			
+			// -------------------------------------------------------------------
+			// 3. 启动 Message Processor (业务处理层)
+			// -------------------------------------------------------------------
+			// 创建 Message Processor 实例
+			// 注意：这里需要 wsHub 和 marketDescService，因为业务逻辑已迁移到这里
+			processor := services.NewMessageProcessor(cfg, messageStore, broker, wsHub, marketDescService)
+			
+			// 定义需要处理的消息类型 (Topic)
+			messageTypes := []string{
+				"odds_change", 
+				"bet_stop", 
+				"bet_settlement", 
+				"bet_cancel", 
+				"fixture", 
+				"fixture_change", 
+				"rollback_bet_settlement", 
+				"rollback_bet_cancel",
+			}
+			
+			// 为每种消息类型启动一个独立的消费者
+			for _, msgType := range messageTypes {
+				if err := processor.StartConsumer(msgType); err != nil {
+					logger.Fatalf("Failed to start MessageProcessor for %s: %v", msgType, err)
+				}
+			}
+			
+			logger.Println("[Processor] ✅ Message Processor started for all business topics")
 
 	// 启动Web服务器
 	server := web.NewServer(cfg, db, wsHub, larkNotifier, marketDescService)
@@ -358,10 +397,11 @@ func main() {
 
 	logger.Println("Shutting down service...")
 
-		// 清理资源
-		amqpConsumer.Stop()
-		amqpConnector.Stop() // 新增：停止 AMQP 连接器
-		server.Stop()
+			// 清理资源
+			amqpConsumer.Stop()
+			amqpConnector.Stop() 
+			// processor.Stop() // MessageProcessor 当前没有 Stop 方法，但 broker.Close() 会关闭通道
+			server.Stop()
 
 	logger.Println("Service stopped")
 }
