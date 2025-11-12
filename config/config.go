@@ -13,9 +13,10 @@ type Config struct {
 	UOFAPIToken   string // UOF API Token (for REST API calls)
 	Username      string
 	Password      string
-	BookmakerID   string
-	Products      []string
-	MessagingHost string
+		BookmakerID   string
+		VirtualHost   string // 新增: AMQP Virtual Host
+		Products      []string
+		MessagingHost string
 	APIBaseURL    string
 	RoutingKeys   []string
 

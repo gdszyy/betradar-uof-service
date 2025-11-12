@@ -27,73 +27,48 @@ func DefaultReconnectConfig() *ReconnectConfig {
 	}
 }
 
-// StartWithReconnect 启动 AMQP 消费者并支持自动重连
-func (c *AMQPConsumer) StartWithReconnect() error {
+// StartWithReconnect 启动 AMQP 连接器并支持自动重连，返回消息通道
+func (c *AMQPConnector) StartWithReconnect() (<-chan amqp.Delivery, error) {
 	reconnectConfig := DefaultReconnectConfig()
 	
-	logger.Println("[AMQP] Starting consumer with auto-reconnect enabled")
+	logger.Println("[AMQP] Starting connector with auto-reconnect enabled")
 	
 	// 首次连接
-	if err := c.connectAndConsume(); err != nil {
-		return fmt.Errorf("initial connection failed: %w", err)
+	msgs, err := c.connectAndConsume()
+	if err != nil {
+		return nil, fmt.Errorf("initial connection failed: %w", err)
 	}
 	
 	// 监控连接状态并自动重连
 	go c.monitorConnection(reconnectConfig)
 	
-	return nil
+	return msgs, nil
 }
 
-// connectAndConsume 连接并开始消费
-func (c *AMQPConsumer) connectAndConsume() error {
-	// 获取 bookmaker 信息
-	bookmakerId, virtualHost, err := c.getBookmakerInfo()
-	if err != nil {
-		return fmt.Errorf("failed to get bookmaker info: %w", err)
-	}
-	
-	logger.Printf("[AMQP] Bookmaker ID: %s, Virtual Host: %s", bookmakerId, virtualHost)
-	
-	// 建立连接
-	if err := c.connect(virtualHost); err != nil {
-		return fmt.Errorf("failed to connect: %w", err)
-	}
-	
-	// 设置通道
-	if err := c.setupChannel(); err != nil {
-		return fmt.Errorf("failed to setup channel: %w", err)
-	}
-	
-	// 开始消费
-	if err := c.startConsuming(); err != nil {
-		return fmt.Errorf("failed to start consuming: %w", err)
-	}
-	
-	// 发送启动通知
-	go c.notifier.NotifyServiceStart(bookmakerId, c.config.RecoveryProducts)
-	
-	// 启动消息统计
-	go c.statsTracker.StartPeriodicReport()
-	
-	// 自动触发恢复
-	if c.config.AutoRecovery {
-		logger.Println("[AMQP] Auto recovery enabled, triggering full recovery...")
-		go func() {
-			time.Sleep(3 * time.Second)
-			if err := c.recoveryManager.TriggerFullRecovery(); err != nil {
-				logger.Errorf("[AMQP] Auto recovery failed: %v", err)
-			} else {
-				logger.Println("[AMQP] Auto recovery completed successfully")
-			}
-		}()
-	}
-	
-	return nil
+// connectAndConsume 连接并开始消费，返回消息通道
+func (c *AMQPConnector) connectAndConsume() (<-chan amqp.Delivery, error) {
+		// 建立连接
+		if err := c.connect(); err != nil {
+			return nil, fmt.Errorf("failed to connect: %w", err)
+		}
+		
+		// 设置通道
+		if err := c.setupChannel(); err != nil {
+			return nil, fmt.Errorf("failed to setup channel: %w", err)
+		}
+		
+		// 开始消费
+		msgs, err := c.startConsuming()
+		if err != nil {
+			return nil, fmt.Errorf("failed to start consuming: %w", err)
+		}
+		
+		return msgs, nil
 }
 
 // connect 建立 AMQP 连接
-func (c *AMQPConsumer) connect(virtualHost string) error {
-	logger.Printf("[AMQP] Connecting to %s (vhost: %s)...", c.config.MessagingHost, virtualHost)
+func (c *AMQPConnector) connect() error {
+		logger.Printf("[AMQP] Connecting to %s (vhost: %s)...", c.config.MessagingHost, c.config.VirtualHost)
 	
 	// TLS 配置
 	tlsConfig := &tls.Config{
@@ -102,7 +77,7 @@ func (c *AMQPConsumer) connect(virtualHost string) error {
 	
 	// AMQP 配置
 	config := amqp.Config{
-		Vhost:           virtualHost,
+			Vhost:           c.config.VirtualHost,
 		Heartbeat:       60 * time.Second,
 		Locale:          "en_US",
 		TLSClientConfig: tlsConfig,
@@ -127,7 +102,7 @@ func (c *AMQPConsumer) connect(virtualHost string) error {
 }
 
 // setupChannel 设置通道和队列
-func (c *AMQPConsumer) setupChannel() error {
+func (c *AMQPConnector) setupChannel() error {
 	// 创建通道
 	channel, err := c.conn.Channel()
 	if err != nil {
@@ -173,7 +148,7 @@ func (c *AMQPConsumer) setupChannel() error {
 }
 
 // startConsuming 开始消费消息
-func (c *AMQPConsumer) startConsuming() error {
+func (c *AMQPConnector) startConsuming() (<-chan amqp.Delivery, error) {
 	// 获取当前队列 (已在 setupChannel 中声明)
 	// 这里需要重新获取队列信息
 	queues, err := c.channel.QueueInspect("")
@@ -188,7 +163,7 @@ func (c *AMQPConsumer) startConsuming() error {
 			nil,   // arguments
 		)
 		if err != nil {
-			return fmt.Errorf("failed to declare queue: %w", err)
+			return nil, fmt.Errorf("failed to declare queue: %w", err)
 		}
 		queues = queue
 	}
@@ -204,19 +179,16 @@ func (c *AMQPConsumer) startConsuming() error {
 		nil,   // args
 	)
 	if err != nil {
-		return fmt.Errorf("failed to consume: %w", err)
+		return nil, fmt.Errorf("failed to consume: %w", err)
 	}
 	
 	logger.Println("[AMQP] ✅ Started consuming messages")
 	
-	// 处理消息
-	go c.handleMessages(msgs)
-	
-	return nil
+	return msgs, nil
 }
 
 // monitorConnection 监控连接状态并自动重连
-func (c *AMQPConsumer) monitorConnection(config *ReconnectConfig) {
+func (c *AMQPConnector) monitorConnection(config *ReconnectConfig) {
 	retryCount := 0
 	currentDelay := config.InitialDelay
 	
@@ -236,7 +208,7 @@ func (c *AMQPConsumer) monitorConnection(config *ReconnectConfig) {
 		// 检查是否达到最大重试次数
 		if config.MaxRetries > 0 && retryCount >= config.MaxRetries {
 		logger.Errorf("[AMQP] ❌ Max retries (%d) reached, giving up", config.MaxRetries)
-		c.notifier.SendText(fmt.Sprintf("❌ AMQP Connection: Max retries reached after %d attempts", retryCount))
+		// c.notifier.SendText(fmt.Sprintf("❌ AMQP Connection: Max retries reached after %d attempts", retryCount)) // 移除对 notifier 的依赖
 			return
 		}
 		
@@ -246,7 +218,7 @@ func (c *AMQPConsumer) monitorConnection(config *ReconnectConfig) {
 		time.Sleep(currentDelay)
 		
 		// 尝试重连
-		if err := c.reconnect(); err != nil {
+		if _, err := c.reconnect(); err != nil { // reconnect 现在返回 (<-chan amqp.Delivery, error)
 			logger.Errorf("[AMQP] ❌ Reconnect failed: %v", err)
 			
 			// 增加延迟 (指数退避)
@@ -260,7 +232,7 @@ func (c *AMQPConsumer) monitorConnection(config *ReconnectConfig) {
 		
 		// 重连成功
 		logger.Println("[AMQP] ✅ Reconnected successfully")
-		c.notifier.SendText(fmt.Sprintf("✅ AMQP Connection: Reconnected after %d attempts", retryCount))
+		// c.notifier.SendText(fmt.Sprintf("✅ AMQP Connection: Reconnected after %d attempts", retryCount)) // 移除对 notifier 的依赖
 		
 		// 重置重试计数和延迟
 		retryCount = 0
@@ -269,18 +241,17 @@ func (c *AMQPConsumer) monitorConnection(config *ReconnectConfig) {
 }
 
 // reconnect 重新连接
-func (c *AMQPConsumer) reconnect() error {
-	// 清理旧连接
-	if c.channel != nil {
-		c.channel.Close()
-		c.channel = nil
-	}
-	if c.conn != nil {
-		c.conn.Close()
-		c.conn = nil
-	}
-	
-	// 重新连接
-	return c.connectAndConsume()
-}
-
+func (c *AMQPConnector) reconnect() (<-chan amqp.Delivery, error) {
+			// 清理旧连接
+			if c.channel != nil {
+				c.channel.Close()
+				c.channel = nil
+			}
+			if c.conn != nil {
+				c.conn.Close()
+				c.conn = nil
+			}
+			
+			// 重新连接
+			return c.connectAndConsume()
+		}

@@ -130,20 +130,29 @@ func main() {
 	statsTracker := services.NewMessageStatsTracker(larkNotifier, 5*time.Minute)
 	go statsTracker.StartPeriodicReport()
 
-	// 启动AMQP消费者
-	amqpConsumer := services.NewAMQPConsumer(cfg, messageStore, wsHub, marketDescService)
-	
-	// 设置消息统计回调
-	amqpConsumer.SetStatsTracker(statsTracker)
-	
-	go func() {
-		if err := amqpConsumer.Start(); err != nil {
-			logger.Fatalf("AMQP consumer error: %v", err)
-			larkNotifier.NotifyError("AMQP Consumer", err.Error())
-		}
-	}()
+		// 创建 AMQP 连接器
+		amqpConnector := services.NewAMQPConnector(cfg)
 
-	logger.Println("AMQP consumer started")
+		// 启动 AMQP 连接器并获取消息通道
+		msgs, err := amqpConnector.Start()
+		if err != nil {
+			logger.Fatalf("Failed to start AMQP connector: %v", err)
+		}
+
+		// 启动 AMQP 消费者 (消息处理层)
+		amqpConsumer := services.NewAMQPConsumer(cfg, messageStore, wsHub, marketDescService)
+		
+		// 设置消息统计回调
+		amqpConsumer.SetStatsTracker(statsTracker)
+		
+		go func() {
+			if err := amqpConsumer.Start(msgs); err != nil {
+				logger.Fatalf("AMQP consumer error: %v", err)
+				larkNotifier.NotifyError("AMQP Consumer", err.Error())
+			}
+		}()
+	
+		logger.Println("AMQP consumer started")
 
 	// 启动Web服务器
 	server := web.NewServer(cfg, db, wsHub, larkNotifier, marketDescService)
@@ -349,9 +358,10 @@ func main() {
 
 	logger.Println("Shutting down service...")
 
-	// 清理资源
-	amqpConsumer.Stop()
-	server.Stop()
+		// 清理资源
+		amqpConsumer.Stop()
+		amqpConnector.Stop() // 新增：停止 AMQP 连接器
+		server.Stop()
 
 	logger.Println("Service stopped")
 }
