@@ -56,11 +56,11 @@ func (c *AMQPConnector) getBookmakerInfo() (string, string, error) {
 		return "", "", fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	type UserInfo struct {
-		XMLName     xml.Name `xml:"user"`
-		BookmakerID string   `xml:"bookmaker_id,attr"`
-		VirtualHost string   `xml:"virtual_host,attr"`
-	}
+		type UserInfo struct {
+			XMLName     xml.Name `xml:"bookmaker_details"`
+			BookmakerID string   `xml:"bookmaker_id,attr"`
+			VirtualHost string   `xml:"virtual_host,attr"`
+		}
 
 	var userInfo UserInfo
 	if err := xml.Unmarshal(body, &userInfo); err != nil {
