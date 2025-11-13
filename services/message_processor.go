@@ -5,6 +5,7 @@ import (
 
 	"uof-service/config"
 	"uof-service/logger"
+	"uof-service/services" // 引入 services 包，以便使用其中的结构体和工具函数
 )
 
 // MessageProcessor 负责从 Broker 消费特定 Topic 的消息，并执行业务逻辑
@@ -150,8 +151,198 @@ func (p *MessageProcessor) processMessage(msg BrokerMessage) {
 
 // extractMessageData 提取用于广播的附加数据 (从 AMQPConsumer 迁移过来)
 func (p *MessageProcessor) extractMessageData(messageType, xmlContent string) interface{} {
-	// TODO: 实际实现应从 xmlContent 中提取数据
-	return nil
+	// 深度解析和数据增强
+	switch messageType {
+	case "odds_change":
+		return p.extractOddsChangeData(xmlContent)
+	case "bet_stop":
+		return p.extractBetStopData(xmlContent)
+	case "fixture_change":
+		return p.extractFixtureChangeData(xmlContent)
+	case "bet_settlement":
+		return p.extractBetSettlementData(xmlContent)
+	default:
+		// 对于其他消息，只返回原始 XML 内容
+		return map[string]interface{}{
+			"xml_content": xmlContent,
+		}
+	}
+}
+
+// extractOddsChangeData 提取并增强 odds_change 消息数据
+func (p *MessageProcessor) extractOddsChangeData(xmlContent string) interface{} {
+	var oddsChange services.OddsChangeMessage
+	if err := xml.Unmarshal([]byte(xmlContent), &oddsChange); err != nil {
+		logger.Errorf("Failed to parse odds_change for broadcast: %v", err)
+		return map[string]interface{}{"xml_content": xmlContent}
+	}
+
+	// 提取比分和状态信息
+	var homeScore, awayScore *int
+	var matchStatus, status string
+	if oddsChange.SportEventStatus != nil {
+		ses := oddsChange.SportEventStatus
+		homeScore = ses.HomeScore
+		awayScore = ses.AwayScore
+		matchStatus = ses.MatchStatus
+		status = ses.Status
+	}
+
+	// 提取队伍名称
+	var homeTeamName, awayTeamName string
+	for _, comp := range oddsChange.SportEvent.Competitors {
+		if comp.Qualifier == "home" {
+			homeTeamName = comp.Name
+		} else if comp.Qualifier == "away" {
+			awayTeamName = comp.Name
+		}
+	}
+
+	// 提取市场和赔率信息 (简化，只提取关键信息)
+	markets := make([]map[string]interface{}, 0)
+	for _, market := range oddsChange.Odds.Markets {
+		marketName := p.marketDescService.GetMarketName(market.ID) // 假设 marketDescService 提供了 GetMarketName 方法
+		
+		outcomes := make([]map[string]interface{}, 0)
+		for _, outcome := range market.Outcomes {
+			outcomes = append(outcomes, map[string]interface{}{
+				"id": outcome.ID,
+				"name": outcome.Name,
+				"odds": outcome.Odds,
+				"active": outcome.Active,
+			})
+		}
+
+		markets = append(markets, map[string]interface{}{
+			"id": market.ID,
+			"name": marketName,
+			"status": market.Status,
+			"outcomes": outcomes,
+		})
+	}
+
+	return map[string]interface{}{
+		"event_id": oddsChange.EventID,
+		"product_id": oddsChange.ProductID,
+		"timestamp": oddsChange.Timestamp,
+		"home_score": homeScore,
+		"away_score": awayScore,
+		"match_status": matchStatus,
+		"status": status,
+		"home_team_name": homeTeamName,
+		"away_team_name": awayTeamName,
+		"markets": markets,
+	}
+}
+
+// extractBetStopData 提取并增强 bet_stop 消息数据
+func (p *MessageProcessor) extractBetStopData(xmlContent string) interface{} {
+	var betStop services.BetStopMessage
+	if err := xml.Unmarshal([]byte(xmlContent), &betStop); err != nil {
+		logger.Errorf("Failed to parse bet_stop for broadcast: %v", err)
+		return map[string]interface{}{"xml_content": xmlContent}
+	}
+
+	return map[string]interface{}{
+		"event_id": betStop.EventID,
+		"product_id": betStop.ProductID,
+		"timestamp": betStop.Timestamp,
+		"market_status": betStop.MarketStatus,
+		"groups": betStop.Groups,
+		"reason": "Betting Suspended", // 补充业务描述
+	}
+}
+
+// extractFixtureChangeData 提取并增强 fixture_change 消息数据
+func (p *MessageProcessor) extractFixtureChangeData(xmlContent string) interface{} {
+	type FixtureChange struct {
+		StartTime    int64 `xml:"start_time,attr"`
+		NextLiveTime int64 `xml:"next_live_time,attr"`
+		ChangeType   int   `xml:"change_type,attr"`
+		ProductID    int   `xml:"product,attr"`
+	}
+	var fixtureChange FixtureChange
+	if err := xml.Unmarshal([]byte(xmlContent), &fixtureChange); err != nil {
+		logger.Errorf("Failed to parse fixture_change for broadcast: %v", err)
+		return map[string]interface{}{"xml_content": xmlContent}
+	}
+
+	// 尝试获取最新的赛事信息（假设 fixtureService 提供了 GetTrackedEventInfo 方法）
+	// 由于没有看到 GetTrackedEventInfo，我们只返回 change 消息的关键信息
+	
+	changeDescription := ""
+	switch fixtureChange.ChangeType {
+	case 0:
+		changeDescription = "New Fixture"
+	case 1:
+		changeDescription = "Start Time Change"
+	case 2:
+		changeDescription = "Coverage Change"
+	case 3:
+		changeDescription = "Coverage Added"
+	case 4:
+		changeDescription = "Coverage Removed"
+	case 5:
+		changeDescription = "Live Coverage Dropped"
+	default:
+		changeDescription = fmt.Sprintf("Unknown Change Type (%d)", fixtureChange.ChangeType)
+	}
+
+	return map[string]interface{}{
+		"product_id": fixtureChange.ProductID,
+		"timestamp": fixtureChange.StartTime, // 使用 start_time 作为时间戳
+		"change_type": fixtureChange.ChangeType,
+		"change_description": changeDescription,
+		"new_start_time": fixtureChange.StartTime,
+	}
+}
+
+// extractBetSettlementData 提取并增强 bet_settlement 消息数据
+func (p *MessageProcessor) extractBetSettlementData(xmlContent string) interface{} {
+	// 简化处理，只提取关键信息
+	type BetSettlement struct {
+		EventID string `xml:"event_id,attr"`
+		ProductID int `xml:"product,attr"`
+		Timestamp int64 `xml:"timestamp,attr"`
+		Markets []struct {
+			ID string `xml:"id,attr"`
+			Outcomes []struct {
+				ID string `xml:"id,attr"`
+				Status string `xml:"status,attr"` // Won, Lost, Half_Won, Half_Lost, Void
+			} `xml:"outcome"`
+		} `xml:"market"`
+	}
+	var settlement BetSettlement
+	if err := xml.Unmarshal([]byte(xmlContent), &settlement); err != nil {
+		logger.Errorf("Failed to parse bet_settlement for broadcast: %v", err)
+		return map[string]interface{}{"xml_content": xmlContent}
+	}
+
+	markets := make([]map[string]interface{}, 0)
+	for _, market := range settlement.Markets {
+		marketName := p.marketDescService.GetMarketName(market.ID)
+		
+		outcomes := make([]map[string]interface{}, 0)
+		for _, outcome := range market.Outcomes {
+			outcomes = append(outcomes, map[string]interface{}{
+				"id": outcome.ID,
+				"status": outcome.Status,
+			})
+		}
+
+		markets = append(markets, map[string]interface{}{
+			"id": market.ID,
+			"name": marketName,
+			"outcomes": outcomes,
+		})
+	}
+
+	return map[string]interface{}{
+		"event_id": settlement.EventID,
+		"product_id": settlement.ProductID,
+		"timestamp": settlement.Timestamp,
+		"markets": markets,
+	}
 }
 
 // handleOddsChange 处理 odds_change 消息 (从 AMQPConsumer 迁移过来)
