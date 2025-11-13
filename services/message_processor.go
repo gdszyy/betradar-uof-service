@@ -150,16 +150,8 @@ func (p *MessageProcessor) processMessage(msg BrokerMessage) {
 
 // extractMessageData 提取用于广播的附加数据 (从 AMQPConsumer 迁移过来)
 func (p *MessageProcessor) extractMessageData(messageType, xmlContent string) interface{} {
-	// 使用通用的 XMLToJSONMap 函数将 XML 内容转换为结构化的 Map
-	dataMap, err := XMLToJSONMap([]byte(xmlContent))
-	if err != nil {
-		// 转换失败时，记录错误并返回原始 XML 内容，作为最后的保障
-		logger.Errorf("Failed to convert XML to Map for message type %s: %v", messageType, err)
-		return map[string]interface{}{
-			"xml_content": xmlContent,
-		}
-	}
-	return dataMap
+	// TODO: 实际实现应从 xmlContent 中提取数据
+	return nil
 }
 
 // handleOddsChange 处理 odds_change 消息 (从 AMQPConsumer 迁移过来)
