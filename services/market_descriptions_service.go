@@ -468,6 +468,7 @@ func (s *MarketDescriptionsService) GetMarketName(marketID string, specifiers st
 				name = strings.ReplaceAll(name, "{"+key+"}", value)
 				name = strings.ReplaceAll(name, "{+"+key+"}", "+"+value)
 				name = strings.ReplaceAll(name, "{-"+key+"}", "-"+value)
+					name = strings.ReplaceAll(name, "{!"+key+"}", value)
 			}
 		}
 	}
