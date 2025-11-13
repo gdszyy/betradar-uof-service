@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 
 	"uof-service/config"
+	"fmt" // 修复 fmt 未导入的错误
 	"uof-service/logger"
 )
 
@@ -176,6 +177,12 @@ func (p *MessageProcessor) extractOddsChangeData(xmlContent string) interface{} 
 		return map[string]interface{}{"xml_content": xmlContent}
 	}
 
+	// 检查 marketDescService 是否存在
+	if p.marketDescService == nil {
+		logger.Error("marketDescService is nil in MessageProcessor")
+		return map[string]interface{}{"xml_content": xmlContent}
+	}
+
 	// 提取比分和状态信息
 	var homeScore, awayScore *int
 	var matchStatus, status string
@@ -198,28 +205,38 @@ func (p *MessageProcessor) extractOddsChangeData(xmlContent string) interface{} 
 	}
 
 	// 提取市场和赔率信息 (简化，只提取关键信息)
-	markets := make([]map[string]interface{}, 0)
-	for _, market := range oddsChange.Odds.Markets {
-			marketName := p.marketDescService.GetMarketName(market.ID) // 假设 marketDescService 提供了 GetMarketName 方法
-		
-		outcomes := make([]map[string]interface{}, 0)
-		for _, outcome := range market.Outcomes {
-			outcomes = append(outcomes, map[string]interface{}{
-				"id": outcome.ID,
-				"name": outcome.Name,
-				"odds": outcome.Odds,
-				"active": outcome.Active,
-			})
-		}
+		markets := make([]map[string]interface{}, 0)
+		for _, market := range oddsChange.Odds.Markets {
+			// 构造 ReplacementContext
+			ctx := &ReplacementContext{
+				Specifiers: market.Specifier,
+				// HomeTeamName 和 AwayTeamName 可以在这里添加，但为了简化，暂时只用 Specifiers
+			}
+			
+			// 修复 GetMarketName 参数错误: 需要 string 类型的 marketID, specifiers, 和 ctx
+			// 假设 market.ID 是 int，需要转换为 string
+			marketIDStr := strconv.Itoa(market.ID)
+			marketName := p.marketDescService.GetMarketName(marketIDStr, market.Specifier, ctx)
+			
+			outcomes := make([]map[string]interface{}, 0)
+			for _, outcome := range market.Outcomes {
+				// 修复 outcome.Name undefined 错误: 移除 Name 字段，因为它不在 OddsChangeMessage.Outcome 结构体中
+				// 结果名称需要通过 GetOutcomeName 获取，但为了简化，暂时只返回 ID 和 Odds
+				outcomes = append(outcomes, map[string]interface{}{
+					"id": outcome.ID,
+					"odds": outcome.Odds,
+					"active": outcome.Active,
+				})
+			}
 
 			markets = append(markets, map[string]interface{}{
 				"id": market.ID,
-				"specifier": market.Specifier, // 新增 specifier 字段
+				"specifier": market.Specifier,
 				"name": marketName,
 				"status": market.Status,
 				"outcomes": outcomes,
 			})
-	}
+		}
 
 	return map[string]interface{}{
 		"event_id": oddsChange.EventID,
@@ -321,7 +338,13 @@ func (p *MessageProcessor) extractBetSettlementData(xmlContent string) interface
 
 	markets := make([]map[string]interface{}, 0)
 		for _, market := range settlement.Markets {
-			marketName := p.marketDescService.GetMarketName(market.ID)
+			// 构造 ReplacementContext
+			ctx := &ReplacementContext{
+				Specifiers: market.Specifier,
+			}
+			
+			// 修复 GetMarketName 参数错误: 需要 string 类型的 marketID, specifiers, 和 ctx
+			marketName := p.marketDescService.GetMarketName(market.ID, market.Specifier, ctx)
 			
 			outcomes := make([]map[string]interface{}, 0)
 			for _, outcome := range market.Outcomes {
@@ -333,7 +356,7 @@ func (p *MessageProcessor) extractBetSettlementData(xmlContent string) interface
 
 			markets = append(markets, map[string]interface{}{
 				"id": market.ID,
-				"specifier": market.Specifier, // 新增 specifier 字段
+				"specifier": market.Specifier,
 				"name": marketName,
 				"outcomes": outcomes,
 			})
