@@ -5,7 +5,6 @@ import (
 
 	"uof-service/config"
 	"uof-service/logger"
-	"uof-service/services" // 引入 services 包，以便使用其中的结构体和工具函数
 )
 
 // MessageProcessor 负责从 Broker 消费特定 Topic 的消息，并执行业务逻辑
@@ -171,7 +170,7 @@ func (p *MessageProcessor) extractMessageData(messageType, xmlContent string) in
 
 // extractOddsChangeData 提取并增强 odds_change 消息数据
 func (p *MessageProcessor) extractOddsChangeData(xmlContent string) interface{} {
-	var oddsChange services.OddsChangeMessage
+	var oddsChange OddsChangeMessage
 	if err := xml.Unmarshal([]byte(xmlContent), &oddsChange); err != nil {
 		logger.Errorf("Failed to parse odds_change for broadcast: %v", err)
 		return map[string]interface{}{"xml_content": xmlContent}
@@ -238,7 +237,7 @@ func (p *MessageProcessor) extractOddsChangeData(xmlContent string) interface{} 
 
 // extractBetStopData 提取并增强 bet_stop 消息数据
 func (p *MessageProcessor) extractBetStopData(xmlContent string) interface{} {
-	var betStop services.BetStopMessage
+	var betStop BetStopMessage
 	if err := xml.Unmarshal([]byte(xmlContent), &betStop); err != nil {
 		logger.Errorf("Failed to parse bet_stop for broadcast: %v", err)
 		return map[string]interface{}{"xml_content": xmlContent}
