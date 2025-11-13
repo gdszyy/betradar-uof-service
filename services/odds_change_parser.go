@@ -146,19 +146,21 @@ func (p *OddsChangeParser) ParseAndStore(xmlContent string) error {
 		}
 	}
 
-	// 存储到数据库
-	if err := p.storeOddsChangeData(
-		oddsChange.EventID,
-		homeScore,
-		awayScore,
-		matchStatus,
-		status,
-		matchTime,
-		homeTeamID,
-		homeTeamName,
-		awayTeamID,
-		awayTeamName,
-	); err != nil {
+		// 存储到数据库
+		statusOrder := p.getStatusOrder(status)
+		if err := p.storeOddsChangeData(
+			oddsChange.EventID,
+			homeScore,
+			awayScore,
+			matchStatus,
+			status,
+			matchTime,
+			homeTeamID,
+			homeTeamName,
+			awayTeamID,
+			awayTeamName,
+			statusOrder,
+		); err != nil {
 		return fmt.Errorf("failed to store odds_change data: %w", err)
 	}
 
@@ -205,13 +207,32 @@ func (p *OddsChangeParser) ParseAndStore(xmlContent string) error {
 	return nil
 }
 
+// getStatusOrder 为比赛状态分配一个数值，用于确保状态的单向更新
+func (p *OddsChangeParser) getStatusOrder(status string) int {
+	switch status {
+	case "closed":
+		return 50
+	case "ended":
+		return 40
+	case "live":
+		return 30
+	case "suspended", "interrupted", "delayed":
+		return 20
+	case "not_started", "postponed", "cancelled", "abandoned":
+		return 10
+	default:
+		return 0
+	}
+}
+
 // storeOddsChangeData 存储 Odds Change 数据到数据库
 func (p *OddsChangeParser) storeOddsChangeData(
-	eventID string,
-	homeScore, awayScore *int,
+		eventID string,
+		homeScore, awayScore *int,
 	matchStatus, status, matchTime string,
-	homeTeamID, homeTeamName, awayTeamID, awayTeamName string,
-) error {
+			homeTeamID, homeTeamName, awayTeamID, awayTeamName string,
+			statusOrder int,
+		) error {
 	// 将 sport_event_status.status 数字映射为状态名称
 	statusMap := map[string]string{
 		"0": "not_started",
@@ -232,31 +253,33 @@ func (p *OddsChangeParser) storeOddsChangeData(
 	}
 	
 	// 更新 tracked_events 表 (不再使用 ld_matches)
-query := `INSERT INTO tracked_events (event_id, home_score, away_score, match_status, status, home_team_id, away_team_id, home_team_name, away_team_name, last_message_at, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ON CONFLICT (event_id) DO UPDATE SET home_score = EXCLUDED.home_score, away_score = EXCLUDED.away_score, match_status = CASE WHEN EXCLUDED.match_status = '' THEN tracked_events.match_status ELSE EXCLUDED.match_status END, status = CASE WHEN EXCLUDED.status = '' THEN tracked_events.status ELSE EXCLUDED.status END, home_team_id = CASE WHEN EXCLUDED.home_team_id = '' THEN tracked_events.home_team_id ELSE EXCLUDED.home_team_id END, away_team_id = CASE WHEN EXCLUDED.away_team_id = '' THEN tracked_events.away_team_id ELSE EXCLUDED.away_team_id END, home_team_name = CASE WHEN EXCLUDED.home_team_name = '' THEN tracked_events.home_team_name ELSE EXCLUDED.home_team_name END, away_team_name = CASE WHEN EXCLUDED.away_team_name = '' THEN tracked_events.away_team_name ELSE EXCLUDED.away_team_name END, last_message_at = EXCLUDED.last_message_at, updated_at = EXCLUDED.updated_at`
+query := `INSERT INTO tracked_events (event_id, home_score, away_score, match_status, status, status_order, home_team_id, away_team_id, home_team_name, away_team_name, last_message_at, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) ON CONFLICT (event_id) DO UPDATE SET home_score = EXCLUDED.home_score, away_score = EXCLUDED.away_score, match_status = CASE WHEN EXCLUDED.match_status = '' THEN tracked_events.match_status ELSE EXCLUDED.match_status END, status = CASE WHEN EXCLUDED.status = '' THEN tracked_events.status ELSE EXCLUDED.status END, status_order = CASE WHEN EXCLUDED.status_order > tracked_events.status_order THEN EXCLUDED.status_order ELSE tracked_events.status_order END, home_team_id = CASE WHEN EXCLUDED.home_team_id = '' THEN tracked_events.home_team_id ELSE EXCLUDED.home_team_id END, away_team_id = CASE WHEN EXCLUDED.away_team_id = '' THEN tracked_events.away_team_id ELSE EXCLUDED.away_team_id END, home_team_name = CASE WHEN EXCLUDED.home_team_name = '' THEN tracked_events.home_team_name ELSE EXCLUDED.home_team_name END, away_team_name = CASE WHEN EXCLUDED.away_team_name = '' THEN tracked_events.away_team_name ELSE EXCLUDED.away_team_name END, last_message_at = EXCLUDED.last_message_at, updated_at = EXCLUDED.updated_at`
 
 	now := time.Now()
 	var t1Score, t2Score int
 	if homeScore != nil {
 		t1Score = *homeScore
 	}
-	if awayScore != nil {
-		t2Score = *awayScore
-	}
-
-	// 使用 status 如果 matchStatus 为空
-	finalStatus := fmt.Sprintf("%s", matchStatus)
-	if finalStatus == "" {
-		finalStatus = status
-	}
+		if awayScore != nil {
+			t2Score = *awayScore
+		}
+		
+		// 使用 status 如果 matchStatus 为空
+		finalStatus := fmt.Sprintf("%s", matchStatus)
+		if finalStatus == "" {
+			finalStatus = status
+		}
+		
+			statusOrder = p.getStatusOrder(statusName)
 
 	// p.logger.Printf("[DEBUG] SQL Query: %s, Args: event_id=%v, home_score=%v, away_score=%v, match_status=%v, match_time=%v, status=%v", CleanSQLQuery(query), eventID, t1Score, t2Score, finalStatus, matchTime, statusName)
 		
 		_, err := p.db.Exec(
-			query,
-				eventID, t1Score, t2Score, matchTime, statusName,
-			homeTeamID, awayTeamID, homeTeamName, awayTeamName,
-			now, now, now,
-		)
+				query,
+					eventID, t1Score, t2Score, finalStatus, statusName, statusOrder,
+					homeTeamID, awayTeamID, homeTeamName, awayTeamName,
+					now, now,
+			)
 		if err != nil {
 			return fmt.Errorf("failed to upsert tracked_events: %w", err)
 		}
