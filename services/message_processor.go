@@ -5,6 +5,7 @@ import (
 
 	"uof-service/config"
 	"fmt" // 修复 fmt 未导入的错误
+	"strconv" // 修复 strconv 未导入的错误
 	"uof-service/logger"
 )
 
@@ -177,11 +178,11 @@ func (p *MessageProcessor) extractOddsChangeData(xmlContent string) interface{} 
 		return map[string]interface{}{"xml_content": xmlContent}
 	}
 
-	// 检查 marketDescService 是否存在
-	if p.marketDescService == nil {
-		logger.Error("marketDescService is nil in MessageProcessor")
-		return map[string]interface{}{"xml_content": xmlContent}
-	}
+		// 检查 marketDescService 是否存在
+		if p.marketDescService == nil {
+			logger.Printf("marketDescService is nil in MessageProcessor") // 修复 logger.Error 调用错误
+			return map[string]interface{}{"xml_content": xmlContent}
+		}
 
 	// 提取比分和状态信息
 	var homeScore, awayScore *int
