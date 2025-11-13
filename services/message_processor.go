@@ -201,7 +201,7 @@ func (p *MessageProcessor) extractOddsChangeData(xmlContent string) interface{} 
 	// 提取市场和赔率信息 (简化，只提取关键信息)
 	markets := make([]map[string]interface{}, 0)
 	for _, market := range oddsChange.Odds.Markets {
-		marketName := p.marketDescService.GetMarketName(market.ID) // 假设 marketDescService 提供了 GetMarketName 方法
+			marketName := p.marketDescService.GetMarketName(market.ID) // 假设 marketDescService 提供了 GetMarketName 方法
 		
 		outcomes := make([]map[string]interface{}, 0)
 		for _, outcome := range market.Outcomes {
@@ -213,12 +213,13 @@ func (p *MessageProcessor) extractOddsChangeData(xmlContent string) interface{} 
 			})
 		}
 
-		markets = append(markets, map[string]interface{}{
-			"id": market.ID,
-			"name": marketName,
-			"status": market.Status,
-			"outcomes": outcomes,
-		})
+			markets = append(markets, map[string]interface{}{
+				"id": market.ID,
+				"specifier": market.Specifier, // 新增 specifier 字段
+				"name": marketName,
+				"status": market.Status,
+				"outcomes": outcomes,
+			})
 	}
 
 	return map[string]interface{}{
@@ -306,6 +307,7 @@ func (p *MessageProcessor) extractBetSettlementData(xmlContent string) interface
 		Timestamp int64 `xml:"timestamp,attr"`
 		Markets []struct {
 			ID string `xml:"id,attr"`
+			Specifier string `xml:"specifiers,attr"` // 新增 specifier 字段
 			Outcomes []struct {
 				ID string `xml:"id,attr"`
 				Status string `xml:"status,attr"` // Won, Lost, Half_Won, Half_Lost, Void
@@ -319,23 +321,24 @@ func (p *MessageProcessor) extractBetSettlementData(xmlContent string) interface
 	}
 
 	markets := make([]map[string]interface{}, 0)
-	for _, market := range settlement.Markets {
-		marketName := p.marketDescService.GetMarketName(market.ID)
-		
-		outcomes := make([]map[string]interface{}, 0)
-		for _, outcome := range market.Outcomes {
-			outcomes = append(outcomes, map[string]interface{}{
-				"id": outcome.ID,
-				"status": outcome.Status,
+		for _, market := range settlement.Markets {
+			marketName := p.marketDescService.GetMarketName(market.ID)
+			
+			outcomes := make([]map[string]interface{}, 0)
+			for _, outcome := range market.Outcomes {
+				outcomes = append(outcomes, map[string]interface{}{
+					"id": outcome.ID,
+					"status": outcome.Status,
+				})
+			}
+
+			markets = append(markets, map[string]interface{}{
+				"id": market.ID,
+				"specifier": market.Specifier, // 新增 specifier 字段
+				"name": marketName,
+				"outcomes": outcomes,
 			})
 		}
-
-		markets = append(markets, map[string]interface{}{
-			"id": market.ID,
-			"name": marketName,
-			"outcomes": outcomes,
-		})
-	}
 
 	return map[string]interface{}{
 		"event_id": settlement.EventID,

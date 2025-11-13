@@ -84,7 +84,8 @@ type OddsInfo struct {
 
 // Market 市场信息
 type Market struct {
-	ID       int       `xml:"id,attr"`
+	ID        int       `xml:"id,attr"`
+	Specifier string    `xml:"specifiers,attr"`
 	Status   int       `xml:"status,attr"`
 	Outcomes []Outcome `xml:"outcome"`
 }
