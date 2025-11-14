@@ -276,9 +276,9 @@ query := `INSERT INTO tracked_events (event_id, home_score, away_score, match_st
 		
 		_, err := p.db.Exec(
 				query,
-					eventID, t1Score, t2Score, finalStatus, statusName, statusOrder,
-					homeTeamID, awayTeamID, homeTeamName, awayTeamName,
-					now, now,
+						eventID, t1Score, t2Score, finalStatus, statusName, statusOrder,
+						homeTeamID, awayTeamID, homeTeamName, awayTeamName,
+						now, now, now,
 			)
 		if err != nil {
 			return fmt.Errorf("failed to upsert tracked_events: %w", err)
