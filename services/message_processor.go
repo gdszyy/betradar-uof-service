@@ -28,6 +28,8 @@ type MessageProcessor struct {
 	srnMappingService         *SRNMappingService
 	fixtureService            *FixtureService
 	marketDescService         *MarketDescriptionsService
+	teamsService              *TeamsService
+	logoFetcher               *LogoFetcherService
 	
 	done                      chan bool
 }
@@ -37,7 +39,12 @@ func NewMessageProcessor(cfg *config.Config, store *MessageStore, broker Message
 	// 初始化解析器 (与原 AMQPConsumer 的初始化逻辑一致)
 	srnMappingService := NewSRNMappingService(cfg.UOFAPIToken, cfg.APIBaseURL, store.db)
 	fixtureParser := NewFixtureParser(store.db, srnMappingService, cfg.APIBaseURL, cfg.AccessToken)
-	oddsChangeParser := NewOddsChangeParser(store.db)
+	
+	// 初始化队伍管理服务
+	teamsService := NewTeamsService(store.db)
+	logoFetcher := NewLogoFetcherService(store.db, teamsService)
+	
+	oddsChangeParser := NewOddsChangeParser(store.db, teamsService, logoFetcher)
 	oddsParser := NewOddsParser(store.db, marketDescService)
 	betSettlementParser := NewBetSettlementParser(store.db)
 	betStopProcessor := NewBetStopProcessor(store.db)
@@ -45,6 +52,9 @@ func NewMessageProcessor(cfg *config.Config, store *MessageStore, broker Message
 	rollbackBetSettlementProc := NewRollbackBetSettlementProcessor(store.db)
 	rollbackBetCancelProc := NewRollbackBetCancelProcessor(store.db)
 	fixtureService := NewFixtureService(cfg.UOFAPIToken, cfg.APIBaseURL)
+	
+	// 启动 Logo 获取服务
+	logoFetcher.Start()
 
 	// 从数据库加载 SRN mapping 缓存
 	if err := srnMappingService.LoadCacheFromDB(); err != nil {
@@ -67,6 +77,8 @@ func NewMessageProcessor(cfg *config.Config, store *MessageStore, broker Message
 		srnMappingService:         srnMappingService,
 		fixtureService:            fixtureService,
 		marketDescService:         marketDescService,
+		teamsService:              teamsService,
+		logoFetcher:               logoFetcher,
 		done:                      make(chan bool),
 	}
 }

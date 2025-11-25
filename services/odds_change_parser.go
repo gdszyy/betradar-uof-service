@@ -12,8 +12,10 @@ import (
 
 // OddsChangeParser Odds Change 消息解析器
 type OddsChangeParser struct {
-	db     *sql.DB
-	logger *log.Logger
+	db              *sql.DB
+	logger          *log.Logger
+	teamsService    *TeamsService
+	logoFetcher     *LogoFetcherService
 }
 
 // OddsChangeMessage Odds Change 消息结构
@@ -98,10 +100,12 @@ type Outcome struct {
 }
 
 // NewOddsChangeParser 创建 Odds Change 解析器
-func NewOddsChangeParser(db *sql.DB) *OddsChangeParser {
+func NewOddsChangeParser(db *sql.DB, teamsService *TeamsService, logoFetcher *LogoFetcherService) *OddsChangeParser {
 	return &OddsChangeParser{
-		db:     db,
-		logger: log.New(os.Stdout, "", log.LstdFlags),
+		db:           db,
+		logger:       log.New(os.Stdout, "", log.LstdFlags),
+		teamsService: teamsService,
+		logoFetcher:  logoFetcher,
 	}
 }
 
@@ -143,6 +147,18 @@ func (p *OddsChangeParser) ParseAndStore(xmlContent string) error {
 		} else if comp.Qualifier == "away" {
 			awayTeamID = comp.ID
 			awayTeamName = comp.Name
+		}
+	}
+
+	// 处理队伍信息：检查并创建队伍记录，如果是新队伍则安排 Logo 获取
+	if p.teamsService != nil && p.logoFetcher != nil {
+		// 处理主队
+		if homeTeamID != "" && homeTeamName != "" {
+			p.processTeam(homeTeamID, homeTeamName, oddsChange.EventID)
+		}
+		// 处理客队
+		if awayTeamID != "" && awayTeamName != "" {
+			p.processTeam(awayTeamID, awayTeamName, oddsChange.EventID)
 		}
 	}
 
@@ -295,3 +311,31 @@ func formatScore(score *int) string {
 	return fmt.Sprintf("%d", *score)
 }
 
+
+// processTeam 处理队伍信息，检查是否为新队伍并安排 Logo 获取
+func (p *OddsChangeParser) processTeam(teamID, teamName, eventID string) {
+	// 尝试获取或创建队伍记录
+	teamInfo := TeamInfo{
+		TeamID:   teamID,
+		TeamName: teamName,
+		// 注意：这里没有 sport_id 等信息，可以后续从其他地方补充
+	}
+	
+	team, isNew, err := p.teamsService.GetOrCreateTeam(teamInfo)
+	if err != nil {
+		p.logger.Printf("[OddsChangeParser] ⚠️  Failed to process team %s: %v", teamName, err)
+		return
+	}
+	
+	// 如果是新队伍，异步安排 Logo 获取
+	if isNew {
+		p.logger.Printf("[OddsChangeParser] 🆕 New team detected: %s (ID: %s), scheduling logo fetch", teamName, teamID)
+		p.logoFetcher.ScheduleLogoFetch(teamID, teamName)
+	}
+	
+	// 如果队伍已存在但 Logo 未获取，也可以尝试重新获取（可选）
+	if !isNew && !team.LogoFetched && team.LogoFetchRetryCount < 3 {
+		p.logger.Printf("[OddsChangeParser] 🔄 Team %s exists but logo not fetched, retrying", teamName)
+		p.logoFetcher.ScheduleLogoFetch(teamID, teamName)
+	}
+}

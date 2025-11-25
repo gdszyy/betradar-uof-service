@@ -87,3 +87,19 @@ type RecoveryStatus struct {
 	CompletedAt *time.Time `db:"completed_at"`
 }
 
+// Team 队伍信息
+type Team struct {
+	ID                   int64      `db:"id"`
+	TeamID               string     `db:"team_id"`
+	TeamName             string     `db:"team_name"`
+	SportID              *string    `db:"sport_id"`
+	SportName            *string    `db:"sport_name"`
+	CategoryID           *string    `db:"category_id"`
+	CategoryName         *string    `db:"category_name"`
+	LogoURL              *string    `db:"logo_url"`
+	LogoFetched          bool       `db:"logo_fetched"`
+	LogoFetchAttemptedAt *time.Time `db:"logo_fetch_attempted_at"`
+	LogoFetchRetryCount  int        `db:"logo_fetch_retry_count"`
+	CreatedAt            time.Time  `db:"created_at"`
+	UpdatedAt            time.Time  `db:"updated_at"`
+}
