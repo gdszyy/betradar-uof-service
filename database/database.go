@@ -72,12 +72,29 @@ func Migrate(db *sql.DB) error {
 		
 		// 球员信息
 		`CREATE TABLE IF NOT EXISTS players (
-    player_id VARCHAR(50) PRIMARY KEY,
-    player_name VARCHAR(200) NOT NULL,
-    nationality VARCHAR(10),
-    date_of_birth DATE,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);`,
+	    player_id VARCHAR(50) PRIMARY KEY,
+	    player_name VARCHAR(200) NOT NULL,
+	    nationality VARCHAR(10),
+	    date_of_birth DATE,
+	    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);`,
+		
+		// 队伍信息
+		`CREATE TABLE IF NOT EXISTS teams (
+	    id SERIAL PRIMARY KEY,
+	    team_id VARCHAR(100) UNIQUE NOT NULL,
+	    team_name VARCHAR(255) NOT NULL,
+	    sport_id VARCHAR(50),
+	    sport_name VARCHAR(100),
+	    category_id VARCHAR(50),
+	    category_name VARCHAR(200),
+	    logo_url VARCHAR(500),
+	    logo_fetched BOOLEAN DEFAULT FALSE,
+	    logo_fetch_attempted_at TIMESTAMP,
+	    logo_fetch_retry_count INTEGER DEFAULT 0,
+	    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);`,
 		
 		// 跟踪的体育赛事
 		`CREATE TABLE IF NOT EXISTS tracked_events (
@@ -363,6 +380,10 @@ func Migrate(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_tournaments_sport_id ON tournaments(sport_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_tournaments_category_id ON tournaments(category_id)`,
 		
+		`CREATE INDEX IF NOT EXISTS idx_teams_team_id ON teams(team_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_teams_team_name ON teams(team_name)`,
+		`CREATE INDEX IF NOT EXISTS idx_teams_sport_id ON teams(sport_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_teams_logo_fetched ON teams(logo_fetched)`,
 		
 		`CREATE INDEX IF NOT EXISTS idx_recovery_status_request_id ON recovery_status(request_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_recovery_status_product_id ON recovery_status(product_id)`,
