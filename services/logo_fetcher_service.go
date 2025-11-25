@@ -32,11 +32,11 @@ func NewLogoFetcherService(db *sql.DB, teamsService *TeamsService) *LogoFetcherS
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		apiKey:     "123", // TheSportsDB 免费 API Key
-		apiBaseURL: "https://www.thesportsdb.com/api/v1/json",
-		maxRetries: 3,
-		batchSize:  10,
-		interval:   5 * time.Minute, // 每 5 分钟检查一次
+			apiKey:     "123", // TheSportsDB 免费 API Key
+			apiBaseURL: "https://www.thesportsdb.com/api/v1/json",
+			maxRetries: 3,
+			batchSize:  50,              // 每次处理 50 个队伍（加速处理）
+			interval:   30 * time.Second, // 每 30 秒检查一次（加速处理）
 		stopChan:   make(chan struct{}),
 	}
 }
