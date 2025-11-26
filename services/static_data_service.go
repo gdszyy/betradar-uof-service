@@ -233,8 +233,8 @@ func (s *StaticDataService) LoadCategories() error {
 
 // LoadTournaments 加载锦标赛
 func (s *StaticDataService) LoadTournaments() error {
-	// 修复 404 错误: 移除语言代码 /en/，统一路径格式
-	url := fmt.Sprintf("%s/descriptions/tournaments.xml", s.apiBaseURL)
+	// 使用正确的API端点: /sports/en/tournaments.xml
+	url := fmt.Sprintf("%s/sports/en/tournaments.xml", s.apiBaseURL)
 	logger.Printf("[StaticData] 📥 Loading tournaments from: %s", url)
 
 	body, err := s.fetchAPI(url)
