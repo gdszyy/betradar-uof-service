@@ -60,29 +60,28 @@ func (s *Server) handleGetCategories(w http.ResponseWriter, r *http.Request) {
 			args = append(args, strings.TrimSpace(id))
 			argIndex++
 		}
-		sportFilter = fmt.Sprintf("AND t.sport_id IN (%s)", strings.Join(placeholders, ","))
+		sportFilter = fmt.Sprintf("AND te.sport_id IN (%s)", strings.Join(placeholders, ","))
 	}
 
 	// 排序
-	orderBy := "ORDER BY t.category_id"
+	orderBy := "ORDER BY category_name"
 	if sort == "match_count_asc" {
 		orderBy = "ORDER BY match_count ASC"
 	} else if sort == "match_count_desc" {
 		orderBy = "ORDER BY match_count DESC"
 	}
 
-	// 查询
+	// 查询 - 从 tracked_events 表获取 category 信息
 	query := fmt.Sprintf(`
 		SELECT 
-			t.category_id,
-			COALESCE(t.category_name, t.category_id) AS category_name,
-			t.sport_id,
-			COUNT(DISTINCT e.event_id) AS match_count
-		FROM teams t
-		INNER JOIN tracked_events e ON (e.home_team_id = t.team_id OR e.away_team_id = t.team_id)
-		WHERE t.category_id IS NOT NULL
+			te.category_id,
+			COALESCE(te.category_name, te.category_id) AS category_name,
+			te.sport_id,
+			COUNT(DISTINCT te.event_id) AS match_count
+		FROM tracked_events te
+		WHERE te.category_id IS NOT NULL AND te.category_id != ''
 			%s
-		GROUP BY t.category_id, t.category_name, t.sport_id
+		GROUP BY te.category_id, te.category_name, te.sport_id
 		%s
 		LIMIT $%d OFFSET $%d
 	`, sportFilter, orderBy, argIndex, argIndex+1)
@@ -113,10 +112,9 @@ func (s *Server) handleGetCategories(w http.ResponseWriter, r *http.Request) {
 
 	// 查询总数
 	countQuery := fmt.Sprintf(`
-		SELECT COUNT(DISTINCT t.category_id)
-		FROM teams t
-		INNER JOIN tracked_events e ON (e.home_team_id = t.team_id OR e.away_team_id = t.team_id)
-		WHERE t.category_id IS NOT NULL
+		SELECT COUNT(DISTINCT te.category_id)
+		FROM tracked_events te
+		WHERE te.category_id IS NOT NULL AND te.category_id != ''
 			%s
 	`, sportFilter)
 
@@ -166,20 +164,77 @@ func (s *Server) handleGetTournaments(w http.ResponseWriter, r *http.Request) {
 		sort = "name"
 	}
 
-	// 注意：目前 teams 表中没有 tournament_id 字段
-	// sort 参数暂时未使用
-	_ = sort
-	// 我们需要从 event_id 或其他来源获取 tournament 信息
-	// 暂时返回空结果，需要进一步讨论数据来源
+	// 排序
+	orderBy := "ORDER BY tournament_name"
+	if sort == "match_count_asc" {
+		orderBy = "ORDER BY match_count ASC"
+	} else if sort == "match_count_desc" {
+		orderBy = "ORDER BY match_count DESC"
+	}
+
+	// 查询 - 从 tracked_events 表获取 tournament 信息
+	query := fmt.Sprintf(`
+		SELECT 
+			te.tournament_id,
+			COALESCE(te.tournament_name, te.tournament_id) AS tournament_name,
+			te.category_id,
+			te.sport_id,
+			COUNT(DISTINCT te.event_id) AS match_count
+		FROM tracked_events te
+		WHERE te.category_id = $1 
+			AND te.tournament_id IS NOT NULL 
+			AND te.tournament_id != ''
+		GROUP BY te.tournament_id, te.tournament_name, te.category_id, te.sport_id
+		%s
+		LIMIT $2 OFFSET $3
+	`, orderBy)
+
+	offset := (page - 1) * pageSize
+	rows, err := s.db.Query(query, categoryID, pageSize, offset)
+	if err != nil {
+		log.Printf("[API] Error querying tournaments: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to query tournaments: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var tournaments []TournamentResponse
+	for rows.Next() {
+		var tournament TournamentResponse
+		if err := rows.Scan(&tournament.TournamentID, &tournament.TournamentName, &tournament.CategoryID, &tournament.SportID, &tournament.MatchCount); err != nil {
+			log.Printf("[API] Error scanning tournament: %v", err)
+			continue
+		}
+		tournaments = append(tournaments, tournament)
+	}
+
+	if tournaments == nil {
+		tournaments = []TournamentResponse{}
+	}
+
+	// 查询总数
+	countQuery := `
+		SELECT COUNT(DISTINCT te.tournament_id)
+		FROM tracked_events te
+		WHERE te.category_id = $1 
+			AND te.tournament_id IS NOT NULL 
+			AND te.tournament_id != ''
+	`
+
+	var totalCount int
+	if err := s.db.QueryRow(countQuery, categoryID).Scan(&totalCount); err != nil {
+		log.Printf("[API] Error counting tournaments: %v", err)
+		totalCount = 0
+	}
 
 	response := map[string]interface{}{
-		"success":   true,
-		"data":      []TournamentResponse{},
-		"page":      page,
-		"page_size": pageSize,
-		"count":     0,
-		"total":     0,
-		"message":   "Tournament data not available in current schema. Need to add tournament_id to teams table or fetch from SportRader API.",
+		"success":     true,
+		"data":        tournaments,
+		"page":        page,
+		"page_size":   pageSize,
+		"count":       len(tournaments),
+		"total":       totalCount,
+		"total_pages": (totalCount + pageSize - 1) / pageSize,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

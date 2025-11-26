@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	
 	"uof-service/services"
 )
@@ -89,6 +90,7 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 	isLive := r.URL.Query().Get("is_live")
 	isEnded := r.URL.Query().Get("is_ended")
 	hasMarkets := r.URL.Query().Get("has_markets")
+	marketIDs := r.URL.Query().Get("market_ids") // 新增: 逗号分隔的 market ID 列表
 	
 	page := 1
 	pageSize := 100
@@ -316,8 +318,8 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 			localAwayTeamName = *event.AwayTeamName
 		}
 		
-		// 获取盘口信息 (按 producer 过滤)
-		markets, err := s.getEventMarketsWithProducer(event.EventID, producer, localHomeTeamName, localAwayTeamName)
+			// 获取盘口信息 (按 producer 和 market_ids 过滤)
+			markets, err := s.getEventMarketsWithFilters(event.EventID, producer, marketIDs, localHomeTeamName, localAwayTeamName)
 			if err != nil {
 				log.Printf("[API] Failed to get markets for %s: %v", event.EventID, err)
 				event.Markets = []MarketInfo{} // 空数组而不是 null
@@ -360,8 +362,8 @@ func (s *Server) getEventMarkets(eventID string) ([]MarketInfo, error) {
 	return s.getEventMarketsWithProducer(eventID, "", "", "")
 }
 
-// getEventMarketsWithProducer 获取赛事的盘口信息 (按 producer 过滤)
-func (s *Server) getEventMarketsWithProducer(eventID string, producer string, homeTeamName string, awayTeamName string) ([]MarketInfo, error) {
+// getEventMarketsWithFilters 获取赛事的盘口信息 (按 producer 和 market_ids 过滤)
+func (s *Server) getEventMarketsWithFilters(eventID string, producer string, marketIDs string, homeTeamName string, awayTeamName string) ([]MarketInfo, error) {
 	query := `
 		SELECT DISTINCT ON (sr_market_id, specifiers)
 			id, sr_market_id, specifiers, status, producer_id, updated_at
@@ -370,11 +372,27 @@ func (s *Server) getEventMarketsWithProducer(eventID string, producer string, ho
 	`
 	
 	args := []interface{}{eventID}
+	argIndex := 2
 	
 	// 添加 producer 过滤
 	if producer != "" {
-		query += " AND producer_id = $2"
+		query += fmt.Sprintf(" AND producer_id = $%d", argIndex)
 		args = append(args, producer)
+		argIndex++
+	}
+	
+	// 添加 market_ids 过滤
+	if marketIDs != "" {
+		marketIDList := strings.Split(marketIDs, ",")
+		if len(marketIDList) > 0 {
+			placeholders := make([]string, len(marketIDList))
+			for i, id := range marketIDList {
+				placeholders[i] = fmt.Sprintf("$%d", argIndex)
+				args = append(args, strings.TrimSpace(id))
+				argIndex++
+			}
+			query += fmt.Sprintf(" AND sr_market_id IN (%s)", strings.Join(placeholders, ","))
+		}
 	}
 	
 	query += " ORDER BY sr_market_id, specifiers, updated_at DESC"
@@ -409,11 +427,11 @@ func (s *Server) getEventMarketsWithProducer(eventID string, producer string, ho
 			market.ProducerID = int(producerID.Int64)
 		}
 		
-	// 获取市场名称 (简化版,可以后续从 market descriptions 获取)
-				market.MarketName = s.getMarketName(market.MarketID, homeTeamName, awayTeamName, market.Specifiers)
-			
-				// 获取该盘口的赔率 (使用 marketPK)
-				outcomes, err := s.getMarketOutcomes(marketPK, market.MarketID, homeTeamName, awayTeamName, market.Specifiers)
+		// 获取市场名称 (简化版,可以后续从 market descriptions 获取)
+		market.MarketName = s.getMarketName(market.MarketID, homeTeamName, awayTeamName, market.Specifiers)
+		
+		// 获取该盘口的赔率 (使用 marketPK)
+		outcomes, err := s.getMarketOutcomes(marketPK, market.MarketID, homeTeamName, awayTeamName, market.Specifiers)
 		if err != nil {
 			log.Printf("[API] Failed to get outcomes for market %s: %v", market.MarketID, err)
 			market.Outcomes = []OutcomeInfo{}
@@ -426,6 +444,11 @@ func (s *Server) getEventMarketsWithProducer(eventID string, producer string, ho
 	}
 	
 	return markets, nil
+}
+
+// getEventMarketsWithProducer 获取赛事的盘口信息 (按 producer 过滤) - 保留以保持向后兼容
+func (s *Server) getEventMarketsWithProducer(eventID string, producer string, homeTeamName string, awayTeamName string) ([]MarketInfo, error) {
+	return s.getEventMarketsWithFilters(eventID, producer, "", homeTeamName, awayTeamName)
 }
 
 // getMarketOutcomes 获取盘口的赔率
