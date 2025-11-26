@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
+	"strings"
 	"time"
 	"uof-service/logger"
 )
@@ -39,6 +41,36 @@ func NewLogoFetcherService(db *sql.DB, teamsService *TeamsService) *LogoFetcherS
 			interval:   30 * time.Second, // 每 30 秒检查一次（加速处理）
 		stopChan:   make(chan struct{}),
 	}
+}
+
+// 替代名称映射表（用于处理队伍更名等情况）
+var alternativeTeamNames = map[string]string{
+	"Houston Christian Huskies": "Houston Baptist",
+	// 可以在未来添加更多映射
+}
+
+// cleanTeamNameP4 清洗队伍名称（P4 策略：移除括号内容 + 移除 SRL/Youth 等后缀）
+func cleanTeamNameP4(name string) string {
+	// 1. 移除括号内容（包括玩家代号如 Eros, Maverick 等）
+	cleaned := regexp.MustCompile(`\s*\([^)]*\)\s*`).ReplaceAllString(name, " ")
+	cleaned = strings.TrimSpace(cleaned)
+	
+	// 2. 移除 SRL/UXX/Womens/Youth/Reserves 等后缀
+	suffixPatterns := []string{
+		`\s+SRL\b`,
+		`\s+U\d{2}\b`,
+		`\s+Womens\b`,
+		`\s+Youth\b`,
+		`\s+Reserves\b`,
+	}
+	
+	for _, pattern := range suffixPatterns {
+		re := regexp.MustCompile("(?i)" + pattern)
+		cleaned = re.ReplaceAllString(cleaned, "")
+		cleaned = strings.TrimSpace(cleaned)
+	}
+	
+	return cleaned
 }
 
 // TheSportsDBResponse TheSportsDB API 响应结构
@@ -135,8 +167,41 @@ func (s *LogoFetcherService) fetchLogosForPendingTeams() {
 	logger.Printf("[LogoFetcherService] ✅ Logo fetch completed: %d success, %d failure", successCount, failureCount)
 }
 
-// fetchLogoFromTheSportsDB 从 TheSportsDB API 获取队伍 Logo
+// fetchLogoFromTheSportsDB 使用三层递进式查询策略获取队伍 Logo
 func (s *LogoFetcherService) fetchLogoFromTheSportsDB(teamName string) (string, error) {
+	// 第一层：原始名称查询 (P0)
+	logoURL, err := s.queryAPIWithName(teamName)
+	if err == nil && logoURL != "" {
+		logger.Printf("[LogoFetcherService] ✅ Logo found using original name: %s", teamName)
+		return logoURL, nil
+	}
+	
+	// 第二层：标准清洗查询 (P4)
+	cleanedName := cleanTeamNameP4(teamName)
+	if cleanedName != teamName {
+		logoURL, err = s.queryAPIWithName(cleanedName)
+		if err == nil && logoURL != "" {
+			logger.Printf("[LogoFetcherService] ✅ Logo found using cleaned name: %s -> %s", teamName, cleanedName)
+			return logoURL, nil
+		}
+	}
+	
+	// 第三层：替代名称查询
+	if altName, ok := alternativeTeamNames[teamName]; ok {
+		logoURL, err = s.queryAPIWithName(altName)
+		if err == nil && logoURL != "" {
+			logger.Printf("[LogoFetcherService] ✅ Logo found using alternative name: %s -> %s", teamName, altName)
+			return logoURL, nil
+		}
+	}
+	
+	// 所有层级都失败
+	logger.Printf("[LogoFetcherService] ⚠️  No logo found after all attempts for: %s", teamName)
+	return "", nil
+}
+
+// queryAPIWithName 使用指定名称查询 TheSportsDB API
+func (s *LogoFetcherService) queryAPIWithName(teamName string) (string, error) {
 	// 构建 API URL
 	apiURL := fmt.Sprintf("%s/%s/searchteams.php?t=%s", s.apiBaseURL, s.apiKey, url.QueryEscape(teamName))
 	
