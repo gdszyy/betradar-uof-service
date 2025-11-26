@@ -99,17 +99,6 @@ func (s *Server) handleGetEventsWithFilters(w http.ResponseWriter, r *http.Reque
 	// 使用 SR 映射器转换数据
 	enhancedMatches := MapMatchList(matches, s.srMapper)
 
-	// 如果需要，加载 markets 和 outcomes
-	if len(filters.MarketIDs) > 0 {
-		for i := range enhancedMatches {
-			markets, err := s.getMarketsForEvent(enhancedMatches[i].EventID, filters.MarketIDs)
-			if err != nil {
-				log.Printf("[API] Error getting markets for event %s: %v", enhancedMatches[i].EventID, err)
-				continue
-			}
-			enhancedMatches[i].Markets = markets
-		}
-	}
 
 	// 构建响应
 	response := map[string]interface{}{
@@ -649,7 +638,7 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 			}
 	
 	// 热门度筛选 (与 buildEventFilterQuery 保持一致)
-	if filters.Popular != "" {
+	if filters.Popular != nil {
 			if *filters.Popular {
 				conditions = append(conditions, "(e.feature_match = TRUE OR e.sellout = TRUE OR e.broadcasts_count > 0 OR e.popularity_score > 50)")
 			} else {
@@ -714,103 +703,3 @@ func (f *EventFilters) toMap() map[string]interface{} {
 	return m
 }
 
-
-// MarketInfo 盘口信息
-type MarketInfo struct {
-	ID            int64         `json:"id"`
-	EventID       string        `json:"event_id"`
-	MarketID      string        `json:"market_id"`
-	Specifier     string        `json:"specifier"`
-	Status        string        `json:"status"`
-	CashoutStatus string        `json:"cashout_status"`
-	BetStatus     string        `json:"bet_status"`
-	Outcomes      []OutcomeInfo `json:"outcomes"`
-}
-
-// OutcomeInfo 赔率信息
-type OutcomeInfo struct {
-	ID        int64   `json:"id"`
-	MarketID  int64   `json:"market_id"`
-	OutcomeID string  `json:"outcome_id"`
-	Odds      float64 `json:"odds"`
-	Status    string  `json:"status"`
-	BetStatus string  `json:"bet_status"`
-}
-
-// getMarketsForEvent 获取指定赛事和盘口类型的盘口和赔率信息
-func (s *Server) getMarketsForEvent(eventID string, marketIDs []string) ([]MarketInfo, error) {
-	// 1. 构建查询
-	placeholders := make([]string, len(marketIDs))
-	args := make([]interface{}, len(marketIDs)+1)
-	args[0] = eventID
-	for i, id := range marketIDs {
-		placeholders[i] = fmt.Sprintf("$%d", i+2)
-		args[i+1] = id
-	}
-
-	query := fmt.Sprintf(`
-		SELECT 
-			m.id, m.event_id, m.sr_market_id, m.specifier, m.status, m.cashout_status, m.bet_status,
-			o.id, o.market_id, o.outcome_id, o.odds, o.status, o.bet_status
-		FROM markets m
-		LEFT JOIN outcomes o ON m.id = o.market_id
-		WHERE m.event_id = $1 AND m.sr_market_id IN (%s)
-		ORDER BY m.id, o.id
-	`, strings.Join(placeholders, ","))
-
-	// 2. 查询数据
-	rows, err := s.db.Query(query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query markets and outcomes for event %s: %w", eventID, err)
-	}
-	defer rows.Close()
-
-	// 3. 构建嵌套结构
-	marketMap := make(map[int64]*MarketInfo)
-	var markets []MarketInfo
-
-	for rows.Next() {
-		var marketInfo MarketInfo
-		var outcomeInfo OutcomeInfo
-		var srMarketID, outcomeID sql.NullString
-		var marketStatus, marketCashoutStatus, marketBetStatus, outcomeStatus, outcomeBetStatus sql.NullString
-		var marketIDInt, outcomeIDInt sql.NullInt64
-		var outcomeOdds sql.NullFloat64
-
-		if err := rows.Scan(
-			&marketIDInt, &marketInfo.EventID, &srMarketID, &marketInfo.Specifier, &marketStatus, &marketCashoutStatus, &marketBetStatus,
-			&outcomeIDInt, &outcomeInfo.MarketID, &outcomeID, &outcomeOdds, &outcomeStatus, &outcomeBetStatus,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan market and outcome detail for event %s: %w", eventID, err)
-		}
-
-		// 市场信息
-		marketInfo.ID = marketIDInt.Int64
-		marketInfo.MarketID = srMarketID.String
-		marketInfo.Status = marketStatus.String
-		marketInfo.CashoutStatus = marketCashoutStatus.String
-		marketInfo.BetStatus = marketBetStatus.String
-
-		// 赔率信息
-		outcomeInfo.ID = outcomeIDInt.Int64
-		outcomeInfo.OutcomeID = outcomeID.String
-		outcomeInfo.Odds = outcomeOdds.Float64
-		outcomeInfo.Status = outcomeStatus.String
-		outcomeInfo.BetStatus = outcomeBetStatus.String
-
-		// 关联到 Market
-		market, exists := marketMap[marketInfo.ID]
-		if !exists {
-			market = &marketInfo
-			marketMap[marketInfo.ID] = market
-			markets = append(markets, *market)
-		}
-
-		// 关联到 Outcome
-		if outcomeInfo.ID != 0 {
-			market.Outcomes = append(market.Outcomes, outcomeInfo)
-		}
-	}
-
-	return markets, nil
-}
