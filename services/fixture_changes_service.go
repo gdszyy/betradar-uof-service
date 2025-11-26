@@ -32,8 +32,9 @@ type FixtureChangesResponse struct {
 
 // NewFixtureChangesService 创建 FixtureChangesService 实例
 func NewFixtureChangesService(apiToken, apiBaseURL string) *FixtureChangesService {
+	// apiBaseURL 应该从配置传入，不使用硬编码默认值
 	if apiBaseURL == "" {
-		apiBaseURL = "https://global.api.betradar.com/v1"
+		logger.Println("[FixtureChangesService] Warning: apiBaseURL is empty, service may not work correctly")
 	}
 	return &FixtureChangesService{
 		apiToken: apiToken,

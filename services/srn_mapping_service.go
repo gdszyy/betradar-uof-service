@@ -35,8 +35,9 @@ type SRNMappingResponse struct {
 
 // NewSRNMappingService 创建 SRN 映射服务
 func NewSRNMappingService(apiToken, apiBaseURL string, db *sql.DB) *SRNMappingService {
+	// apiBaseURL 应该从配置传入
 	if apiBaseURL == "" {
-		apiBaseURL = "https://global.api.betradar.com/v1"
+		log.Println("[SRNMappingService] Warning: apiBaseURL is empty, service may not work correctly")
 	}
 	return &SRNMappingService{
 		apiToken:   apiToken,

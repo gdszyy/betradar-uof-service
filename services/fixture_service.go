@@ -18,11 +18,12 @@ type FixtureService struct {
 
 // NewFixtureService 创建 Fixture 服务
 func NewFixtureService(apiToken, apiBaseURL string) *FixtureService {
-	// UOF Fixture API 使用全球 API 端点
+	// apiBaseURL 应该从配置传入
 	if apiBaseURL == "" {
-		apiBaseURL = "https://global.api.betradar.com/v1"
+		logger.Println("[FixtureService] Warning: apiBaseURL is empty, service may not work correctly")
+	} else {
+		logger.Printf("[FixtureService] Using API: %s", apiBaseURL)
 	}
-	logger.Printf("[FixtureService] Using API: %s", apiBaseURL)
 	return &FixtureService{
 		apiToken: apiToken,
 		baseURL:  apiBaseURL,

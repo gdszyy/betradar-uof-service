@@ -35,11 +35,12 @@ func NewReplayClient(accessToken, apiBaseURL string) *ReplayClient {
 		logger.Println("[ReplayClient] ⚠️  Access token is empty")
 	}
 	
-	// 默认使用 global API
+	// apiBaseURL 应该从配置传入
 	if apiBaseURL == "" {
-		apiBaseURL = "https://global.api.betradar.com/v1"
+		logger.Println("[ReplayClient] Warning: apiBaseURL is empty, service may not work correctly")
+	} else {
+		logger.Printf("[ReplayClient] Using API: %s", apiBaseURL)
 	}
-	logger.Printf("[ReplayClient] Using API: %s", apiBaseURL)
 	
 	return &ReplayClient{
 		baseURL:     apiBaseURL,

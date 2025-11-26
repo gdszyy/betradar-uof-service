@@ -1,16 +1,16 @@
 # Build stage
-FROM golang:1.24-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
 # 复制依赖文件
 COPY go.mod go.sum ./
 
+# 下载依赖
+RUN go mod download
+
 # 复制源代码
 COPY . .
-
-# 下载依赖并整理
-RUN go mod download && go mod tidy
 
 # 构建应用
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
@@ -33,4 +33,3 @@ EXPOSE 8080
 
 # 运行应用
 CMD ["./main"]
-
