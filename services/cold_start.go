@@ -30,11 +30,12 @@ type ScheduleData struct {
 
 // ColdStartEvent 赛事
 type ColdStartEvent struct {
-	ID          string       `xml:"id,attr"`
-	Scheduled   string       `xml:"scheduled,attr"`
-	StartTime   string       `xml:"start_time,attr"`
-	LiveOdds    string       `xml:"liveodds,attr"`
-	Sport       SportData    `xml:"sport"`
+	ID          string                `xml:"id,attr"`
+	Scheduled   string                `xml:"scheduled,attr"`
+	StartTime   string                `xml:"start_time,attr"`
+	LiveOdds    string                `xml:"liveodds,attr"`
+	Sport       SportData             `xml:"sport"`
+	Tournament  TournamentData        `xml:"tournament"`
 	Competitors []ColdStartCompetitor `xml:"competitors>competitor"`
 }
 
@@ -42,6 +43,21 @@ type ColdStartEvent struct {
 type SportData struct {
 	ID   string `xml:"id,attr"`
 	Name string `xml:"name,attr"`
+}
+
+// TournamentData 联赛数据
+type TournamentData struct {
+	ID       string       `xml:"id,attr"`
+	Name     string       `xml:"name,attr"`
+	Sport    SportData    `xml:"sport"`
+	Category CategoryData `xml:"category"`
+}
+
+// CategoryData 分类数据
+type CategoryData struct {
+	ID          string `xml:"id,attr"`
+	Name        string `xml:"name,attr"`
+	CountryCode string `xml:"country_code,attr"`
 }
 
 // ColdStartCompetitor 参赛者
@@ -53,13 +69,17 @@ type ColdStartCompetitor struct {
 
 // MatchInfo 比赛信息
 type MatchInfo struct {
-	EventID       string
-	SportID       string
-	ScheduleTime  *time.Time
-	HomeTeamID    string
-	HomeTeamName  string
-	AwayTeamID    string
-	AwayTeamName  string
+	EventID        string
+	SportID        string
+	CategoryID     string
+	CategoryName   string
+	TournamentID   string
+	TournamentName string
+	ScheduleTime   *time.Time
+	HomeTeamID     string
+	HomeTeamName   string
+	AwayTeamID     string
+	AwayTeamName   string
 }
 
 // ValidationReport 验证报告
@@ -196,6 +216,18 @@ func (c *ColdStart) parseEvent(event ColdStartEvent) MatchInfo {
 		match.SportID = c.inferSportID(event.ID)
 	}
 	
+	// 提取联赛信息
+	if event.Tournament.ID != "" {
+		match.TournamentID = event.Tournament.ID
+		match.TournamentName = event.Tournament.Name
+	}
+	
+	// 提取分类信息
+	if event.Tournament.Category.ID != "" {
+		match.CategoryID = event.Tournament.Category.ID
+		match.CategoryName = event.Tournament.Category.Name
+	}
+	
 	// 解析时间
 	if event.Scheduled != "" {
 		if t, err := time.Parse(time.RFC3339, event.Scheduled); err == nil {
@@ -239,7 +271,7 @@ func (c *ColdStart) deduplicate(matches []MatchInfo) []MatchInfo {
 // storeMatches 存储比赛
 func (c *ColdStart) storeMatches(matches []MatchInfo) int {
 	failed := 0
-query := `INSERT INTO tracked_events (event_id, sport_id, schedule_time, home_team_id, home_team_name, away_team_id, away_team_name, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'scheduled', $8, $9) ON CONFLICT (event_id) DO UPDATE SET sport_id = CASE WHEN EXCLUDED.sport_id = '' THEN tracked_events.sport_id ELSE EXCLUDED.sport_id END, schedule_time = EXCLUDED.schedule_time, home_team_id = CASE WHEN EXCLUDED.home_team_id = '' THEN tracked_events.home_team_id ELSE EXCLUDED.home_team_id END, home_team_name = CASE WHEN EXCLUDED.home_team_name = '' THEN tracked_events.home_team_name ELSE EXCLUDED.home_team_name END, away_team_id = CASE WHEN EXCLUDED.away_team_id = '' THEN tracked_events.away_team_id ELSE EXCLUDED.away_team_id END, away_team_name = CASE WHEN EXCLUDED.away_team_name = '' THEN tracked_events.away_team_name ELSE EXCLUDED.away_team_name END, updated_at = EXCLUDED.updated_at`
+	query := `INSERT INTO tracked_events (event_id, sport_id, category_id, category_name, tournament_id, tournament_name, schedule_time, home_team_id, home_team_name, away_team_id, away_team_name, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'scheduled', $12, $13) ON CONFLICT (event_id) DO UPDATE SET sport_id = CASE WHEN EXCLUDED.sport_id = '' THEN tracked_events.sport_id ELSE EXCLUDED.sport_id END, category_id = CASE WHEN EXCLUDED.category_id = '' THEN tracked_events.category_id ELSE EXCLUDED.category_id END, category_name = CASE WHEN EXCLUDED.category_name = '' THEN tracked_events.category_name ELSE EXCLUDED.category_name END, tournament_id = CASE WHEN EXCLUDED.tournament_id = '' THEN tracked_events.tournament_id ELSE EXCLUDED.tournament_id END, tournament_name = CASE WHEN EXCLUDED.tournament_name = '' THEN tracked_events.tournament_name ELSE EXCLUDED.tournament_name END, schedule_time = EXCLUDED.schedule_time, home_team_id = CASE WHEN EXCLUDED.home_team_id = '' THEN tracked_events.home_team_id ELSE EXCLUDED.home_team_id END, home_team_name = CASE WHEN EXCLUDED.home_team_name = '' THEN tracked_events.home_team_name ELSE EXCLUDED.home_team_name END, away_team_id = CASE WHEN EXCLUDED.away_team_id = '' THEN tracked_events.away_team_id ELSE EXCLUDED.away_team_id END, away_team_name = CASE WHEN EXCLUDED.away_team_name = '' THEN tracked_events.away_team_name ELSE EXCLUDED.away_team_name END, updated_at = EXCLUDED.updated_at`
 	
 	stored := 0
 	for _, match := range matches {
@@ -247,6 +279,10 @@ query := `INSERT INTO tracked_events (event_id, sport_id, schedule_time, home_te
 			_, err := c.db.Exec(query,
 				match.EventID,
 				match.SportID,
+				match.CategoryID,
+				match.CategoryName,
+				match.TournamentID,
+				match.TournamentName,
 				match.ScheduleTime,
 				match.HomeTeamID,
 				match.HomeTeamName,

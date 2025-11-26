@@ -43,8 +43,17 @@ type SportInfo struct {
 
 // TournamentInfo 锦标赛信息
 type TournamentInfo struct {
-	ID   string `xml:"id,attr"`
-	Name string `xml:"name,attr"`
+	ID       string       `xml:"id,attr"`
+	Name     string       `xml:"name,attr"`
+	Sport    SportInfo    `xml:"sport"`
+	Category CategoryInfo `xml:"category"`
+}
+
+// CategoryInfo 分类信息
+type CategoryInfo struct {
+	ID          string `xml:"id,attr"`
+	Name        string `xml:"name,attr"`
+	CountryCode string `xml:"country_code,attr"`
 }
 
 // FixtureCompetitor 参赛队伍
@@ -109,6 +118,10 @@ func (p *FixtureParser) ParseAndStore(xmlContent string) error {
 			fixture.EventID,
 			srnID,
 			fixture.Sport.ID,
+			fixture.Tournament.Category.ID,
+			fixture.Tournament.Category.Name,
+			fixture.Tournament.ID,
+			fixture.Tournament.Name,
 			scheduleTime,
 			homeTeamID,
 			homeTeamName,
@@ -147,20 +160,25 @@ func (p *FixtureParser) getStatusOrder(status string) int {
 // storeFixtureData 存储 Fixture 数据到数据库
 func (p *FixtureParser) storeFixtureData(
 	eventID, srnID, sportID string,
+	categoryID, categoryName string,
+	tournamentID, tournamentName string,
 	scheduleTime *time.Time,
 	homeTeamID, homeTeamName, awayTeamID, awayTeamName, status string, statusOrder int,
 ) error {
 	// 使用 UPSERT 更新或插入 tracked_events
-query := `INSERT INTO tracked_events (event_id, srn_id, sport_id, schedule_time, home_team_id, home_team_name, away_team_id, away_team_name, match_status, status_order, subscribed, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, $11, $12) ON CONFLICT (event_id) DO UPDATE SET srn_id = COALESCE(NULLIF(EXCLUDED.srn_id, ''), tracked_events.srn_id), sport_id = COALESCE(NULLIF(EXCLUDED.sport_id, ''), tracked_events.sport_id), schedule_time = COALESCE(EXCLUDED.schedule_time, tracked_events.schedule_time), home_team_id = CASE WHEN EXCLUDED.home_team_id = '' THEN tracked_events.home_team_id ELSE EXCLUDED.home_team_id END, home_team_name = CASE WHEN EXCLUDED.home_team_name = '' THEN tracked_events.home_team_name ELSE EXCLUDED.home_team_name END, away_team_id = CASE WHEN EXCLUDED.away_team_id = '' THEN tracked_events.away_team_id ELSE EXCLUDED.away_team_id END, away_team_name = CASE WHEN EXCLUDED.away_team_name = '' THEN tracked_events.away_team_name ELSE EXCLUDED.away_team_name END, match_status = CASE WHEN EXCLUDED.match_status = '' THEN tracked_events.match_status ELSE EXCLUDED.match_status END, status_order = CASE WHEN EXCLUDED.status_order > tracked_events.status_order THEN EXCLUDED.status_order ELSE tracked_events.status_order END, updated_at = EXCLUDED.updated_at`
+query := `INSERT INTO tracked_events (event_id, srn_id, sport_id, category_id, category_name, tournament_id, tournament_name, schedule_time, home_team_id, home_team_name, away_team_id, away_team_name, match_status, status_order, subscribed, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true, $15, $16) ON CONFLICT (event_id) DO UPDATE SET srn_id = COALESCE(NULLIF(EXCLUDED.srn_id, ''), tracked_events.srn_id), sport_id = COALESCE(NULLIF(EXCLUDED.sport_id, ''), tracked_events.sport_id), category_id = CASE WHEN EXCLUDED.category_id = '' THEN tracked_events.category_id ELSE EXCLUDED.category_id END, category_name = CASE WHEN EXCLUDED.category_name = '' THEN tracked_events.category_name ELSE EXCLUDED.category_name END, tournament_id = CASE WHEN EXCLUDED.tournament_id = '' THEN tracked_events.tournament_id ELSE EXCLUDED.tournament_id END, tournament_name = CASE WHEN EXCLUDED.tournament_name = '' THEN tracked_events.tournament_name ELSE EXCLUDED.tournament_name END, schedule_time = COALESCE(EXCLUDED.schedule_time, tracked_events.schedule_time), home_team_id = CASE WHEN EXCLUDED.home_team_id = '' THEN tracked_events.home_team_id ELSE EXCLUDED.home_team_id END, home_team_name = CASE WHEN EXCLUDED.home_team_name = '' THEN tracked_events.home_team_name ELSE EXCLUDED.home_team_name END, away_team_id = CASE WHEN EXCLUDED.away_team_id = '' THEN tracked_events.away_team_id ELSE EXCLUDED.away_team_id END, away_team_name = CASE WHEN EXCLUDED.away_team_name = '' THEN tracked_events.away_team_name ELSE EXCLUDED.away_team_name END, match_status = CASE WHEN EXCLUDED.match_status = '' THEN tracked_events.match_status ELSE EXCLUDED.match_status END, status_order = CASE WHEN EXCLUDED.status_order > tracked_events.status_order THEN EXCLUDED.status_order ELSE tracked_events.status_order END, updated_at = EXCLUDED.updated_at`
 
 	// p.logger.Printf("[DEBUG] SQL Query: %s, Args: event_id=%v, srn_id=%v, sport_id=%v, schedule_time=%v, home_team_id=%v, home_team_name=%v, away_team_id=%v, away_team_name=%v, status=%v", CleanSQLQuery(query), eventID, srnID, sportID, scheduleTime, homeTeamID, homeTeamName, awayTeamID, awayTeamName, status)
 		_, err := p.db.Exec(
 			query,
-			eventID, srnID, sportID, scheduleTime,
+			eventID, srnID, sportID,
+			categoryID, categoryName,
+			tournamentID, tournamentName,
+			scheduleTime,
 			homeTeamID, homeTeamName,
 			awayTeamID, awayTeamName,
-status, statusOrder,
-				time.Now(), time.Now(),
+			status, statusOrder,
+			time.Now(), time.Now(),
 			)
 	if err != nil {
 		return fmt.Errorf("failed to upsert tracked_events: %w", err)
