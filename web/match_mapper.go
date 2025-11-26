@@ -35,6 +35,9 @@ type EnhancedMatchDetail struct {
 	AwayTeamIDMapped   string `json:"away_team_id_mapped"` // "1002"
 	IsLive             bool   `json:"is_live"`             // true/false
 	IsEnded            bool   `json:"is_ended"`            // true/false
+
+	// Markets 盘口信息 (只在传入 market_id 时返回)
+	Markets []MarketInfo `json:"markets,omitempty"`
 }
 
 // MapMatchDetail 将原始比赛数据映射为增强的比赛详情

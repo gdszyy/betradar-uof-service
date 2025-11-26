@@ -17,6 +17,7 @@ import (
 
 	"uof-service/config"
 	"uof-service/services"
+	"uof-service/web/response"
 )
 
 type Server struct {
@@ -182,7 +183,9 @@ func (s *Server) Start() error {
 	api.HandleFunc("/matches/{event_id}", s.handleGetMatchDetail).Methods("GET")
 	
 	// 联赛API
-	api.HandleFunc("/leagues", s.handleGetLeagues).Methods("GET")
+api.HandleFunc("/leagues", s.handleGetLeagues).Methods("GET")
+	api.HandleFunc("/categories", s.handleGetCategories).Methods("GET")
+	api.HandleFunc("/tournaments", s.handleGetTournaments).Methods("GET")
 	
 	// 盘口赔率API
 	api.HandleFunc("/odds/all", s.handleGetAllBookedMarketsOdds).Methods("GET")

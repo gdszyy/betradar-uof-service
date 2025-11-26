@@ -99,6 +99,18 @@ func (s *Server) handleGetEventsWithFilters(w http.ResponseWriter, r *http.Reque
 	// 使用 SR 映射器转换数据
 	enhancedMatches := MapMatchList(matches, s.srMapper)
 
+	// 如果需要，加载 markets 和 outcomes
+	if len(filters.MarketIDs) > 0 {
+		for i := range enhancedMatches {
+			markets, err := s.getMarketsForEvent(enhancedMatches[i].EventID, filters.MarketIDs)
+			if err != nil {
+				log.Printf("[API] Error getting markets for event %s: %v", enhancedMatches[i].EventID, err)
+				continue
+			}
+			enhancedMatches[i].Markets = markets
+		}
+	}
+
 	// 构建响应
 	response := map[string]interface{}{
 		"success":     true,
@@ -118,7 +130,7 @@ func (s *Server) handleGetEventsWithFilters(w http.ResponseWriter, r *http.Reque
 	
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Cache", "MISS")
-			json.NewEncoder(w).Encode(response)
+				json.NewEncoder(w).Encode(response)
 }
 
 // EventFilters 事件筛选参数
@@ -412,27 +424,29 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 				conditions = append(conditions, fmt.Sprintf("(e.home_team_id IN (%s) OR e.away_team_id IN (%s))", inClause, inClause))
 			}
 	}
-		if filters.TeamName != "" {
+	
+	if filters.TeamName != "" {
 			conditions = append(conditions, fmt.Sprintf("(e.home_team_name ILIKE $%d OR e.away_team_name ILIKE $%d)", argIndex, argIndex+1))
 			args = append(args, "%"+filters.TeamName+"%", "%"+filters.TeamName+"%")
 			argIndex += 2
 		}
-		// 联赛 ID 筛选 (从 srn_id 提取,支持多选)
+		
+	// 联赛 ID 筛选 (从 srn_id 提取,支持多选)
 	if len(filters.LeagueIDs) > 0 {
-		leagueConditions := []string{}
-		for _, leagueID := range filters.LeagueIDs {
-			leagueConditions = append(leagueConditions, fmt.Sprintf("e.srn_id LIKE $%d", argIndex))
-			args = append(args, "%:"+leagueID+":%")
-			argIndex++
+			leagueConditions := []string{}
+			for _, leagueID := range filters.LeagueIDs {
+				leagueConditions = append(leagueConditions, fmt.Sprintf("e.srn_id LIKE $%d", argIndex))
+				args = append(args, "%:"+leagueID+":%")
+				argIndex++
+			}
+			conditions = append(conditions, fmt.Sprintf("(%s)", strings.Join(leagueConditions, " OR ")))
 		}
-		conditions = append(conditions, fmt.Sprintf("(%s)", strings.Join(leagueConditions, " OR ")))
-	}
-	
-	if filters.LeagueName != "" {
-		// 联赛名称搜索 (需要 JOIN 联赛表,暂时不支持)
-		log.Printf("[API] Warning: league_name filter not yet supported")
-	}
-	
+		
+		if filters.LeagueName != "" {
+			// 联赛名称搜索 (需要 JOIN 联赛表,暂时不支持)
+			log.Printf("[API] Warning: league_name filter not yet supported")
+		}
+		
 		// 搜索 (队伍名称或赛事 ID)
 		if filters.Search != "" {
 			// 假设 event_id 是 bigint，需要转换为 text 才能使用 ILIKE
@@ -478,16 +492,16 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 	}
 	
 	// 分页
-limit := filters.PageSize
-		offset := (filters.Page - 1) * filters.PageSize
+	limit := filters.PageSize
+			offset := (filters.Page - 1) * filters.PageSize
 
-		query += fmt.Sprintf(" LIMIT $%d", argIndex)
-		args = append(args, limit)
-		argIndex++
+			query += fmt.Sprintf(" LIMIT $%d", argIndex)
+			args = append(args, limit)
+			argIndex++
 
-		query += fmt.Sprintf(" OFFSET $%d", argIndex)
-		args = append(args, offset)
-		argIndex++
+			query += fmt.Sprintf(" OFFSET $%d", argIndex)
+			args = append(args, offset)
+			argIndex++
 	
 	return query, args
 }
@@ -516,7 +530,7 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 			}
 	}
 	
-		if filters.Status != "" {
+	if filters.Status != "" {
 			conditions = append(conditions, fmt.Sprintf("e.status::text = $%d", argIndex))
 			args = append(args, filters.Status)
 			argIndex++
@@ -531,11 +545,11 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 	if len(filters.SportIDs) > 0 {
 		placeholders := []string{}
 		for _, sportIDStr := range filters.SportIDs {
-	sportID, err := strconv.ParseInt(sportIDStr, 10, 64)
-	if err != nil {
-		log.Printf("[API] Warning: Invalid sport_id in filter: %s", sportIDStr)
-		continue
-	}
+		sportID, err := strconv.ParseInt(sportIDStr, 10, 64)
+		if err != nil {
+			log.Printf("[API] Warning: Invalid sport_id in filter: %s", sportIDStr)
+			continue
+		}
 
 			placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
 			args = append(args, sportID)
@@ -571,11 +585,11 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 	if len(filters.MarketIDs) > 0 {
 		placeholders := []string{}
 		for _, marketIDStr := range filters.MarketIDs {
-	marketID, err := strconv.ParseInt(marketIDStr, 10, 64)
-	if err != nil {
-		log.Printf("[API] Warning: Invalid market_id in filter: %s", marketIDStr)
-		continue
-	}
+		marketID, err := strconv.ParseInt(marketIDStr, 10, 64)
+		if err != nil {
+			log.Printf("[API] Warning: Invalid market_id in filter: %s", marketIDStr)
+			continue
+		}
 
 			placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
 			args = append(args, marketID)
@@ -603,7 +617,7 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 			}
 		}
 	
-		if filters.TeamName != "" {
+	if filters.TeamName != "" {
 			conditions = append(conditions, fmt.Sprintf("(e.home_team_name ILIKE $%d OR e.away_team_name ILIKE $%d)", argIndex, argIndex+1))
 			args = append(args, "%"+filters.TeamName+"%", "%"+filters.TeamName+"%")
 			argIndex += 2
@@ -611,36 +625,36 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 	
 	// 联赛 ID 筛选 (从 srn_id 提取,支持多选)
 	if len(filters.LeagueIDs) > 0 {
-		leagueConditions := []string{}
-		for _, leagueID := range filters.LeagueIDs {
-			leagueConditions = append(leagueConditions, fmt.Sprintf("e.srn_id LIKE $%d", argIndex))
-			args = append(args, "%:"+leagueID+":%")
-			argIndex++
-		}
-			conditions = append(conditions, fmt.Sprintf("(%s)", strings.Join(leagueConditions, " OR ")))
-		}
-		
+			leagueConditions := []string{}
+			for _, leagueID := range filters.LeagueIDs {
+				leagueConditions = append(leagueConditions, fmt.Sprintf("e.srn_id LIKE $%d", argIndex))
+				args = append(args, "%:"+leagueID+":%")
+				argIndex++
+			}
+				conditions = append(conditions, fmt.Sprintf("(%s)", strings.Join(leagueConditions, " OR ")))
+			}
+			
 		if filters.LeagueName != "" {
-			// 联赛名称搜索 (需要 JOIN 联赛表,暂时不支持)
-			log.Printf("[API] Warning: league_name filter not yet supported")
-		}
-		
-		// 搜索 (队伍名称或赛事 ID)
-		if filters.Search != "" {
-			// 假设 event_id 是 bigint，需要转换为 text 才能使用 ILIKE
-			searchCondition := fmt.Sprintf("(e.event_id::text ILIKE $%d OR e.home_team_name ILIKE $%d OR e.away_team_name ILIKE $%d)", argIndex, argIndex+1, argIndex+2)
-			conditions = append(conditions, searchCondition)
-			args = append(args, "%"+filters.Search+"%", "%"+filters.Search+"%", "%"+filters.Search+"%")
-			argIndex += 3
-		}
+				// 联赛名称搜索 (需要 JOIN 联赛表,暂时不支持)
+				log.Printf("[API] Warning: league_name filter not yet supported")
+			}
+			
+			// 搜索 (队伍名称或赛事 ID)
+			if filters.Search != "" {
+				// 假设 event_id 是 bigint，需要转换为 text 才能使用 ILIKE
+				searchCondition := fmt.Sprintf("(e.event_id::text ILIKE $%d OR e.home_team_name ILIKE $%d OR e.away_team_name ILIKE $%d)", argIndex, argIndex+1, argIndex+2)
+				conditions = append(conditions, searchCondition)
+				args = append(args, "%"+filters.Search+"%", "%"+filters.Search+"%", "%"+filters.Search+"%")
+				argIndex += 3
+			}
 	
 	// 热门度筛选 (与 buildEventFilterQuery 保持一致)
-	if filters.Popular != nil {
-		if *filters.Popular {
-			conditions = append(conditions, "(e.feature_match = TRUE OR e.sellout = TRUE OR e.broadcasts_count > 0 OR e.popularity_score > 50)")
-		} else {
-			conditions = append(conditions, "(e.feature_match = FALSE OR e.feature_match IS NULL) AND (e.sellout = FALSE OR e.sellout IS NULL) AND (e.broadcasts_count = 0 OR e.broadcasts_count IS NULL) AND (e.popularity_score <= 50 OR e.popularity_score IS NULL)")
-		}
+	if filters.Popular != "" {
+			if *filters.Popular {
+				conditions = append(conditions, "(e.feature_match = TRUE OR e.sellout = TRUE OR e.broadcasts_count > 0 OR e.popularity_score > 50)")
+			} else {
+				conditions = append(conditions, "(e.feature_match = FALSE OR e.feature_match IS NULL) AND (e.sellout = FALSE OR e.sellout IS NULL) AND (e.broadcasts_count = 0 OR e.broadcasts_count IS NULL) AND (e.popularity_score <= 50 OR e.popularity_score IS NULL)")
+			}
 	}
 	
 	if filters.MinPopularity > 0 {
@@ -652,8 +666,6 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 	if len(conditions) > 0 {
 		query += " WHERE " + strings.Join(conditions, " AND ")
 	}
-	
-	
 	
 	return query, args
 }
@@ -702,3 +714,103 @@ func (f *EventFilters) toMap() map[string]interface{} {
 	return m
 }
 
+
+// MarketInfo 盘口信息
+type MarketInfo struct {
+	ID            int64         `json:"id"`
+	EventID       string        `json:"event_id"`
+	MarketID      string        `json:"market_id"`
+	Specifier     string        `json:"specifier"`
+	Status        string        `json:"status"`
+	CashoutStatus string        `json:"cashout_status"`
+	BetStatus     string        `json:"bet_status"`
+	Outcomes      []OutcomeInfo `json:"outcomes"`
+}
+
+// OutcomeInfo 赔率信息
+type OutcomeInfo struct {
+	ID        int64   `json:"id"`
+	MarketID  int64   `json:"market_id"`
+	OutcomeID string  `json:"outcome_id"`
+	Odds      float64 `json:"odds"`
+	Status    string  `json:"status"`
+	BetStatus string  `json:"bet_status"`
+}
+
+// getMarketsForEvent 获取指定赛事和盘口类型的盘口和赔率信息
+func (s *Server) getMarketsForEvent(eventID string, marketIDs []string) ([]MarketInfo, error) {
+	// 1. 构建查询
+	placeholders := make([]string, len(marketIDs))
+	args := make([]interface{}, len(marketIDs)+1)
+	args[0] = eventID
+	for i, id := range marketIDs {
+		placeholders[i] = fmt.Sprintf("$%d", i+2)
+		args[i+1] = id
+	}
+
+	query := fmt.Sprintf(`
+		SELECT 
+			m.id, m.event_id, m.sr_market_id, m.specifier, m.status, m.cashout_status, m.bet_status,
+			o.id, o.market_id, o.outcome_id, o.odds, o.status, o.bet_status
+		FROM markets m
+		LEFT JOIN outcomes o ON m.id = o.market_id
+		WHERE m.event_id = $1 AND m.sr_market_id IN (%s)
+		ORDER BY m.id, o.id
+	`, strings.Join(placeholders, ","))
+
+	// 2. 查询数据
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query markets and outcomes for event %s: %w", eventID, err)
+	}
+	defer rows.Close()
+
+	// 3. 构建嵌套结构
+	marketMap := make(map[int64]*MarketInfo)
+	var markets []MarketInfo
+
+	for rows.Next() {
+		var marketInfo MarketInfo
+		var outcomeInfo OutcomeInfo
+		var srMarketID, outcomeID sql.NullString
+		var marketStatus, marketCashoutStatus, marketBetStatus, outcomeStatus, outcomeBetStatus sql.NullString
+		var marketIDInt, outcomeIDInt sql.NullInt64
+		var outcomeOdds sql.NullFloat64
+
+		if err := rows.Scan(
+			&marketIDInt, &marketInfo.EventID, &srMarketID, &marketInfo.Specifier, &marketStatus, &marketCashoutStatus, &marketBetStatus,
+			&outcomeIDInt, &outcomeInfo.MarketID, &outcomeID, &outcomeOdds, &outcomeStatus, &outcomeBetStatus,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan market and outcome detail for event %s: %w", eventID, err)
+		}
+
+		// 市场信息
+		marketInfo.ID = marketIDInt.Int64
+		marketInfo.MarketID = srMarketID.String
+		marketInfo.Status = marketStatus.String
+		marketInfo.CashoutStatus = marketCashoutStatus.String
+		marketInfo.BetStatus = marketBetStatus.String
+
+		// 赔率信息
+		outcomeInfo.ID = outcomeIDInt.Int64
+		outcomeInfo.OutcomeID = outcomeID.String
+		outcomeInfo.Odds = outcomeOdds.Float64
+		outcomeInfo.Status = outcomeStatus.String
+		outcomeInfo.BetStatus = outcomeBetStatus.String
+
+		// 关联到 Market
+		market, exists := marketMap[marketInfo.ID]
+		if !exists {
+			market = &marketInfo
+			marketMap[marketInfo.ID] = market
+			markets = append(markets, *market)
+		}
+
+		// 关联到 Outcome
+		if outcomeInfo.ID != 0 {
+			market.Outcomes = append(market.Outcomes, outcomeInfo)
+		}
+	}
+
+	return markets, nil
+}
