@@ -385,8 +385,16 @@ func (p *MessageProcessor) extractBetSettlementData(xmlContent string) interface
 
 // handleOddsChange 处理 odds_change 消息 (从 AMQPConsumer 迁移过来)
 func (p *MessageProcessor) handleOddsChange(eventID string, productID *int, xmlContent string, timestamp int64) {
+	// 1. 解析并存储比赛状态（tracked_events）
 	if err := p.oddsChangeParser.ParseAndStore(xmlContent); err != nil {
 		logger.Errorf("Failed to handle odds_change: %v", err)
+	}
+	
+	// 2. 解析并存储赔率数据（markets + odds）
+	if productID != nil {
+		if err := p.oddsParser.ParseAndStoreOdds([]byte(xmlContent), *productID); err != nil {
+			logger.Errorf("Failed to parse and store odds: %v", err)
+		}
 	}
 }
 
