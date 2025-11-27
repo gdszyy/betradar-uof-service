@@ -11,19 +11,21 @@ import (
 
 // CategoryResponse 分类响应
 type CategoryResponse struct {
-	CategoryID   string `json:"category_id"`
-	CategoryName string `json:"category_name"`
-	SportID      string `json:"sport_id"`
-	MatchCount   int    `json:"match_count"`
+	CategoryID   string  `json:"category_id"`
+	CategoryName string  `json:"category_name"`
+	SportID      string  `json:"sport_id"`
+	MatchCount   int     `json:"match_count"`
+	Popularity   float64 `json:"popularity,omitempty"` // 热度分数
 }
 
 // TournamentResponse 联赛响应
 type TournamentResponse struct {
-	TournamentID   string `json:"tournament_id"`
-	TournamentName string `json:"tournament_name"`
-	CategoryID     string `json:"category_id"`
-	SportID        string `json:"sport_id"`
-	MatchCount     int    `json:"match_count"`
+	TournamentID   string  `json:"tournament_id"`
+	TournamentName string  `json:"tournament_name"`
+	CategoryID     string  `json:"category_id"`
+	SportID        string  `json:"sport_id"`
+	MatchCount     int     `json:"match_count"`
+	Popularity     float64 `json:"popularity,omitempty"` // 热度分数
 }
 
 // handleGetCategories 获取分类列表
@@ -72,15 +74,18 @@ func (s *Server) handleGetCategories(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 查询 - 从 categories 表获取所有 category，左连接 tracked_events 获取赛事数量
+	// 左连接 tournament_popularity_scores 获取联赛热度，计算分类的平均热度
 	// 这样可以显示所有已加载的 categories，包括没有赛事的
 	query := fmt.Sprintf(`
 		SELECT 
 			c.id as category_id,
 			c.name as category_name,
 			c.sport_id,
-			COALESCE(COUNT(DISTINCT te.event_id) FILTER (WHERE te.category_id IS NOT NULL), 0) AS match_count
+			COALESCE(COUNT(DISTINCT te.event_id) FILTER (WHERE te.category_id IS NOT NULL), 0) AS match_count,
+			COALESCE(AVG(tps.final_popularity_score), 0) AS popularity
 		FROM categories c
 		LEFT JOIN tracked_events te ON c.id = te.category_id
+		LEFT JOIN tournament_popularity_scores tps ON c.id = tps.category_id
 		WHERE 1=1 %s
 		GROUP BY c.id, c.name, c.sport_id
 		%s
@@ -100,7 +105,7 @@ func (s *Server) handleGetCategories(w http.ResponseWriter, r *http.Request) {
 	var categories []CategoryResponse
 	for rows.Next() {
 		var cat CategoryResponse
-		if err := rows.Scan(&cat.CategoryID, &cat.CategoryName, &cat.SportID, &cat.MatchCount); err != nil {
+		if err := rows.Scan(&cat.CategoryID, &cat.CategoryName, &cat.SportID, &cat.MatchCount, &cat.Popularity); err != nil {
 			log.Printf("[API] Error scanning category: %v", err)
 			continue
 		}
@@ -125,14 +130,54 @@ func (s *Server) handleGetCategories(w http.ResponseWriter, r *http.Request) {
 		totalCount = 0
 	}
 
+	// 查询热度前五名的联赛
+	topTournamentsQuery := `
+		SELECT 
+			tournament_id,
+			tournament_name,
+			category_id,
+			final_popularity_score
+		FROM tournament_popularity_scores
+		ORDER BY final_popularity_score DESC
+		LIMIT 5
+	`
+	
+	type TopTournament struct {
+		TournamentID   string  `json:"tournament_id"`
+		TournamentName string  `json:"tournament_name"`
+		CategoryID     string  `json:"category_id"`
+		Popularity     float64 `json:"popularity"`
+	}
+	
+	var topTournaments []TopTournament
+	topRows, err := s.db.Query(topTournamentsQuery)
+	if err != nil {
+		log.Printf("[API] Error querying top tournaments: %v", err)
+	} else {
+		defer topRows.Close()
+		for topRows.Next() {
+			var t TopTournament
+			if err := topRows.Scan(&t.TournamentID, &t.TournamentName, &t.CategoryID, &t.Popularity); err != nil {
+				log.Printf("[API] Error scanning top tournament: %v", err)
+				continue
+			}
+			topTournaments = append(topTournaments, t)
+		}
+	}
+	
+	if topTournaments == nil {
+		topTournaments = []TopTournament{}
+	}
+
 	response := map[string]interface{}{
-		"success":     true,
-		"data":        categories,
-		"page":        page,
-		"page_size":   pageSize,
-		"count":       len(categories),
-		"total":       totalCount,
-		"total_pages": (totalCount + pageSize - 1) / pageSize,
+		"success":        true,
+		"data":           categories,
+		"page":           page,
+		"page_size":      pageSize,
+		"count":          len(categories),
+		"total":          totalCount,
+		"total_pages":    (totalCount + pageSize - 1) / pageSize,
+		"top_tournaments": topTournaments,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -172,19 +217,21 @@ func (s *Server) handleGetTournaments(w http.ResponseWriter, r *http.Request) {
 		orderBy = "ORDER BY match_count DESC"
 	}
 
-	// 查询 - 从 tracked_events 表获取 tournament 信息
+	// 查询 - 从 tracked_events 表获取 tournament 信息，左连接 tournament_popularity_scores 获取热度
 	query := fmt.Sprintf(`
 		SELECT 
 			te.tournament_id,
 			COALESCE(te.tournament_name, te.tournament_id) AS tournament_name,
 			te.category_id,
 			te.sport_id,
-			COUNT(DISTINCT te.event_id) AS match_count
+			COUNT(DISTINCT te.event_id) AS match_count,
+			COALESCE(tps.final_popularity_score, 0) AS popularity
 		FROM tracked_events te
+		LEFT JOIN tournament_popularity_scores tps ON te.tournament_id = tps.tournament_id
 		WHERE te.category_id = $1 
 			AND te.tournament_id IS NOT NULL 
 			AND te.tournament_id != ''
-		GROUP BY te.tournament_id, te.tournament_name, te.category_id, te.sport_id
+		GROUP BY te.tournament_id, te.tournament_name, te.category_id, te.sport_id, tps.final_popularity_score
 		%s
 		LIMIT $2 OFFSET $3
 	`, orderBy)
@@ -201,7 +248,7 @@ func (s *Server) handleGetTournaments(w http.ResponseWriter, r *http.Request) {
 	var tournaments []TournamentResponse
 	for rows.Next() {
 		var tournament TournamentResponse
-		if err := rows.Scan(&tournament.TournamentID, &tournament.TournamentName, &tournament.CategoryID, &tournament.SportID, &tournament.MatchCount); err != nil {
+		if err := rows.Scan(&tournament.TournamentID, &tournament.TournamentName, &tournament.CategoryID, &tournament.SportID, &tournament.MatchCount, &tournament.Popularity); err != nil {
 			log.Printf("[API] Error scanning tournament: %v", err)
 			continue
 		}
