@@ -23,6 +23,8 @@ type MatchDetail struct {
 	HomeTeamName   *string   `json:"home_team_name"`
 	AwayTeamID     *string   `json:"away_team_id"`
 	AwayTeamName   *string   `json:"away_team_name"`
+	HomeTeamLogo   *string   `json:"home_team_logo,omitempty"`   // 主队 Logo URL
+	AwayTeamLogo   *string   `json:"away_team_logo,omitempty"`   // 客队 Logo URL
 	HomeScore      *int      `json:"home_score"`
 	AwayScore      *int      `json:"away_score"`
 	MatchStatus    *string   `json:"match_status"`

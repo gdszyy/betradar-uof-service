@@ -69,6 +69,8 @@ func (s *Server) handleGetEventsWithFilters(w http.ResponseWriter, r *http.Reque
 			&match.HomeTeamName,
 			&match.AwayTeamID,
 			&match.AwayTeamName,
+			&match.HomeTeamLogo,
+			&match.AwayTeamLogo,
 			&match.HomeScore,
 			&match.AwayScore,
 			&match.MatchStatus,
@@ -298,11 +300,14 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 		SELECT DISTINCT
 			e.event_id, e.srn_id, e.sport_id, e.status, e.schedule_time,
 			e.home_team_id, e.home_team_name, e.away_team_id, e.away_team_name,
+			ht.logo_url as home_team_logo, at.logo_url as away_team_logo,
 			e.home_score, e.away_score, e.match_status, e.match_time,
 			e.message_count, e.last_message_at, e.created_at, e.updated_at,
 			e.attendance, e.sellout, e.feature_match, e.live_video_available,
 			e.live_data_available, e.broadcasts_count, e.popularity_score
 		FROM tracked_events e
+		LEFT JOIN teams ht ON e.home_team_id = ht.team_id
+		LEFT JOIN teams at ON e.away_team_id = at.team_id
 	`
 	
 	// 是否需要 JOIN markets 表
