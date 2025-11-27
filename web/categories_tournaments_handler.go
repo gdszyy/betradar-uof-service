@@ -29,7 +29,7 @@ type TournamentResponse struct {
 }
 
 // handleGetCategories 获取分类列表
-// GET /api/categories?sport_ids=sr:sport:1,sr:sport:2&page=1&page_size=10&sort=name|match_count_asc|match_count_desc
+// GET /api/categories?sport_ids=sr:sport:1,sr:sport:2&page=1&page_size=10&sort=name|match_count_asc|match_count_desc|popularity_desc
 func (s *Server) handleGetCategories(w http.ResponseWriter, r *http.Request) {
 	log.Println("[API] Getting categories...")
 
@@ -71,6 +71,8 @@ func (s *Server) handleGetCategories(w http.ResponseWriter, r *http.Request) {
 		orderBy = "ORDER BY match_count ASC"
 	} else if sort == "match_count_desc" {
 		orderBy = "ORDER BY match_count DESC"
+	} else if sort == "popularity_desc" {
+		orderBy = "ORDER BY popularity DESC"
 	}
 
 	// 查询 - 从 categories 表获取所有 category，左连接 tracked_events 获取赛事数量
@@ -185,7 +187,7 @@ func (s *Server) handleGetCategories(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleGetTournaments 获取联赛列表
-// GET /api/tournaments?category_id=sr:category:1&page=1&page_size=10&sort=name|match_count_asc|match_count_desc
+// GET /api/tournaments?category_id=sr:category:1&page=1&page_size=10&sort=name|match_count_asc|match_count_desc|popularity_desc
 func (s *Server) handleGetTournaments(w http.ResponseWriter, r *http.Request) {
 	log.Println("[API] Getting tournaments...")
 
@@ -215,6 +217,8 @@ func (s *Server) handleGetTournaments(w http.ResponseWriter, r *http.Request) {
 		orderBy = "ORDER BY match_count ASC"
 	} else if sort == "match_count_desc" {
 		orderBy = "ORDER BY match_count DESC"
+	} else if sort == "popularity_desc" {
+		orderBy = "ORDER BY popularity DESC"
 	}
 
 	// 查询 - 从 tracked_events 表获取 tournament 信息，左连接 tournament_popularity_scores 获取热度
