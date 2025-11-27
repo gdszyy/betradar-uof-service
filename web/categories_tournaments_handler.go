@@ -135,12 +135,15 @@ func (s *Server) handleGetCategories(w http.ResponseWriter, r *http.Request) {
 	// 查询热度前五名的联赛
 	topTournamentsQuery := `
 		SELECT 
-			tournament_id,
-			tournament_name,
-			category_id,
-			final_popularity_score
-		FROM tournament_popularity_scores
-		ORDER BY final_popularity_score DESC
+			tps.tournament_id,
+			tps.tournament_name,
+			tps.category_id,
+			tps.final_popularity_score,
+			COALESCE(COUNT(DISTINCT te.event_id), 0) AS match_count
+		FROM tournament_popularity_scores tps
+		LEFT JOIN tracked_events te ON tps.tournament_id = te.tournament_id
+		GROUP BY tps.tournament_id, tps.tournament_name, tps.category_id, tps.final_popularity_score
+		ORDER BY tps.final_popularity_score DESC
 		LIMIT 5
 	`
 	
@@ -149,6 +152,7 @@ func (s *Server) handleGetCategories(w http.ResponseWriter, r *http.Request) {
 		TournamentName string  `json:"tournament_name"`
 		CategoryID     string  `json:"category_id"`
 		Popularity     float64 `json:"popularity"`
+		MatchCount     int     `json:"match_count"`
 	}
 	
 	var topTournaments []TopTournament
@@ -159,7 +163,7 @@ func (s *Server) handleGetCategories(w http.ResponseWriter, r *http.Request) {
 		defer topRows.Close()
 		for topRows.Next() {
 			var t TopTournament
-			if err := topRows.Scan(&t.TournamentID, &t.TournamentName, &t.CategoryID, &t.Popularity); err != nil {
+			if err := topRows.Scan(&t.TournamentID, &t.TournamentName, &t.CategoryID, &t.Popularity, &t.MatchCount); err != nil {
 				log.Printf("[API] Error scanning top tournament: %v", err)
 				continue
 			}
