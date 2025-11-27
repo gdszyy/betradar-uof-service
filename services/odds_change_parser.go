@@ -16,6 +16,7 @@ type OddsChangeParser struct {
 	logger          *log.Logger
 	teamsService    *TeamsService
 	logoFetcher     *LogoFetcherService
+	fixtureParser   *FixtureParser // 用于获取完整的 Fixture 信息
 }
 
 // OddsChangeMessage Odds Change 消息结构
@@ -100,12 +101,13 @@ type Outcome struct {
 }
 
 // NewOddsChangeParser 创建 Odds Change 解析器
-func NewOddsChangeParser(db *sql.DB, teamsService *TeamsService, logoFetcher *LogoFetcherService) *OddsChangeParser {
+func NewOddsChangeParser(db *sql.DB, teamsService *TeamsService, logoFetcher *LogoFetcherService, fixtureParser *FixtureParser) *OddsChangeParser {
 	return &OddsChangeParser{
-		db:           db,
-		logger:       log.New(os.Stdout, "", log.LstdFlags),
-		teamsService: teamsService,
-		logoFetcher:  logoFetcher,
+		db:            db,
+		logger:        log.New(os.Stdout, "", log.LstdFlags),
+		teamsService:  teamsService,
+		logoFetcher:   logoFetcher,
+		fixtureParser: fixtureParser,
 	}
 }
 
@@ -220,6 +222,18 @@ func (p *OddsChangeParser) ParseAndStore(xmlContent string) error {
 	p.logger.Printf("[odds_change] 比赛 %s: %s",
 		oddsChange.EventID, strings.Join(logParts, ", "))
 
+	// 检查是否需要获取 Fixture 信息
+	if p.fixtureParser != nil && p.needsFixtureInfo(oddsChange.EventID) {
+		// 异步获取 Fixture 信息，不阻塞当前消息处理
+		go func(eventID string) {
+			if err := p.fixtureParser.FetchAndUpdateFixture(eventID); err != nil {
+				p.logger.Printf("[odds_change] ⚠️  Failed to fetch fixture for %s: %v", eventID, err)
+			} else {
+				p.logger.Printf("[odds_change] ✓ Fetched fixture info for %s", eventID)
+			}
+		}(oddsChange.EventID)
+	}
+
 	return nil
 }
 
@@ -311,6 +325,24 @@ func formatScore(score *int) string {
 	return fmt.Sprintf("%d", *score)
 }
 
+
+// needsFixtureInfo 检查赛事是否需要获取 Fixture 信息
+// 如果赛事没有 category_id 或 tournament_id，则需要获取
+func (p *OddsChangeParser) needsFixtureInfo(eventID string) bool {
+	var categoryID, tournamentID string
+	err := p.db.QueryRow(
+		"SELECT category_id, tournament_id FROM tracked_events WHERE event_id = $1",
+		eventID,
+	).Scan(&categoryID, &tournamentID)
+	
+	// 如果记录不存在或查询失败，需要获取
+	if err != nil {
+		return true
+	}
+	
+	// 如果 category_id 或 tournament_id 为空，需要获取
+	return categoryID == "" || tournamentID == ""
+}
 
 // processTeam 处理队伍信息，检查是否为新队伍并安排 Logo 获取
 func (p *OddsChangeParser) processTeam(teamID, teamName, eventID string) {

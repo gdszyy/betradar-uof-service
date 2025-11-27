@@ -60,7 +60,7 @@ func (s *Server) handleGetCategories(w http.ResponseWriter, r *http.Request) {
 			args = append(args, strings.TrimSpace(id))
 			argIndex++
 		}
-		sportFilter = fmt.Sprintf("AND te.sport_id IN (%s)", strings.Join(placeholders, ","))
+			sportFilter = fmt.Sprintf("AND c.sport_id IN (%s)", strings.Join(placeholders, ","))
 	}
 
 	// 排序
@@ -71,17 +71,18 @@ func (s *Server) handleGetCategories(w http.ResponseWriter, r *http.Request) {
 		orderBy = "ORDER BY match_count DESC"
 	}
 
-	// 查询 - 从 tracked_events 表获取 category 信息
+	// 查询 - 从 categories 表获取所有 category，左连接 tracked_events 获取赛事数量
+	// 这样可以显示所有已加载的 categories，包括没有赛事的
 	query := fmt.Sprintf(`
 		SELECT 
-			te.category_id,
-			COALESCE(te.category_name, te.category_id) AS category_name,
-			te.sport_id,
-			COUNT(DISTINCT te.event_id) AS match_count
-		FROM tracked_events te
-		WHERE te.category_id IS NOT NULL AND te.category_id != ''
-			%s
-		GROUP BY te.category_id, te.category_name, te.sport_id
+			c.id as category_id,
+			c.name as category_name,
+			c.sport_id,
+			COALESCE(COUNT(DISTINCT te.event_id) FILTER (WHERE te.category_id IS NOT NULL), 0) AS match_count
+		FROM categories c
+		LEFT JOIN tracked_events te ON c.id = te.category_id
+		WHERE 1=1 %s
+		GROUP BY c.id, c.name, c.sport_id
 		%s
 		LIMIT $%d OFFSET $%d
 	`, sportFilter, orderBy, argIndex, argIndex+1)
@@ -112,10 +113,9 @@ func (s *Server) handleGetCategories(w http.ResponseWriter, r *http.Request) {
 
 	// 查询总数
 	countQuery := fmt.Sprintf(`
-		SELECT COUNT(DISTINCT te.category_id)
-		FROM tracked_events te
-		WHERE te.category_id IS NOT NULL AND te.category_id != ''
-			%s
+		SELECT COUNT(DISTINCT c.id)
+		FROM categories c
+		WHERE 1=1 %s
 	`, sportFilter)
 
 	var totalCount int

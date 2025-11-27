@@ -213,7 +213,7 @@ func (p *FixtureParser) ParseFixtureChange(eventID string, xmlContent string) er
 
 	// 官方建议: 无论 change_type 是什么,都应该调用 Fixture API 获取完整信息
 	// 这样可以确保所有属性都是最新的
-	if err := p.fetchAndUpdateFixture(eventID); err != nil {
+	if err := p.FetchAndUpdateFixture(eventID); err != nil {
 		// API 失败日志已简化
 		
 		// 如果 API 调用失败,回退到只更新 start_time
@@ -234,8 +234,9 @@ func (p *FixtureParser) ParseFixtureChange(eventID string, xmlContent string) er
 
 
 
-// fetchAndUpdateFixture 从 API 获取完整的 Fixture 信息并更新
-func (p *FixtureParser) fetchAndUpdateFixture(eventID string) error {
+// FetchAndUpdateFixture 从 API 获取完整的 Fixture 信息并更新
+// 公开方法，可以被其他 Parser 调用
+func (p *FixtureParser) FetchAndUpdateFixture(eventID string) error {
 	// 构造 API URL
 	url := fmt.Sprintf("%s/sports/en/sports_events/%s/fixture.xml", p.apiBaseURL, eventID)
 	// API 请求日志已简化

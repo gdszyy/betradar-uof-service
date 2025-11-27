@@ -3,6 +3,9 @@ package services
 import (
 	"bytes"
 	"encoding/xml"
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/streadway/amqp"
@@ -101,8 +104,8 @@ func (c *AMQPConsumer) processMessage(msg amqp.Delivery) {
 	routingKey := msg.RoutingKey
 	xmlContent := string(msg.Body)
 
-	// 解析消息类型
-	messageType, eventID, productID, sportID, timestamp := c.parseMessage(xmlContent)
+	// 解析消息类型，传入 routingKey 以提取 sport_id
+	messageType, eventID, productID, sportID, timestamp := c.parseMessage(xmlContent, routingKey)
 
 	// 统计消息
 	if messageType != "" && c.statsTracker != nil {
@@ -143,7 +146,7 @@ func (c *AMQPConsumer) processMessage(msg amqp.Delivery) {
 }
 
 // parseMessage 解析消息基本信息
-func (c *AMQPConsumer) parseMessage(xmlContent string) (messageType, eventID string, productID *int, sportID *string, timestamp int64) {
+func (c *AMQPConsumer) parseMessage(xmlContent string, routingKey string) (messageType, eventID string, productID *int, sportID *string, timestamp int64) {
 	type BaseMessage struct {
 		EventID   string `xml:"event_id,attr"`
 		ProductID int    `xml:"product,attr"`
@@ -172,12 +175,34 @@ func (c *AMQPConsumer) parseMessage(xmlContent string) (messageType, eventID str
 	if base.ProductID != 0 {
 		productID = &base.ProductID
 	}
+	// 优先使用 XML 中的 sport_id
 	if base.SportID != "" {
 		sportID = &base.SportID
+	} else {
+		// 如果 XML 中没有，从 routing_key 提取
+		extractedSportID := extractSportIDFromRoutingKey(routingKey)
+		if extractedSportID != "" {
+			sportID = &extractedSportID
+		}
 	}
 	timestamp = base.Timestamp
 
 	return
+}
+
+// extractSportIDFromRoutingKey 从 routing_key 提取 sport_id
+// routing_key 格式: {priority}.{pre}.{live}.{message_type}.{sport_id}.{urn_type}.{event_id}.{node_id}
+// 示例: hi.pre.-.odds_change.2.sr:match.61360049.118
+func extractSportIDFromRoutingKey(routingKey string) string {
+	parts := strings.Split(routingKey, ".")
+	if len(parts) >= 5 {
+		sportIDStr := parts[4]
+		// 验证是否为数字
+		if _, err := strconv.Atoi(sportIDStr); err == nil {
+			return fmt.Sprintf("sr:sport:%s", sportIDStr)
+		}
+	}
+	return ""
 }
 
 // extractMessageData 提取用于广播的附加数据

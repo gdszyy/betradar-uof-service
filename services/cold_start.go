@@ -363,27 +363,25 @@ func (c *ColdStart) validateData(matches []MatchInfo) ValidationReport {
 	return report
 }
 
-// inferSportID 从 event_id推断sport_id
+// inferSportID 从数据库或其他来源推断sport_id
+// 优先从 uof_messages 表中查询，避免硬编码
 func (c *ColdStart) inferSportID(eventID string) string {
-	// 根据 event_id 的格式推断 sport_id
-	// sr:match:xxx -> 足球 (sr:sport:1)
-	// sr:stage:xxx -> 足球 (sr:sport:1)
-	// sr:simple_tournament:xxx -> 网球等其他运动
+	// 尝试从数据库中查询该赛事的 sport_id
+	var sportID string
+	err := c.db.QueryRow(
+		"SELECT sport_id FROM uof_messages WHERE event_id = $1 AND sport_id IS NOT NULL AND sport_id != '' ORDER BY received_at DESC LIMIT 1",
+		eventID,
+	).Scan(&sportID)
 	
-	if strings.HasPrefix(eventID, "sr:match:") {
-		// 大多数 match 是足球
-		return "sr:sport:1"
-	} else if strings.HasPrefix(eventID, "sr:stage:") {
-		// stage 通常也是足球
-		return "sr:sport:1"
-	} else if strings.HasPrefix(eventID, "sr:simple_tournament:") {
-		// 网球等其他运动
-		// 默认也设为足球，需要时可以调整
-		return "sr:sport:1"
+	if err == nil && sportID != "" {
+		c.logger.Printf("[ColdStart] ✓ Inferred sport_id=%s for event %s from database", sportID, eventID)
+		return sportID
 	}
 	
-	// 默认返回足球
-	return "sr:sport:1"
+	// 如果查询失败，返回空字符串而不是硬编码
+	// 这样可以在日志中识别出需要手动处理的情况
+	c.logger.Printf("[ColdStart] ⚠️  Cannot infer sport_id for event %s, will be filled by fixture data", eventID)
+	return "" // 返回空字符串，让后续的 fixture 数据填充
 }
 
 // printReport 打印报告

@@ -44,7 +44,7 @@ func NewMessageProcessor(cfg *config.Config, store *MessageStore, broker Message
 	teamsService := NewTeamsService(store.db)
 	logoFetcher := NewLogoFetcherService(store.db, teamsService)
 	
-	oddsChangeParser := NewOddsChangeParser(store.db, teamsService, logoFetcher)
+	oddsChangeParser := NewOddsChangeParser(store.db, teamsService, logoFetcher, fixtureParser)
 	oddsParser := NewOddsParser(store.db, marketDescService)
 	betSettlementParser := NewBetSettlementParser(store.db)
 	betStopProcessor := NewBetStopProcessor(store.db)
