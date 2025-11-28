@@ -219,6 +219,16 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 		// 只返回有 markets 数据的比赛 (使用 defensive cast 避免类型不匹配)
 		whereClauses = append(whereClauses, "EXISTS (SELECT 1 FROM markets m WHERE m.event_id::text = te.event_id)")
 	}
+	
+	// 业务规则：默认排除未订阅且已开赛的比赛
+	// 原因：未订阅 = 没有滚球盘口，已开赛 = 赛前盘已结束，这类比赛没有可用盘口
+	// 可通过 include_unsubscribed_started=true 参数覆盖此行为
+	includeUnsubscribedStarted := r.URL.Query().Get("include_unsubscribed_started")
+	if includeUnsubscribedStarted != "true" {
+		// 排除：subscribed = false AND schedule_time < NOW()
+		whereClauses = append(whereClauses, 
+			"(te.subscribed = true OR te.schedule_time IS NULL OR te.schedule_time >= NOW())")
+	}
 		
 		// 构建 WHERE 子句
 		whereClause := ""
