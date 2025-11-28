@@ -71,6 +71,18 @@ type SpecifierGroup struct {
 	UpdatedAt  string        `json:"updated_at"`
 }
 
+// MarketInfo 盘口信息 (保留以兼容其他文件)
+type MarketInfo struct {
+	MarketID       string        `json:"sr_market_id"`
+	MarketName     string        `json:"market_name"`
+	Specifiers     string        `json:"specifiers,omitempty"`
+	Status         string        `json:"status"`
+	ProducerID     int           `json:"producer_id"`
+	Outcomes       []OutcomeInfo `json:"outcomes"`
+	OutcomesCount  int           `json:"outcomes_count"`
+	UpdatedAt      string        `json:"updated_at"`
+}
+
 // OutcomeInfo 结果信息
 type OutcomeInfo struct {
 	OutcomeID   string  `json:"outcome_id"`
