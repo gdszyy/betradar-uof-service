@@ -31,19 +31,21 @@ GET /api/events
 | `market_ids` | string | 按Market ID过滤，多个ID用逗号分隔。 | `1,16,18` |
 | `page` | integer | 页码，默认为`1`。 | `2` |
 | `page_size` | integer | 每页数量，默认为`100`，最大为`500`。 | `50` |
+| `sort_by` | string | 排序字段。可选值为 `time` (按开赛时间), `popularity` (按热度), `last_update` (按最后更新时间，默认)。 | `popularity` |
+| `sort_order` | string | 排序顺序。`asc` (升序) 或 `desc` (降序，默认)。 | `desc` |
 
 ### 2.3. 排序规则
 
-接口默认按照以下规则排序：
+接口支持通过`sort_by`和`sort_order`参数自定义排序逻辑。
 
-1. **主排序**：按最后更新时间（`last_update`）降序排列，最新更新的比赛排在前面
-2. **次排序**：当更新时间相同时，按`event_id`排序
+| `sort_by` 值 | 排序字段 | 描述 |
+|---|---|---|
+| `last_update` (默认) | `last_update` | **按最后更新时间排序**：综合盘口更新和消息更新时间，最新的比赛排在最前。适合滚球和实时场景。 |
+| `time` | `schedule_time` | **按开赛时间排序**：根据比赛预定的开始时间排序。适合赛程展示。 |
+| `popularity` | `message_count` | **按热度排序**：根据收到的消息数量排序，消息越多的比赛被认为越热门。 |
 
-其中`last_update`取以下两者中的较新值：
-- 盘口数据的最后更新时间（`markets.updated_at`）
-- 比赛消息的最后接收时间（`tracked_events.last_message_at`）
-
-这样可以确保有最新盘口变化或消息更新的比赛优先展示。
+- **`sort_order`**：可以设为`asc`（升序）或`desc`（降序），默认为`desc`。
+- **次排序**：所有排序规则在主排序键相同时，都会使用`event_id`作为次要排序键，以确保结果的稳定性。
 
 ## 3. 响应
 

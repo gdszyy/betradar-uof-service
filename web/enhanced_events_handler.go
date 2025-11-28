@@ -91,6 +91,8 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 	isEnded := r.URL.Query().Get("is_ended")
 	hasMarkets := r.URL.Query().Get("has_markets")
 	marketIDs := r.URL.Query().Get("market_ids") // 新增: 逗号分隔的 market ID 列表
+	sortBy := r.URL.Query().Get("sort_by") // 新增: 排序方式 (time, popularity)
+	sortOrder := r.URL.Query().Get("sort_order") // 新增: 排序顺序 (asc, desc)
 	
 	page := 1
 	pageSize := 100
@@ -202,8 +204,33 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 				te.created_at, te.updated_at
 		`
 	
-		// 添加排序和限制 (支持 page/page_size)
-		query += " ORDER BY last_update DESC NULLS LAST, te.event_id"
+			// 添加排序和限制 (支持 page/page_size)
+			// 根据 sort_by 参数决定排序字段
+			orderByClause := ""
+			switch sortBy {
+			case "popularity":
+				// 按热度排序: message_count 越高越热门
+				if sortOrder == "asc" {
+					orderByClause = " ORDER BY te.message_count ASC NULLS LAST, te.event_id"
+				} else {
+					orderByClause = " ORDER BY te.message_count DESC NULLS LAST, te.event_id"
+				}
+			case "time":
+				// 按时间排序: schedule_time
+				if sortOrder == "asc" {
+					orderByClause = " ORDER BY te.schedule_time ASC NULLS LAST, te.event_id"
+				} else {
+					orderByClause = " ORDER BY te.schedule_time DESC NULLS LAST, te.event_id"
+				}
+			default:
+				// 默认: 按最后更新时间排序
+				if sortOrder == "asc" {
+					orderByClause = " ORDER BY last_update ASC NULLS LAST, te.event_id"
+				} else {
+					orderByClause = " ORDER BY last_update DESC NULLS LAST, te.event_id"
+				}
+			}
+			query += orderByClause
 		
 		limit := pageSize
 		offset := (page - 1) * pageSize
