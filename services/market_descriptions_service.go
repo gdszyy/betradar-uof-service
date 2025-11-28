@@ -14,6 +14,14 @@ import (
 	"uof-service/logger"
 )
 
+// min 返回两个整数中的较小值
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // ReplacementContext 变量替换所需的上下文信息
 type ReplacementContext struct {
 	HomeTeamName string
@@ -608,9 +616,85 @@ func (s *MarketDescriptionsService) loadVariantDescription(marketID, outcomeID, 
 		return "", fmt.Errorf("failed to read variant response: %w", err)
 	}
 	
+	// 尝试解析为 variant_description 格式
 	var variantDesc VariantDescription
 	if err := xml.Unmarshal(body, &variantDesc); err != nil {
-		return "", fmt.Errorf("failed to parse variant XML: %w", err)
+		// 如果失败，尝试解析为 market_descriptions 格式
+		var marketDescsResp MarketDescriptionsResponse
+		if err2 := xml.Unmarshal(body, &marketDescsResp); err2 != nil {
+			logger.Printf("[MarketDescService] ⚠️  Failed to parse variant XML as both formats. Original error: %v, Fallback error: %v", err, err2)
+			logger.Printf("[MarketDescService] 📝 Raw XML (first 500 chars): %s", string(body[:min(500, len(body))]))
+			return "", fmt.Errorf("failed to parse variant XML: %w", err)
+		}
+		
+		// 从 market_descriptions 格式中提取 variant 信息
+		logger.Printf("[MarketDescService] ℹ️  Variant API returned market_descriptions format, extracting mappings...")
+		
+		// 更新缓存和数据库
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		
+		if s.mappings[marketID] == nil {
+			s.mappings[marketID] = make(map[string]string)
+		}
+		
+		foundName := ""
+		
+		// 从 market_descriptions 中提取 outcomes
+		for _, market := range marketDescsResp.Markets {
+			if market.ID != marketID {
+				continue
+			}
+			
+			// 遍历 outcomes
+			for _, outcome := range market.Outcomes {
+				// 保存到数据库
+				if s.db != nil {
+					_, err := s.db.Exec(`
+						INSERT INTO mapping_outcomes (market_id, outcome_id, product_outcome_name)
+						VALUES ($1, $2, $3)
+						ON CONFLICT (market_id, outcome_id) DO UPDATE
+						SET product_outcome_name = EXCLUDED.product_outcome_name
+					`, marketID, outcome.ID, outcome.Name)
+					if err != nil {
+						logger.Printf("[MarketDescService] ⚠️  Failed to save outcome %s/%s: %v", marketID, outcome.ID, err)
+					}
+				}
+				
+				// 更新内存缓存
+				s.mappings[marketID][outcome.ID] = outcome.Name
+				if outcome.ID == outcomeID {
+					foundName = outcome.Name
+				}
+			}
+			
+			// 遍历 mappings
+			for _, mapping := range market.Mappings {
+				for _, outcome := range mapping.Outcomes {
+					// 保存到数据库
+					if s.db != nil {
+						_, err := s.db.Exec(`
+							INSERT INTO mapping_outcomes (market_id, outcome_id, product_outcome_name)
+							VALUES ($1, $2, $3)
+							ON CONFLICT (market_id, outcome_id) DO UPDATE
+							SET product_outcome_name = EXCLUDED.product_outcome_name
+						`, marketID, outcome.OutcomeID, outcome.ProductOutcomeName)
+						if err != nil {
+							logger.Printf("[MarketDescService] ⚠️  Failed to save mapping outcome %s/%s: %v", marketID, outcome.OutcomeID, err)
+						}
+					}
+					
+					// 更新内存缓存
+					s.mappings[marketID][outcome.OutcomeID] = outcome.ProductOutcomeName
+					if outcome.OutcomeID == outcomeID {
+						foundName = outcome.ProductOutcomeName
+					}
+				}
+			}
+		}
+		
+		logger.Printf("[MarketDescService] ✅ Loaded variant from market_descriptions format, found name: %s", foundName)
+		return foundName, nil
 	}
 	
 	// 更新缓存和数据库
