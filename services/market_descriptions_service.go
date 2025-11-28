@@ -481,14 +481,37 @@ func (s *MarketDescriptionsService) GetOutcomeName(marketID string, outcomeID st
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	
-	// 优先从 mappings 中查询 (处理 URN 格式的 outcome_id)
-	if mappings, ok := s.mappings[marketID]; ok {
-		if productOutcomeName, ok := mappings[outcomeID]; ok {
-			return productOutcomeName
+	// 第一优先级: 尝试从 outcomes 中查找模板并替换变量
+	if outcomes, ok := s.outcomes[marketID]; ok {
+		if outcome, ok := outcomes[outcomeID]; ok {
+			name := outcome.Name
+			// 替换队伍名称变量
+			if ctx != nil {
+				name = strings.ReplaceAll(name, "$competitor1", ctx.HomeTeamName)
+				name = strings.ReplaceAll(name, "$competitor2", ctx.AwayTeamName)
+				name = strings.ReplaceAll(name, "{$competitor1}", ctx.HomeTeamName)
+				name = strings.ReplaceAll(name, "{$competitor2}", ctx.AwayTeamName)
+			}
+			// 替换 specifiers 变量 (如 {hcp}, {total}, {+hcp}, {-hcp} 等)
+			if specifiers != "" {
+				pairs := strings.Split(specifiers, "|")
+				for _, pair := range pairs {
+					parts := strings.Split(pair, "=")
+					if len(parts) == 2 {
+						key := parts[0]
+						value := parts[1]
+						name = strings.ReplaceAll(name, "{"+key+"}", value)
+						name = strings.ReplaceAll(name, "{+"+key+"}", "+"+value)
+						name = strings.ReplaceAll(name, "{-"+key+"}", "-"+value)
+						name = strings.ReplaceAll(name, "{!"+key+"}", value)
+					}
+				}
+			}
+			return name
 		}
 	}
 	
-	// 如果 mappings 中没有,且 outcomeID 是 URN 格式,尝试动态加载 variant
+	// 第二优先级: 如果 outcomeID 是 URN 格式,尝试动态加载 variant
 	if strings.HasPrefix(outcomeID, "sr:") && specifiers != "" {
 		// 提取 variant 从 specifiers
 		// 例如: variant=sr:winning_margin_no_draw_any_team:31+
@@ -511,18 +534,15 @@ func (s *MarketDescriptionsService) GetOutcomeName(marketID string, outcomeID st
 		}
 	}
 	
-	// 降级: 尝试从 outcomes 中查找
-	if outcomes, ok := s.outcomes[marketID]; ok {
-		if outcome, ok := outcomes[outcomeID]; ok {
-			name := outcome.Name
-			// 替换变量
-			if ctx != nil {
-				name = strings.ReplaceAll(name, "$competitor1", ctx.HomeTeamName)
-				name = strings.ReplaceAll(name, "$competitor2", ctx.AwayTeamName)
-				name = strings.ReplaceAll(name, "{$competitor1}", ctx.HomeTeamName)
-				name = strings.ReplaceAll(name, "{$competitor2}", ctx.AwayTeamName)
-			}
-			return name
+	// 第三优先级: 从 mappings 中查询 (仅用于特殊情况的降级)
+	// 注意: mappings 中的 product_outcome_name 通常是简化标识 (如 "1", "2"),
+	// 不应该用于前端显示,仅在 outcomes 中找不到时才使用
+	if mappings, ok := s.mappings[marketID]; ok {
+		if productOutcomeName, ok := mappings[outcomeID]; ok {
+			// 如果 product_outcome_name 是简单的数字或字母,可能需要进一步处理
+			// 这里我们记录一个警告,表明使用了降级方案
+			logger.Printf("[MarketDescService] ℹ️  Using mapping fallback for marketID=%s, outcomeID=%s, name=%s", marketID, outcomeID, productOutcomeName)
+			return productOutcomeName
 		}
 	}
 	
