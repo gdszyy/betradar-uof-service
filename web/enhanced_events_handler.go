@@ -111,7 +111,7 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 	sortOrder := r.URL.Query().Get("sort_order") // 新增: 排序顺序 (asc, desc)
 	
 	page := 1
-	pageSize := 100
+	pageSize := 20 // 默认改为 20，降低负载
 	
 	if pageParam := r.URL.Query().Get("page"); pageParam != "" {
 		if p, err := strconv.Atoi(pageParam); err == nil && p > 0 {
@@ -119,13 +119,42 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 		}
 	}
 	
+	// 限制最大 page_size 为 50，防止查询过载
 	if pageSizeParam := r.URL.Query().Get("page_size"); pageSizeParam != "" {
-		if ps, err := strconv.Atoi(pageSizeParam); err == nil && ps > 0 && ps <= 500 {
+		if ps, err := strconv.Atoi(pageSizeParam); err == nil && ps > 0 && ps <= 50 {
 			pageSize = ps
 		}
 	} else if limitParam := r.URL.Query().Get("limit"); limitParam != "" {
-		if l, err := strconv.Atoi(limitParam); err == nil && l > 0 && l <= 500 {
+		if l, err := strconv.Atoi(limitParam); err == nil && l > 0 && l <= 50 {
 			pageSize = l
+		}
+	}
+	
+	// 生成缓存键
+	cacheKey := services.GenerateCacheKey("enhanced_events", map[string]interface{}{
+		"status":      status,
+		"subscribed":  subscribed,
+		"sport_id":    sportID,
+		"search":      search,
+		"producer":    producer,
+		"is_live":     isLive,
+		"is_ended":    isEnded,
+		"has_markets": hasMarkets,
+		"market_ids":  marketIDs,
+		"sort_by":     sortBy,
+		"sort_order":  sortOrder,
+		"page":        page,
+		"page_size":   pageSize,
+	})
+	
+	// 尝试从缓存获取
+	if s.queryCache != nil {
+		if cached, found := s.queryCache.Get(cacheKey); found {
+			log.Printf("[API] Cache hit for enhanced events query")
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("X-Cache", "HIT")
+			json.NewEncoder(w).Encode(cached)
+			return
 		}
 	}
 	
@@ -391,12 +420,21 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 	
 	log.Printf("[API] Returning %d enhanced events", len(events))
 	
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	// 构建响应
+	response := map[string]interface{}{
 		"success": true,
 		"count":   len(events),
 		"events":  events,
-	})
+	}
+	
+	// 缓存结果
+	if s.queryCache != nil {
+		s.queryCache.Set(cacheKey, response)
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Cache", "MISS")
+	json.NewEncoder(w).Encode(response)
 }
 
 // getEventMarketsGrouped 获取赛事的盘口信息 (按 market -> specifier 分组)
