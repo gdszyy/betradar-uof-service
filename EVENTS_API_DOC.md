@@ -60,53 +60,63 @@ GET /api/events
   "events": [
     {
       "event_id": "sr:match:12345",
-      "srn_id": "srn:match:12345",
-      "sport_id": "1",
-      "status": "live",
-      "schedule_time": "2025-11-28T20:00:00Z",
-      "home_team_id": "sr:competitor:1",
-      "home_team_name": "Real Madrid",
-      "away_team_id": "sr:competitor:2",
-      "away_team_name": "FC Barcelona",
-      "home_score": 1,
-      "away_score": 0,
-      "match_status": "2nd_half",
-      "match_time": "65:00",
-      "message_count": 120,
-      "last_message_at": "2025-11-28T21:10:00Z",
-      "subscribed": true,
-      "created_at": "2025-11-28T19:00:00Z",
-      "updated_at": "2025-11-28T21:10:05Z",
-      "sport": "Soccer",
-      "sport_name": "足球",
-      "match_status_mapped": "2nd Half",
-      "match_status_name": "下半场",
-      "match_time_mapped": "65:00",
-      "home_team_id_mapped": "1",
-      "away_team_id_mapped": "2",
+      // ... 其他赛事字段
       "is_live": true,
       "is_ended": false,
-      "markets": [
-        {
+      "markets": {
+        "1": {
           "sr_market_id": "1",
           "market_name": "1X2",
-          "specifiers": "",
-          "status": "active",
-          "producer_id": 1,
-          "outcomes": [
-            {
-              "outcome_id": "1",
-              "name": "Real Madrid",
-              "outcome_name": "主胜",
-              "odds": 1.5,
-              "probability": 0.65,
-              "active": true
+          "specifiers": {
+            "default": {
+              "specifier": "",
+              "status": "active",
+              "producer_id": 1,
+              "outcomes": [
+                {
+                  "outcome_id": "1",
+                  "name": "Real Madrid",
+                  "outcome_name": "主胜",
+                  "odds": 1.5,
+                  "probability": 0.65,
+                  "active": true
+                },
+                {
+                  "outcome_id": "X",
+                  "name": "Draw",
+                  "outcome_name": "平局",
+                  "odds": 3.0,
+                  "probability": 0.30,
+                  "active": true
+                }
+              ],
+              "updated_at": "2025-11-28T21:09:30Z"
             }
-          ],
-          "outcomes_count": 3,
-          "updated_at": "2025-11-28T21:09:30Z"
+          }
+        },
+        "16": {
+          "sr_market_id": "16",
+          "market_name": "Handicap",
+          "specifiers": {
+            "hcp=-1.5": {
+              "specifier": "hcp=-1.5",
+              "status": "active",
+              "producer_id": 1,
+              "outcomes": [
+                {
+                  "outcome_id": "1",
+                  "name": "Real Madrid (-1.5)",
+                  "outcome_name": "主队 (-1.5)",
+                  "odds": 2.1,
+                  "probability": 0.45,
+                  "active": true
+                }
+              ],
+              "updated_at": "2025-11-28T21:08:00Z"
+            }
+          }
         }
-      ]
+      }
     }
   ]
 }
@@ -128,17 +138,25 @@ GET /api/events
 | `match_status` | string | 比赛内部状态 (e.g., `2nd_half`) |
 | `is_live` | boolean | 是否为滚球 |
 | `is_ended` | boolean | 是否已结束 |
-| `markets` | array | 盘口信息数组，见`MarketInfo` |
+| `markets` | object | 盘口信息对象，key为`sr_market_id`，value为`MarketGroup`对象 |
 
-#### `MarketInfo` 对象
+#### `MarketGroup` 对象
 
 | 字段 | 类型 | 描述 |
 |---|---|---|
 | `sr_market_id` | string | Sportradar市场ID |
 | `market_name` | string | 市场名称 (e.g., "1X2", "Handicap") |
-| `specifiers` | string | 盘口参数 (e.g., `hcp=-1.5`) |
+| `specifiers` | object | 盘口参数对象，key为`specifier`字符串，value为`SpecifierGroup`对象 |
+
+#### `SpecifierGroup` 对象
+
+| 字段 | 类型 | 描述 |
+|---|---|---|
+| `specifier` | string | 盘口参数 (e.g., `hcp=-1.5`) |
 | `status` | string | 盘口状态 (e.g., `active`, `suspended`) |
+| `producer_id` | integer | Producer ID |
 | `outcomes` | array | 赔率项数组，见`OutcomeInfo` |
+| `updated_at` | string | 盘口最后更新时间 |
 
 #### `OutcomeInfo` 对象
 

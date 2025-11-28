@@ -51,20 +51,24 @@ type EnhancedEvent struct {
 	IsLive             bool   `json:"is_live"`
 	IsEnded            bool   `json:"is_ended"`
 	
-	// 盘口信息
-	Markets []MarketInfo `json:"markets"`
+	// 盘口信息 - 按 market -> specifier -> outcomes 的嵌套结构
+	Markets map[string]MarketGroup `json:"markets"`
 }
 
-// MarketInfo 盘口信息
-type MarketInfo struct {
-	MarketID       string        `json:"sr_market_id"`
-	MarketName     string        `json:"market_name"`
-	Specifiers     string        `json:"specifiers,omitempty"`
-	Status         string        `json:"status"`
-	ProducerID     int           `json:"producer_id"`
-	Outcomes       []OutcomeInfo `json:"outcomes"`
-	OutcomesCount  int           `json:"outcomes_count"`
-	UpdatedAt      string        `json:"updated_at"`
+// MarketGroup 按 market_id 分组的盘口信息
+type MarketGroup struct {
+	MarketID   string                     `json:"sr_market_id"`
+	MarketName string                     `json:"market_name"`
+	Specifiers map[string]SpecifierGroup `json:"specifiers"`
+}
+
+// SpecifierGroup 按 specifier 分组的盘口信息
+type SpecifierGroup struct {
+	Specifier  string        `json:"specifier"`
+	Status     string        `json:"status"`
+	ProducerID int           `json:"producer_id"`
+	Outcomes   []OutcomeInfo `json:"outcomes"`
+	UpdatedAt  string        `json:"updated_at"`
 }
 
 // OutcomeInfo 结果信息
@@ -346,14 +350,14 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 		}
 		
 			// 获取盘口信息 (按 producer 和 market_ids 过滤)
-			markets, err := s.getEventMarketsWithFilters(event.EventID, producer, marketIDs, localHomeTeamName, localAwayTeamName)
+			markets, err := s.getEventMarketsGrouped(event.EventID, producer, marketIDs, localHomeTeamName, localAwayTeamName)
 			if err != nil {
 				log.Printf("[API] Failed to get markets for %s: %v", event.EventID, err)
-				event.Markets = []MarketInfo{} // 空数组而不是 null
+				event.Markets = make(map[string]MarketGroup) // 空map而不是 null
 			} else {
-				// 确保不为 nil，即使没有 markets 也返回空数组
+				// 确保不为 nil，即使没有 markets 也返回空map
 				if markets == nil {
-					event.Markets = []MarketInfo{}
+					event.Markets = make(map[string]MarketGroup)
 				} else {
 					event.Markets = markets
 				}
@@ -383,10 +387,111 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-// getEventMarkets 获取赛事的盘口信息
-func (s *Server) getEventMarkets(eventID string) ([]MarketInfo, error) {
-	// 传入空字符串作为默认值
-	return s.getEventMarketsWithProducer(eventID, "", "", "")
+// getEventMarketsGrouped 获取赛事的盘口信息 (按 market -> specifier 分组)
+func (s *Server) getEventMarketsGrouped(eventID string, producer string, marketIDs string, homeTeamName string, awayTeamName string) (map[string]MarketGroup, error) {
+	query := `
+		SELECT DISTINCT ON (sr_market_id, specifiers)
+			id, sr_market_id, specifiers, status, producer_id, updated_at
+		FROM markets
+		WHERE event_id = $1
+	`
+	
+	args := []interface{}{eventID}
+	argIndex := 2
+	
+	// 添加 producer 过滤
+	if producer != "" {
+		query += fmt.Sprintf(" AND producer_id = $%d", argIndex)
+		args = append(args, producer)
+		argIndex++
+	}
+	
+	// 添加 market_ids 过滤
+	if marketIDs != "" {
+		marketIDList := strings.Split(marketIDs, ",")
+		if len(marketIDList) > 0 {
+			placeholders := make([]string, len(marketIDList))
+			for i, id := range marketIDList {
+				placeholders[i] = fmt.Sprintf("$%d", argIndex)
+				args = append(args, strings.TrimSpace(id))
+				argIndex++
+			}
+			query += fmt.Sprintf(" AND sr_market_id IN (%s)", strings.Join(placeholders, ","))
+		}
+	}
+	
+	query += " ORDER BY sr_market_id, specifiers, updated_at DESC"
+	
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	// 初始化为空map
+	marketsMap := make(map[string]MarketGroup)
+	
+	for rows.Next() {
+		var marketPK int
+		var marketID string
+		var specifiers sql.NullString
+		var status string
+		var producerID sql.NullInt64
+		var updatedAt string
+		
+		err := rows.Scan(&marketPK, &marketID, &specifiers, &status, &producerID, &updatedAt)
+		if err != nil {
+			log.Printf("[API] Failed to scan market: %v", err)
+			continue
+		}
+		
+		specifierStr := ""
+		if specifiers.Valid {
+			specifierStr = specifiers.String
+		}
+		
+		prodID := 0
+		if producerID.Valid {
+			prodID = int(producerID.Int64)
+		}
+		
+		// 获取或创建 MarketGroup
+		marketGroup, exists := marketsMap[marketID]
+		if !exists {
+			marketGroup = MarketGroup{
+				MarketID:   marketID,
+				MarketName: s.getMarketName(marketID, homeTeamName, awayTeamName, specifierStr),
+				Specifiers: make(map[string]SpecifierGroup),
+			}
+		}
+		
+		// 获取该盘口的赔率
+		outcomes, err := s.getMarketOutcomes(marketPK, marketID, homeTeamName, awayTeamName, specifierStr)
+		if err != nil {
+			log.Printf("[API] Failed to get outcomes for market %s: %v", marketID, err)
+			outcomes = []OutcomeInfo{}
+		}
+		
+		// 使用 specifier 作为 key，如果为空则使用 "default"
+		specifierKey := specifierStr
+		if specifierKey == "" {
+			specifierKey = "default"
+		}
+		
+		// 添加 SpecifierGroup
+		marketGroup.Specifiers[specifierKey] = SpecifierGroup{
+			Specifier:  specifierStr,
+			Status:     status,
+			ProducerID: prodID,
+			Outcomes:   outcomes,
+			UpdatedAt:  updatedAt,
+		}
+		
+		// 更新 marketsMap
+		marketsMap[marketID] = marketGroup
+	}
+	
+	return marketsMap, nil
 }
 
 // getEventMarketsWithFilters 获取赛事的盘口信息 (按 producer 和 market_ids 过滤)
