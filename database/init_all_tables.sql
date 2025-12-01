@@ -35,12 +35,18 @@ CREATE TABLE IF NOT EXISTS tracked_events (
     srn_id VARCHAR(200),
     sport_id VARCHAR(50),
     sport VARCHAR(50),
+    sport_name VARCHAR(100),
+    category_id VARCHAR(50),
+    category_name VARCHAR(200),
+    tournament_id VARCHAR(50),
+    tournament_name VARCHAR(200),
     status VARCHAR(50) DEFAULT 'active',
+    status_order INTEGER DEFAULT 0,
     schedule_time TIMESTAMP,
     home_team_id VARCHAR(100),
-    home_team_name VARCHAR(200),
+    home_team_name VARCHAR(255),
     away_team_id VARCHAR(100),
-    away_team_name VARCHAR(200),
+    away_team_name VARCHAR(255),
     home_score INTEGER,
     away_score INTEGER,
     match_status VARCHAR(50),
@@ -68,6 +74,7 @@ CREATE INDEX IF NOT EXISTS idx_tracked_events_event_id ON tracked_events(event_i
 CREATE INDEX IF NOT EXISTS idx_tracked_events_srn_id ON tracked_events(srn_id);
 CREATE INDEX IF NOT EXISTS idx_tracked_events_sport_id ON tracked_events(sport_id);
 CREATE INDEX IF NOT EXISTS idx_tracked_events_status ON tracked_events(status);
+CREATE INDEX IF NOT EXISTS idx_tracked_events_status_order ON tracked_events(status_order);
 CREATE INDEX IF NOT EXISTS idx_tracked_events_schedule_time ON tracked_events(schedule_time);
 CREATE INDEX IF NOT EXISTS idx_tracked_events_subscribed ON tracked_events(subscribed);
 CREATE INDEX IF NOT EXISTS idx_tracked_events_popularity_score ON tracked_events(popularity_score DESC);
