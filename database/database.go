@@ -331,18 +331,35 @@ func Migrate(db *sql.DB) error {
     UNIQUE (market_id, outcome_id)
 );`,
 		
-		// 结果映射表
-		`CREATE TABLE IF NOT EXISTS mapping_outcomes (
-    id SERIAL PRIMARY KEY,
-    market_id VARCHAR(50) NOT NULL,
-    outcome_id VARCHAR(50) NOT NULL,
-    product_outcome_name TEXT,
-    product_id INTEGER,
-    sport_id VARCHAR(50),
-    UNIQUE (market_id, outcome_id)
+			// 结果映射表
+			`CREATE TABLE IF NOT EXISTS mapping_outcomes (
+	    id SERIAL PRIMARY KEY,
+	    market_id VARCHAR(50) NOT NULL,
+	    outcome_id VARCHAR(50) NOT NULL,
+	    product_outcome_name TEXT,
+	    product_id INTEGER,
+	    sport_id VARCHAR(50),
+	    UNIQUE (market_id, outcome_id)
+);`,
+			
+			// 联赛热度评分表
+			`CREATE TABLE IF NOT EXISTS tournament_popularity_scores (
+	    id SERIAL PRIMARY KEY,
+	    tournament_id VARCHAR(100) UNIQUE NOT NULL,
+	    tournament_name VARCHAR(255) NOT NULL,
+	    category_id VARCHAR(100),
+	    sport_id VARCHAR(50),
+	    match_count INTEGER DEFAULT 0,
+	    total_broadcasts INTEGER DEFAULT 0,
+	    avg_attendance DECIMAL(10, 2) DEFAULT 0,
+	    feature_match_count INTEGER DEFAULT 0,
+	    sellout_count INTEGER DEFAULT 0,
+	    final_popularity_score DECIMAL(5, 2) DEFAULT 0,
+	    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );`,
 		
-	}
+		}
 	
 	for _, sql := range tables {
 		if _, err := db.Exec(sql); err != nil {
@@ -385,10 +402,16 @@ func Migrate(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_teams_sport_id ON teams(sport_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_teams_logo_fetched ON teams(logo_fetched)`,
 		
-		`CREATE INDEX IF NOT EXISTS idx_recovery_status_request_id ON recovery_status(request_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_recovery_status_product_id ON recovery_status(product_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_recovery_status_status ON recovery_status(status)`,
-	}
+			`CREATE INDEX IF NOT EXISTS idx_recovery_status_request_id ON recovery_status(request_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_recovery_status_product_id ON recovery_status(product_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_recovery_status_status ON recovery_status(status)`,
+			
+			`CREATE INDEX IF NOT EXISTS idx_tournament_popularity_tournament_id ON tournament_popularity_scores(tournament_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_tournament_popularity_category_id ON tournament_popularity_scores(category_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_tournament_popularity_sport_id ON tournament_popularity_scores(sport_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_tournament_popularity_score ON tournament_popularity_scores(final_popularity_score DESC)`,
+			`CREATE INDEX IF NOT EXISTS idx_tournament_popularity_match_count ON tournament_popularity_scores(match_count DESC)`,
+		}
 	
 	for _, sql := range indexes {
 		if _, err := db.Exec(sql); err != nil {
