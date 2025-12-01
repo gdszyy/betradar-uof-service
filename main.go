@@ -327,6 +327,14 @@ func main() {
 	
 	logger.Println("Data cleanup service started (daily at 2:00 AM)")
 	
+	// 启动热度评分服务 (每天凌晨 2 点执行一次)
+	popularityService := services.NewPopularityScoringService(db, larkNotifier)
+	if err := popularityService.Start(); err != nil {
+		logger.Errorf("[PopularityScoring] ⚠️  Failed to start: %v", err)
+	} else {
+		logger.Println("[PopularityScoring] ✅ Popularity scoring service started (daily at 2:00 AM)")
+	}
+	
 	// 冷启动初始化 - 获取所有比赛信息
 	coldStart := services.NewColdStart(cfg, db, larkNotifier)
 	go func() {
