@@ -367,6 +367,29 @@ CREATE TABLE IF NOT EXISTS players (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 24. Tournament Popularity Scores Table (联赛热度评分)
+CREATE TABLE IF NOT EXISTS tournament_popularity_scores (
+    id SERIAL PRIMARY KEY,
+    tournament_id VARCHAR(100) UNIQUE NOT NULL,
+    tournament_name VARCHAR(255) NOT NULL,
+    category_id VARCHAR(100),
+    sport_id VARCHAR(50),
+    match_count INTEGER DEFAULT 0,
+    total_broadcasts INTEGER DEFAULT 0,
+    avg_attendance DECIMAL(10, 2) DEFAULT 0,
+    feature_match_count INTEGER DEFAULT 0,
+    sellout_count INTEGER DEFAULT 0,
+    final_popularity_score DECIMAL(5, 2) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_tournament_popularity_tournament_id ON tournament_popularity_scores(tournament_id);
+CREATE INDEX IF NOT EXISTS idx_tournament_popularity_category_id ON tournament_popularity_scores(category_id);
+CREATE INDEX IF NOT EXISTS idx_tournament_popularity_sport_id ON tournament_popularity_scores(sport_id);
+CREATE INDEX IF NOT EXISTS idx_tournament_popularity_score ON tournament_popularity_scores(final_popularity_score DESC);
+CREATE INDEX IF NOT EXISTS idx_tournament_popularity_match_count ON tournament_popularity_scores(match_count DESC);
+
 -- ============================================================================
 -- Comments
 -- ============================================================================
@@ -382,6 +405,7 @@ COMMENT ON TABLE bet_cancels IS '投注取消记录';
 COMMENT ON TABLE producer_status IS '生产者状态监控';
 COMMENT ON TABLE market_descriptions IS '盘口描述缓存';
 COMMENT ON TABLE outcome_descriptions IS '结果描述缓存';
+COMMENT ON TABLE tournament_popularity_scores IS '联赛热度评分表,存储联赛的综合热度评分';
 
 -- ============================================================================
 -- Completion Message
@@ -390,7 +414,7 @@ COMMENT ON TABLE outcome_descriptions IS '结果描述缓存';
 DO $$
 BEGIN
     RAISE NOTICE '✅ All tables created successfully!';
-    RAISE NOTICE 'Total tables: 23';
+    RAISE NOTICE 'Total tables: 24';
     RAISE NOTICE 'Database is ready for Betradar UOF Service';
 END $$;
 
