@@ -226,20 +226,21 @@ func (s *Server) handleGetTournaments(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 查询 - 从 tracked_events 表获取 tournament 信息，左连接 tournament_popularity_scores 获取热度
+	// 使用 MAX() 选择非空的 sport_id，避免同一 tournament 因 sport_id 不同而重复
 	query := fmt.Sprintf(`
 		SELECT 
 			te.tournament_id,
-			COALESCE(te.tournament_name, te.tournament_id) AS tournament_name,
+			MAX(COALESCE(te.tournament_name, te.tournament_id)) AS tournament_name,
 			te.category_id,
-			te.sport_id,
+			MAX(CASE WHEN te.sport_id != '' THEN te.sport_id ELSE NULL END) AS sport_id,
 			COUNT(DISTINCT te.event_id) AS match_count,
-			COALESCE(tps.final_popularity_score, 0) AS popularity
+			MAX(COALESCE(tps.final_popularity_score, 0)) AS popularity
 		FROM tracked_events te
 		LEFT JOIN tournament_popularity_scores tps ON te.tournament_id = tps.tournament_id
 		WHERE te.category_id = $1 
 			AND te.tournament_id IS NOT NULL 
 			AND te.tournament_id != ''
-		GROUP BY te.tournament_id, te.tournament_name, te.category_id, te.sport_id, tps.final_popularity_score
+		GROUP BY te.tournament_id, te.category_id
 		%s
 		LIMIT $2 OFFSET $3
 	`, orderBy)
