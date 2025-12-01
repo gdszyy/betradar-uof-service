@@ -153,8 +153,7 @@ type EventFilters struct {
 	TeamName string
 	
 	// 联赛筛选 (支持多选,逗号分隔)
-	LeagueIDs  []string
-	LeagueName string
+	TournamentIDs []string
 	
 	// 搜索
 	Search string
@@ -241,13 +240,12 @@ func parseEventFilters(r *http.Request) *EventFilters {
 	filters.TeamName = r.URL.Query().Get("team_name")
 	
 	// 联赛筛选 (支持多选,逗号分隔)
-	if leagueID := r.URL.Query().Get("league_id"); leagueID != "" {
-		filters.LeagueIDs = strings.Split(leagueID, ",")
-		for i := range filters.LeagueIDs {
-			filters.LeagueIDs[i] = strings.TrimSpace(filters.LeagueIDs[i])
+	if tournamentID := r.URL.Query().Get("tournament_id"); tournamentID != "" {
+		filters.TournamentIDs = strings.Split(tournamentID, ",")
+		for i := range filters.TournamentIDs {
+			filters.TournamentIDs[i] = strings.TrimSpace(filters.TournamentIDs[i])
 		}
 	}
-	filters.LeagueName = r.URL.Query().Get("league_name")
 	
 	// 搜索
 	filters.Search = r.URL.Query().Get("search")
@@ -425,21 +423,18 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 			argIndex += 2
 		}
 		
-	// 联赛 ID 筛选 (从 srn_id 提取,支持多选)
-	if len(filters.LeagueIDs) > 0 {
-			leagueConditions := []string{}
-			for _, leagueID := range filters.LeagueIDs {
-				leagueConditions = append(leagueConditions, fmt.Sprintf("e.srn_id LIKE $%d", argIndex))
-				args = append(args, "%:"+leagueID+":%")
-				argIndex++
-			}
-			conditions = append(conditions, fmt.Sprintf("(%s)", strings.Join(leagueConditions, " OR ")))
+	// 联赛 ID 筛选 (支持多选)
+	if len(filters.TournamentIDs) > 0 {
+		placeholders := []string{}
+		for _, tournamentID := range filters.TournamentIDs {
+			placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
+			args = append(args, tournamentID)
+			argIndex++
 		}
-		
-		if filters.LeagueName != "" {
-			// 联赛名称搜索 (需要 JOIN 联赛表,暂时不支持)
-			log.Printf("[API] Warning: league_name filter not yet supported")
+		if len(placeholders) > 0 {
+			conditions = append(conditions, fmt.Sprintf("e.tournament_id IN (%s)", strings.Join(placeholders, ", ")))
 		}
+	}
 		
 		// 搜索 (队伍名称或赛事 ID)
 		if filters.Search != "" {
@@ -617,21 +612,18 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 			argIndex += 2
 		}
 	
-	// 联赛 ID 筛选 (从 srn_id 提取,支持多选)
-	if len(filters.LeagueIDs) > 0 {
-			leagueConditions := []string{}
-			for _, leagueID := range filters.LeagueIDs {
-				leagueConditions = append(leagueConditions, fmt.Sprintf("e.srn_id LIKE $%d", argIndex))
-				args = append(args, "%:"+leagueID+":%")
-				argIndex++
-			}
-				conditions = append(conditions, fmt.Sprintf("(%s)", strings.Join(leagueConditions, " OR ")))
-			}
-			
-		if filters.LeagueName != "" {
-				// 联赛名称搜索 (需要 JOIN 联赛表,暂时不支持)
-				log.Printf("[API] Warning: league_name filter not yet supported")
-			}
+	// 联赛 ID 筛选 (支持多选)
+	if len(filters.TournamentIDs) > 0 {
+		placeholders := []string{}
+		for _, tournamentID := range filters.TournamentIDs {
+			placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
+			args = append(args, tournamentID)
+			argIndex++
+		}
+		if len(placeholders) > 0 {
+			conditions = append(conditions, fmt.Sprintf("e.tournament_id IN (%s)", strings.Join(placeholders, ", ")))
+		}
+	}
 			
 			// 搜索 (队伍名称或赛事 ID)
 			if filters.Search != "" {
@@ -695,11 +687,8 @@ func (f *EventFilters) toMap() map[string]interface{} {
 	if f.TeamName != "" {
 		m["team_name"] = f.TeamName
 	}
-	if len(f.LeagueIDs) > 0 {
-		m["league_id"] = strings.Join(f.LeagueIDs, ",")
-	}
-	if f.LeagueName != "" {
-		m["league_name"] = f.LeagueName
+	if len(f.TournamentIDs) > 0 {
+		m["tournament_id"] = strings.Join(f.TournamentIDs, ",")
 	}
 	if f.Search != "" {
 		m["search"] = f.Search
