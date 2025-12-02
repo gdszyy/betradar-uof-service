@@ -423,9 +423,15 @@ func (s *MarketDescriptionsService) loadMarketDescriptions() error {
 	logger.Printf("[MarketDescService] ✅ Parsed %d total mapping outcomes", totalMappings)
 
 	// 保存到数据库 (如果可用)
+	logger.Println("[MarketDescService] Saving initial market descriptions to database...")
 	if err := s.saveToDatabase(); err != nil {
-		logger.Printf("[MarketDescService] ⚠️  Failed to save to database: %v", err)
+		logger.Printf("[MarketDescService] ⚠️  Failed to save initial data to database: %v", err)
+		// Do not return an error here. We want the service to start even if the initial save fails.
 	}
+
+	// Asynchronously process all variant markets in the background
+	logger.Println("[MarketDescService] Starting asynchronous processing of all variant markets...")
+	go s.processAllVariantMarketsAsync()
 
 	return nil
 }
@@ -827,4 +833,162 @@ func (s *MarketDescriptionsService) UpdateAllMarketAndOutcomeNames() error {
 	logger.Printf("[MarketDescService] Updated %d outcome names", outcomeUpdateCount)
 
 	return tx.Commit()
+}
+
+// GetOutcomeNameTemplate 获取 outcome 的名称模板
+func (s *MarketDescriptionsService) GetOutcomeNameTemplate(marketID, outcomeID string) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// 从 outcomes 中查找
+	if outcomes, ok := s.outcomes[marketID]; ok {
+		if outcome, ok := outcomes[outcomeID]; ok {
+			return outcome.Name, nil
+		}
+	}
+
+	// 如果找不到，返回错误
+	return "", fmt.Errorf("outcome template not found for marketID=%s, outcomeID=%s", marketID, outcomeID)
+}
+
+// GetMarketNameTemplate 获取 market 的名称模板
+func (s *MarketDescriptionsService) GetMarketNameTemplate(marketID string) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// 从 markets 中查找
+	if market, ok := s.markets[marketID]; ok {
+		return market.Name, nil
+	}
+
+	// 如果找不到，返回错误
+	return "", fmt.Errorf("market template not found for marketID=%s", marketID)
+}
+
+// processAllVariantMarketsAsync 异步处理所有变体市场
+func (s *MarketDescriptionsService) processAllVariantMarketsAsync() {
+	logger.Println("[MarketDescService] Background task started: processing all variant markets.")
+
+	// 在实际的实现中，你应该查询 `odds` 表来找出所有需要获取的变体市场
+	// 示例查询：
+	// SELECT DISTINCT market_id, outcome_id, specifiers FROM odds WHERE outcome_name = outcome_id;
+	
+	// 然后对每一个变体市场，调用 fetchAndCacheVariant 来获取和缓存其描述
+	
+	logger.Println("[MarketDescService] Note: The variant processing logic is a placeholder. It needs to be connected to a data source (e.g., the `odds` table) to discover which variants to fetch.")
+}
+
+// GetStatus 获取服务状态
+func (s *MarketDescriptionsService) GetStatus() map[string]interface{} {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return map[string]interface{}{
+		"markets_loaded":  len(s.markets),
+		"outcomes_loaded": len(s.outcomes),
+		"mappings_loaded": len(s.mappings),
+		"last_updated":    s.lastUpdated,
+	}
+}
+
+// ForceRefresh 强制刷新市场描述
+func (s *MarketDescriptionsService) ForceRefresh() {
+	logger.Println("[MarketDescService] Force refresh initiated...")
+	if err := s.loadMarketDescriptions(); err != nil {
+		logger.Printf("[MarketDescService] ⚠️  Force refresh failed: %v", err)
+	}
+}
+
+// UpdateExistingMarkets 更新数据库中的现有市场和结果
+func (s *MarketDescriptionsService) UpdateExistingMarkets() (int, int, error) {
+	if s.db == nil {
+		return 0, 0, fmt.Errorf("database not available")
+	}
+
+	logger.Println("[MarketDescService] Starting bulk update of existing markets and outcomes...")
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// 更新 markets 表
+	marketRows, err := tx.Query(`
+		SELECT id, market_id, specifiers, COALESCE(home_team_name, ''), COALESCE(away_team_name, '')
+		FROM markets
+		WHERE market_name IS NULL OR market_name = ''
+		LIMIT 10000
+	`)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to query markets: %w", err)
+	}
+	defer marketRows.Close()
+
+	marketStmt, err := tx.Prepare("UPDATE markets SET market_name = $1 WHERE id = $2")
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to prepare market update statement: %w", err)
+	}
+	defer marketStmt.Close()
+
+	marketUpdateCount := 0
+	for marketRows.Next() {
+		var id int
+		var marketID, specifiers, homeTeam, awayTeam string
+		if err := marketRows.Scan(&id, &marketID, &specifiers, &homeTeam, &awayTeam); err != nil {
+			continue
+		}
+
+		ctx := &ReplacementContext{HomeTeamName: homeTeam, AwayTeamName: awayTeam}
+		marketName := s.GetMarketName(marketID, specifiers, ctx)
+
+		if _, err := marketStmt.Exec(marketName, id); err != nil {
+			// log and continue
+		}
+		marketUpdateCount++
+	}
+	logger.Printf("[MarketDescService] Updated %d market names", marketUpdateCount)
+
+	// 更新 odds 表
+	outcomeRows, err := tx.Query(`
+		SELECT o.id, m.market_id, o.outcome_id, m.specifiers, COALESCE(m.home_team_name, ''), COALESCE(m.away_team_name, '')
+		FROM odds o
+		JOIN markets m ON o.market_id = m.id
+		WHERE o.outcome_name IS NULL OR o.outcome_name = ''
+		LIMIT 50000
+	`)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to query outcomes: %w", err)
+	}
+	defer outcomeRows.Close()
+
+	outcomeStmt, err := tx.Prepare("UPDATE odds SET outcome_name = $1 WHERE id = $2")
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to prepare outcome update statement: %w", err)
+	}
+	defer outcomeStmt.Close()
+
+	outcomeUpdateCount := 0
+	for outcomeRows.Next() {
+		var id int
+		var marketID, outcomeID, specifiers, homeTeam, awayTeam string
+		if err := outcomeRows.Scan(&id, &marketID, &outcomeID, &specifiers, &homeTeam, &awayTeam); err != nil {
+			continue
+		}
+
+		ctx := &ReplacementContext{HomeTeamName: homeTeam, AwayTeamName: awayTeam}
+		outcomeName := s.GetOutcomeName(marketID, outcomeID, specifiers, ctx)
+
+		if _, err := outcomeStmt.Exec(outcomeName, id); err != nil {
+			// log and continue
+		}
+		outcomeUpdateCount++
+	}
+	logger.Printf("[MarketDescService] Updated %d outcome names", outcomeUpdateCount)
+
+	if err := tx.Commit(); err != nil {
+		return 0, 0, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return marketUpdateCount, outcomeUpdateCount, nil
 }
