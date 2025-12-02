@@ -7,9 +7,13 @@ import (
 	"log"
 	"strings"
 	"time"
-
-	"betradar-uof-service/database"
 )
+
+// SpecifierPair represents a specifier key-value pair
+type SpecifierPair struct {
+	Name  string
+	Value string
+}
 
 // MarketTabChipServiceOptimized provides optimized operations for market tab/chip assignment
 // Key features:
@@ -65,7 +69,7 @@ func (s *MarketTabChipServiceOptimized) AssignTabChipToNewMarkets() error {
 		specifiers := s.parseSpecifiers(specifiersStr)
 
 		// Determine tab and chip
-		tabID, err := s.determineTabID(groups, specifiers, eventID)
+		tabID, err := s.determineTabID(groups, specifiers)
 		if err != nil {
 			// Log unmapped market
 			if err := s.logUnmappedMarket(marketID, eventID, marketType, marketName, groupsStr, specifiersStr, err.Error()); err != nil {
@@ -149,7 +153,7 @@ func (s *MarketTabChipServiceOptimized) AssignTabChipToAllMarkets() error {
 		specifiers := s.parseSpecifiers(specifiersStr)
 
 		// Determine tab and chip
-		tabID, err := s.determineTabID(groups, specifiers, eventID)
+		tabID, err := s.determineTabID(groups, specifiers)
 		if err != nil {
 			// Log unmapped market
 			if err := s.logUnmappedMarket(marketID, eventID, marketType, marketName, groupsStr, specifiersStr, err.Error()); err != nil {
@@ -328,12 +332,12 @@ func (s *MarketTabChipServiceOptimized) parseGroups(groupsStr string) []string {
 }
 
 // parseSpecifiers parses specifiers string into key-value pairs
-func (s *MarketTabChipServiceOptimized) parseSpecifiers(specifiersStr string) []database.SpecifierPair {
+func (s *MarketTabChipServiceOptimized) parseSpecifiers(specifiersStr string) []SpecifierPair {
 	if specifiersStr == "" {
-		return []database.SpecifierPair{}
+		return []SpecifierPair{}
 	}
 
-	var specs []database.SpecifierPair
+	var specs []SpecifierPair
 	parts := strings.Split(specifiersStr, ",")
 
 	for _, part := range parts {
@@ -344,7 +348,7 @@ func (s *MarketTabChipServiceOptimized) parseSpecifiers(specifiersStr string) []
 
 		kv := strings.Split(part, "=")
 		if len(kv) == 2 {
-			specs = append(specs, database.SpecifierPair{
+			specs = append(specs, SpecifierPair{
 				Name:  strings.TrimSpace(kv[0]),
 				Value: strings.TrimSpace(kv[1]),
 			})
@@ -355,7 +359,7 @@ func (s *MarketTabChipServiceOptimized) parseSpecifiers(specifiersStr string) []
 }
 
 // determineTabID determines the tab for a market based on groups and specifiers
-func (s *MarketTabChipServiceOptimized) determineTabID(groups []string, specs []database.SpecifierPair, eventID string) (string, error) {
+func (s *MarketTabChipServiceOptimized) determineTabID(groups []string, specs []SpecifierPair) (string, error) {
 	// Check groups first (group-based tabs)
 	groupTabMap := map[string]string{
 		"regular_play": "regular_play",
@@ -398,7 +402,7 @@ func (s *MarketTabChipServiceOptimized) determineTabID(groups []string, specs []
 }
 
 // determineChipID determines the chip for a market based on tab and specifiers
-func (s *MarketTabChipServiceOptimized) determineChipID(tabID string, specs []database.SpecifierPair) string {
+func (s *MarketTabChipServiceOptimized) determineChipID(tabID string, specs []SpecifierPair) string {
 	// Map of tab to primary specifier
 	primarySpecifierMap := map[string]string{
 		"innings": "inningnr",
