@@ -260,16 +260,24 @@ func (s *MarketDescriptionsService) saveToDatabase() error {
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			logger.Printf("[MarketDescService] Recovered from panic: %v", r)
+		}
+	}()
 
 	// 清空旧数据
 	if _, err := tx.Exec("DELETE FROM mapping_outcomes"); err != nil {
+		tx.Rollback()
 		return fmt.Errorf("failed to clear mapping_outcomes: %w", err)
 	}
 	if _, err := tx.Exec("DELETE FROM outcome_descriptions"); err != nil {
+		tx.Rollback()
 		return fmt.Errorf("failed to clear outcomes: %w", err)
 	}
 	if _, err := tx.Exec("DELETE FROM market_descriptions"); err != nil {
+		tx.Rollback()
 		return fmt.Errorf("failed to clear markets: %w", err)
 	}
 
@@ -320,7 +328,7 @@ func (s *MarketDescriptionsService) saveToDatabase() error {
 	mappingStmt, err := tx.Prepare(`
 		INSERT INTO mapping_outcomes (market_id, outcome_id, product_outcome_name, product_id, sport_id)
 		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (market_id, outcome_id) DO UPDATE
+		ON CONFLICT (market_id, outcome_id, product_id, sport_id) DO UPDATE
 		SET product_outcome_name = EXCLUDED.product_outcome_name
 	`)
 	if err != nil {
@@ -341,6 +349,7 @@ func (s *MarketDescriptionsService) saveToDatabase() error {
 	}
 
 	if err := tx.Commit(); err != nil {
+		logger.Printf("[MarketDescService] ⚠️  Failed to commit transaction: %v", err)
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
