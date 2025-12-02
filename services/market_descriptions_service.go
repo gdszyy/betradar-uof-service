@@ -722,12 +722,12 @@ func (s *MarketDescriptionsService) processAllVariantMarketsAsync() {
 	// Query all variant markets that need to be fetched
 	logger.Println("[MarketDescService] Querying database for variant markets...")
 	rows, err := s.db.Query(`
-		SELECT DISTINCT o.market_id, o.outcome_id, m.specifiers
+		SELECT DISTINCT m.sr_market_id, o.outcome_id, md.specifiers
 		FROM odds o
 		JOIN markets m ON o.market_id = m.id
-		WHERE o.outcome_name = o.outcome_id
-		AND m.specifiers IS NOT NULL
-		AND m.specifiers LIKE '%variant=%'
+		JOIN market_descriptions md ON CAST(m.sr_market_id AS VARCHAR) = md.market_id
+		WHERE md.specifiers IS NOT NULL
+		AND md.specifiers LIKE '%variant=%'
 		LIMIT 1000
 	`)
 	if err != nil {
