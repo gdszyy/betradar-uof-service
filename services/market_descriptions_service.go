@@ -247,7 +247,7 @@ func (s *MarketDescriptionsService) loadFromDatabase() error {
 	return nil
 }
 
-// saveToDatabase 保存到数据库
+// saveToDatabase 保存到数据库 - 使用分步提交策略
 func (s *MarketDescriptionsService) saveToDatabase() error {
 	if s.db == nil {
 		return nil // 数据库不可用,跳过
@@ -256,38 +256,58 @@ func (s *MarketDescriptionsService) saveToDatabase() error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	tx, err := s.db.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-			logger.Printf("[MarketDescService] Recovered from panic: %v", r)
-		}
-	}()
-
 	// 清空旧数据
-	if _, err := tx.Exec("DELETE FROM mapping_outcomes"); err != nil {
-		tx.Rollback()
+	logger.Println("[MarketDescService] Clearing old data from database...")
+	if _, err := s.db.Exec("DELETE FROM mapping_outcomes"); err != nil {
 		return fmt.Errorf("failed to clear mapping_outcomes: %w", err)
 	}
-	if _, err := tx.Exec("DELETE FROM outcome_descriptions"); err != nil {
-		tx.Rollback()
+	if _, err := s.db.Exec("DELETE FROM outcome_descriptions"); err != nil {
 		return fmt.Errorf("failed to clear outcomes: %w", err)
 	}
-	if _, err := tx.Exec("DELETE FROM market_descriptions"); err != nil {
-		tx.Rollback()
+	if _, err := s.db.Exec("DELETE FROM market_descriptions"); err != nil {
 		return fmt.Errorf("failed to clear markets: %w", err)
 	}
 
-	// 插入 markets
+	// 使用分步提交策略：每个表每次提交一次
+	logger.Println("[MarketDescService] Saving markets...")
+	marketCount, err := s.saveMarketsToDatabase()
+	if err != nil {
+		logger.Printf("[MarketDescService] ⚠️  Failed to save markets: %v", err)
+		return err
+	}
+
+	logger.Println("[MarketDescService] Saving outcomes...")
+	outcomeCount, err := s.saveOutcomesToDatabase()
+	if err != nil {
+		logger.Printf("[MarketDescService] ⚠️  Failed to save outcomes: %v", err)
+		return err
+	}
+
+	logger.Println("[MarketDescService] Saving mappings...")
+	mappingCount, err := s.saveMappingsToDatabase()
+	if err != nil {
+		logger.Printf("[MarketDescService] ⚠️  Failed to save mappings: %v", err)
+		return err
+	}
+
+	logger.Printf("[MarketDescService] ✅ Saved %d markets, %d outcomes, and %d mappings to database", marketCount, outcomeCount, mappingCount)
+	return nil
+}
+
+// saveMarketsToDatabase 保存市场到数据库
+func (s *MarketDescriptionsService) saveMarketsToDatabase() (int, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
 	marketStmt, err := tx.Prepare(`
 		INSERT INTO market_descriptions (market_id, market_name, groups, specifiers)
 		VALUES ($1, $2, $3, $4)
 	`)
 	if err != nil {
-		return fmt.Errorf("failed to prepare market statement: %w", err)
+		return 0, fmt.Errorf("failed to prepare market statement: %w", err)
 	}
 	defer marketStmt.Close()
 
@@ -301,13 +321,27 @@ func (s *MarketDescriptionsService) saveToDatabase() error {
 		marketCount++
 	}
 
-	// 插入 outcomes
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("failed to commit markets transaction: %w", err)
+	}
+
+	return marketCount, nil
+}
+
+// saveOutcomesToDatabase 保存结果到数据库
+func (s *MarketDescriptionsService) saveOutcomesToDatabase() (int, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
 	outcomeStmt, err := tx.Prepare(`
 		INSERT INTO outcome_descriptions (market_id, outcome_id, outcome_name)
 		VALUES ($1, $2, $3)
 	`)
 	if err != nil {
-		return fmt.Errorf("failed to prepare outcome statement: %w", err)
+		return 0, fmt.Errorf("failed to prepare outcome statement: %w", err)
 	}
 	defer outcomeStmt.Close()
 
@@ -322,8 +356,20 @@ func (s *MarketDescriptionsService) saveToDatabase() error {
 		}
 	}
 
-	// 插入 mappings
-	logger.Printf("[MarketDescService] Preparing to save %d markets with mappings", len(s.mappings))
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("failed to commit outcomes transaction: %w", err)
+	}
+
+	return outcomeCount, nil
+}
+
+// saveMappingsToDatabase 保存映射到数据库
+func (s *MarketDescriptionsService) saveMappingsToDatabase() (int, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
 
 	mappingStmt, err := tx.Prepare(`
 		INSERT INTO mapping_outcomes (market_id, outcome_id, product_outcome_name, product_id, sport_id)
@@ -332,7 +378,7 @@ func (s *MarketDescriptionsService) saveToDatabase() error {
 		SET product_outcome_name = EXCLUDED.product_outcome_name
 	`)
 	if err != nil {
-		return fmt.Errorf("failed to prepare mapping statement: %w", err)
+		return 0, fmt.Errorf("failed to prepare mapping statement: %w", err)
 	}
 	defer mappingStmt.Close()
 
@@ -349,12 +395,10 @@ func (s *MarketDescriptionsService) saveToDatabase() error {
 	}
 
 	if err := tx.Commit(); err != nil {
-		logger.Printf("[MarketDescService] ⚠️  Failed to commit transaction: %v", err)
-		return fmt.Errorf("failed to commit transaction: %w", err)
+		return 0, fmt.Errorf("failed to commit mappings transaction: %w", err)
 	}
 
-	logger.Printf("[MarketDescService] ✅ Saved %d markets, %d outcomes, and %d mappings to database", marketCount, outcomeCount, mappingCount)
-	return nil
+	return mappingCount, nil
 }
 
 // loadMarketDescriptions 从 API 加载市场描述
@@ -470,7 +514,8 @@ func (s *MarketDescriptionsService) GetMarketName(marketID string, specifiers st
 			name = strings.ReplaceAll(name, "{$competitor1}", ctx.HomeTeamName)
 			name = strings.ReplaceAll(name, "{$competitor2}", ctx.AwayTeamName)
 		}
-		// 替换 specifiers 变量 (如 {hcp}, {total}, {+hcp}, {-hcp} 等)
+
+		// 替换 specifiers
 		if specifiers != "" {
 			pairs := strings.Split(specifiers, "|")
 			for _, pair := range pairs {
@@ -487,6 +532,8 @@ func (s *MarketDescriptionsService) GetMarketName(marketID string, specifiers st
 		}
 		return name
 	}
+
+	logger.Printf("[MarketDescService] ⚠️  Market not found: %s", marketID)
 	return marketID
 }
 
@@ -501,14 +548,11 @@ func (s *MarketDescriptionsService) GetOutcomeName(marketID, outcomeID, specifie
 			name := outcome.Name
 			// 替换变量
 			if ctx != nil {
-				if ctx.HomeTeamName != "" {
-					name = strings.ReplaceAll(name, "{$competitor1}", ctx.HomeTeamName)
-				}
-				if ctx.AwayTeamName != "" {
-					name = strings.ReplaceAll(name, "{$competitor2}", ctx.AwayTeamName)
-				}
+				name = strings.ReplaceAll(name, "{$competitor1}", ctx.HomeTeamName)
+				name = strings.ReplaceAll(name, "{$competitor2}", ctx.AwayTeamName)
 			}
-			// 替换 specifiers 变量 (如 {hcp}, {total}, {+hcp}, {-hcp} 等)
+
+			// 替换 specifiers
 			if specifiers != "" {
 				pairs := strings.Split(specifiers, "|")
 				for _, pair := range pairs {
@@ -527,25 +571,8 @@ func (s *MarketDescriptionsService) GetOutcomeName(marketID, outcomeID, specifie
 		}
 	}
 
-	// 第二优先级: 如果 outcomeID 是 URN 格式,尝试从缓存中加载 variant
-	if strings.HasPrefix(outcomeID, "sr:") && specifiers != "" {
-		// 提取 variant 从 specifiers
-		// 例如: variant=sr:winning_margin_no_draw_any_team:31+
-		pairs := strings.Split(specifiers, "|")
-		for _, pair := range pairs {
-			parts := strings.Split(pair, "=")
-			if len(parts) == 2 && parts[0] == "variant" {
-				variant := parts[1]
-				// 从缓存中查找
-				if mappings, ok := s.mappings[marketID]; ok {
-					if name, ok := mappings[outcomeID+"|"+variant]; ok {
-						s.mu.RUnlock()
-						return name
-					}
-				}
-			}
-		}
-	}
+	// The logic for dynamically fetching variants has been moved to the background process
+	// to prevent blocking. This function will now only return data from the cache.
 
 	s.mu.RUnlock()
 
@@ -616,118 +643,20 @@ func (s *MarketDescriptionsService) fetchAndCacheVariant(marketID, outcomeID, va
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read variant response: %w", err)
+		return "", fmt.Errorf("failed to read response: %w", err)
 	}
 
-	// 尝试解析为 variant_description 格式
 	var variantDesc VariantDescription
 	if err := xml.Unmarshal(body, &variantDesc); err != nil {
-		// 如果失败，尝试解析为 market_descriptions 格式
-		var marketDescsResp MarketDescriptionsResponse
-		if err2 := xml.Unmarshal(body, &marketDescsResp); err2 != nil {
-			logger.Printf("[MarketDescService] ⚠️  Failed to parse variant XML as both formats. Original error: %v, Fallback error: %v", err, err2)
-			logger.Printf("[MarketDescService] 📝 Raw XML (first 500 chars): %s", string(body[:min(500, len(body))]))
-			return "", fmt.Errorf("failed to parse variant XML: %w", err)
-		}
-
-		// 从 market_descriptions 格式中提取 variant 信息
-		logger.Printf("[MarketDescService] ℹ️  Variant API returned market_descriptions format, extracting mappings...")
-
-		// 更新缓存和数据库
-		s.mu.Lock()
-		defer s.mu.Unlock()
-
-		if s.mappings[marketID] == nil {
-			s.mappings[marketID] = make(map[string]string)
-		}
-
-		foundName := ""
-
-		// 从 market_descriptions 中提取 outcomes
-		for _, market := range marketDescsResp.Markets {
-			if market.ID != marketID {
-				continue
-			}
-
-			// 遍历 outcomes
-			for _, outcome := range market.Outcomes {
-				// 保存到数据库
-				if s.db != nil {
-					_, err := s.db.Exec(`
-						INSERT INTO mapping_outcomes (market_id, outcome_id, product_outcome_name)
-						VALUES ($1, $2, $3)
-						ON CONFLICT (market_id, outcome_id) DO UPDATE
-						SET product_outcome_name = EXCLUDED.product_outcome_name
-					`, marketID, outcome.ID, outcome.Name)
-					if err != nil {
-						logger.Printf("[MarketDescService] ⚠️  Failed to save outcome %s/%s: %v", marketID, outcome.ID, err)
-					}
-				}
-
-				// 更新内存缓存
-				s.mappings[marketID][outcome.ID+"|"+variant] = outcome.Name
-				if outcome.ID == outcomeID {
-					foundName = outcome.Name
-				}
-			}
-
-			// 遍历 mappings
-			for _, mapping := range market.Mappings {
-				for _, outcome := range mapping.Outcomes {
-					// 保存到数据库
-					if s.db != nil {
-						_, err := s.db.Exec(`
-							INSERT INTO mapping_outcomes (market_id, outcome_id, product_outcome_name)
-							VALUES ($1, $2, $3)
-							ON CONFLICT (market_id, outcome_id) DO UPDATE
-							SET product_outcome_name = EXCLUDED.product_outcome_name
-						`, marketID, outcome.OutcomeID, outcome.ProductOutcomeName)
-						if err != nil {
-							logger.Printf("[MarketDescService] ⚠️  Failed to save mapping outcome %s/%s: %v", marketID, outcome.OutcomeID, err)
-						}
-					}
-
-					// 更新内存缓存
-					s.mappings[marketID][outcome.OutcomeID+"|"+variant] = outcome.ProductOutcomeName
-					if outcome.OutcomeID == outcomeID {
-						foundName = outcome.ProductOutcomeName
-					}
-				}
-			}
-		}
-
-		logger.Printf("[MarketDescService] ✅ Loaded variant from market_descriptions format, found name: %s", foundName)
-		return foundName, nil
+		return "", fmt.Errorf("failed to parse variant XML: %w", err)
 	}
 
-	// 更新缓存和数据库
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.mappings[marketID] == nil {
-		s.mappings[marketID] = make(map[string]string)
-	}
-
 	foundName := ""
 
-	// 保存到数据库 (如果可用)
-	if s.db != nil {
-		for _, mapping := range variantDesc.Variant.Mappings {
-			for _, outcome := range mapping.Outcomes {
-				_, err := s.db.Exec(`
-					INSERT INTO mapping_outcomes (market_id, outcome_id, product_outcome_name)
-					VALUES ($1, $2, $3)
-					ON CONFLICT (market_id, outcome_id) DO UPDATE
-					SET product_outcome_name = EXCLUDED.product_outcome_name
-				`, marketID, outcome.OutcomeID, outcome.ProductOutcomeName)
-				if err != nil {
-					logger.Printf("[MarketDescService] ⚠️  Failed to save variant outcome %s/%s: %v", marketID, outcome.OutcomeID, err)
-				}
-			}
-		}
-	}
-
-	// 更新内存缓存
+	// 处理 outcomes (如果存在)
 	for _, mapping := range variantDesc.Variant.Mappings {
 		for _, o := range mapping.Outcomes {
 			s.mappings[marketID][o.OutcomeID+"|"+variant] = o.ProductOutcomeName
@@ -738,110 +667,10 @@ func (s *MarketDescriptionsService) fetchAndCacheVariant(marketID, outcomeID, va
 	}
 
 	if foundName != "" {
-		logger.Printf("[MarketDescService] ✅ Dynamically loaded and cached %d outcomes for variant %s", len(variantDesc.Variant.Mappings[0].Outcomes), variant)
 		return foundName, nil
 	}
 
-	return "", fmt.Errorf("outcome %s not found in variant %s response", outcomeID, variant)
-}
-
-// GetMarketSpecifiers 获取市场的所有 specifiers
-func (s *MarketDescriptionsService) GetMarketSpecifiers(marketID string) []SpecifierDescription {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if market, ok := s.markets[marketID]; ok {
-		return market.Specifiers
-	}
-	return nil
-}
-
-// UpdateAllMarketAndOutcomeNames 批量更新所有 market 和 outcome 的名称
-func (s *MarketDescriptionsService) UpdateAllMarketAndOutcomeNames() error {
-	if s.db == nil {
-		return fmt.Errorf("database not available")
-	}
-
-	tx, err := s.db.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	// 更新 markets 表 (分批处理)
-	marketRows, err := tx.Query(`
-		SELECT id, market_id, specifiers, COALESCE(home_team_name, "), COALESCE(away_team_name, ")
-		FROM markets
-		WHERE market_name IS NULL OR market_name = ''
-		LIMIT 10000
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to query markets to update: %w", err)
-	}
-	defer marketRows.Close()
-
-	marketStmt, err := tx.Prepare("UPDATE markets SET market_name = $1 WHERE id = $2")
-	if err != nil {
-		return fmt.Errorf("failed to prepare market update statement: %w", err)
-	}
-	defer marketStmt.Close()
-
-	marketUpdateCount := 0
-	for marketRows.Next() {
-		var id int
-		var marketID, specifiers, homeTeam, awayTeam string
-		if err := marketRows.Scan(&id, &marketID, &specifiers, &homeTeam, &awayTeam); err != nil {
-			continue
-		}
-
-		ctx := &ReplacementContext{HomeTeamName: homeTeam, AwayTeamName: awayTeam}
-		marketName := s.GetMarketName(marketID, specifiers, ctx)
-
-		if _, err := marketStmt.Exec(marketName, id); err != nil {
-			// log and continue
-		}
-		marketUpdateCount++
-	}
-	logger.Printf("[MarketDescService] Updated %d market names", marketUpdateCount)
-
-	// 更新 odds 表 (分批处理)
-	outcomeRows, err := tx.Query(`
-		SELECT o.id, m.market_id, o.outcome_id, m.specifiers, COALESCE(m.home_team_name, "), COALESCE(m.away_team_name, ")
-		FROM odds o
-		JOIN markets m ON o.market_id = m.id
-		WHERE o.outcome_name IS NULL OR o.outcome_name = ''
-		LIMIT 20000
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to query outcomes to update: %w", err)
-	}
-	defer outcomeRows.Close()
-
-	outcomeStmt, err := tx.Prepare("UPDATE odds SET outcome_name = $1 WHERE id = $2")
-	if err != nil {
-		return fmt.Errorf("failed to prepare outcome update statement: %w", err)
-	}
-	defer outcomeStmt.Close()
-
-	outcomeUpdateCount := 0
-	for outcomeRows.Next() {
-		var id int
-		var marketID, outcomeID, specifiers, homeTeam, awayTeam string
-		if err := outcomeRows.Scan(&id, &marketID, &outcomeID, &specifiers, &homeTeam, &awayTeam); err != nil {
-			continue
-		}
-
-		ctx := &ReplacementContext{HomeTeamName: homeTeam, AwayTeamName: awayTeam}
-		outcomeName := s.GetOutcomeName(marketID, outcomeID, specifiers, ctx)
-
-		if _, err := outcomeStmt.Exec(outcomeName, id); err != nil {
-			// log and continue
-		}
-		outcomeUpdateCount++
-	}
-	logger.Printf("[MarketDescService] Updated %d outcome names", outcomeUpdateCount)
-
-	return tx.Commit()
+	return "", fmt.Errorf("outcome %s not found in variant %s", outcomeID, variant)
 }
 
 // GetOutcomeNameTemplate 获取 outcome 的名称模板
