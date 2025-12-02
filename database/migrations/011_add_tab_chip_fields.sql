@@ -9,15 +9,16 @@
 
 BEGIN;
 
--- 1. Add tab_id and chip_id columns to markets table
+-- 1. Add tab_id, chip_id, and groups columns to markets table
 ALTER TABLE markets
 ADD COLUMN IF NOT EXISTS tab_id VARCHAR(50),
-ADD COLUMN IF NOT EXISTS chip_id VARCHAR(200);
+ADD COLUMN IF NOT EXISTS chip_id VARCHAR(200),
+ADD COLUMN IF NOT EXISTS groups TEXT;
 
--- Create indexes for better query performance
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_markets_tab_id ON markets(tab_id);
 CREATE INDEX IF NOT EXISTS idx_markets_chip_id ON markets(chip_id);
+CREATE INDEX IF NOT EXISTS idx_markets_groups ON markets(groups);
 CREATE INDEX IF NOT EXISTS idx_markets_event_tab_chip ON markets(event_id, tab_id, chip_id);
 
 -- 2. Create tabs table to store tab configurations
@@ -141,6 +142,7 @@ CREATE INDEX IF NOT EXISTS idx_assignment_log_created_at ON market_tab_chip_assi
 -- 9. Add comment to markets table explaining new fields
 COMMENT ON COLUMN markets.tab_id IS 'Tab ID for market card display (e.g., regular_play, quarters, player_props)';
 COMMENT ON COLUMN markets.chip_id IS 'Chip ID for market card display (e.g., quarter_1, goal_1)';
+COMMENT ON COLUMN markets.groups IS 'Market groups from SportRader (e.g., regular_play, player_props, micro_market)';
 
 -- 8. Create a view for easier querying of markets with tab and chip info
 CREATE OR REPLACE VIEW market_tab_chip_view AS
@@ -194,6 +196,9 @@ BEGIN
     END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'markets' AND column_name = 'chip_id') THEN
         RAISE EXCEPTION 'chip_id column was not created in markets table';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'markets' AND column_name = 'groups') THEN
+        RAISE EXCEPTION 'groups column was not created in markets table';
     END IF;
     RAISE NOTICE 'All required columns exist in markets table';
 END $$;
