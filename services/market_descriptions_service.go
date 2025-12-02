@@ -38,6 +38,7 @@ type MarketDescriptionsService struct {
 	markets        map[string]*MarketDescription
 	outcomes       map[string]map[string]*OutcomeDescription // marketID -> outcomeID -> outcome
 	mappings       map[string]map[string]string              // marketID -> outcomeID (URN) -> product_outcome_name
+	marketMappings map[string][]Mapping                      // marketID -> []Mapping
 	mu             sync.RWMutex
 	lastUpdated    time.Time
 }
@@ -94,7 +95,8 @@ func NewMarketDescriptionsService(token string, apiBaseURL string) *MarketDescri
 		apiBaseURL: apiBaseURL,
 		markets:    make(map[string]*MarketDescription),
 		outcomes:   make(map[string]map[string]*OutcomeDescription),
-		mappings:   make(map[string]map[string]string),
+		mappings:       make(map[string]map[string]string),
+		marketMappings: make(map[string][]Mapping),
 	}
 }
 
@@ -379,7 +381,8 @@ func (s *MarketDescriptionsService) saveMappingsToDatabase() (int, error) {
 	mappingStmt, err := tx.Prepare(`
 		INSERT INTO mapping_outcomes (market_id, outcome_id, product_outcome_name, product_id, sport_id)
 		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT DO NOTHING
+		ON CONFLICT (market_id, outcome_id, product_id, sport_id) DO UPDATE
+		SET product_outcome_name = EXCLUDED.product_outcome_name
 	`)
 	if err != nil {
 		return 0, fmt.Errorf("failed to prepare mapping statement: %w", err)
@@ -387,14 +390,21 @@ func (s *MarketDescriptionsService) saveMappingsToDatabase() (int, error) {
 	defer mappingStmt.Close()
 
 	mappingCount := 0
-	for marketID, outcomes := range s.mappings {
-		for outcomeID, productOutcomeName := range outcomes {
-			// product_id 和 sport_id 暂时留空,因为我们只存储了 outcome_id -> name 的映射
-			if _, err := mappingStmt.Exec(marketID, outcomeID, productOutcomeName, nil, nil); err != nil {
-				logger.Printf("[MarketDescService] ⚠️  Failed to insert mapping %s/%s: %v", marketID, outcomeID, err)
-				continue
+	for marketID, mappingList := range s.marketMappings {
+		for _, mapping := range mappingList {
+			for _, mappingOutcome := range mapping.Outcomes {
+				if _, err := mappingStmt.Exec(
+					marketID,
+					mappingOutcome.OutcomeID,
+					mappingOutcome.ProductOutcomeName,
+					mapping.ProductID,
+					mapping.SportID,
+				); err != nil {
+					logger.Printf("[MarketDescService] ⚠️  Failed to insert mapping %s/%s: %v", marketID, mappingOutcome.OutcomeID, err)
+					continue
+				}
+				mappingCount++
 			}
-			mappingCount++
 		}
 	}
 
@@ -445,6 +455,7 @@ func (s *MarketDescriptionsService) loadMarketDescriptions() error {
 	s.markets = make(map[string]*MarketDescription)
 	s.outcomes = make(map[string]map[string]*OutcomeDescription)
 	s.mappings = make(map[string]map[string]string)
+	s.marketMappings = make(map[string][]Mapping)
 
 	for i := range response.Markets {
 		market := &response.Markets[i]
@@ -465,6 +476,9 @@ func (s *MarketDescriptionsService) loadMarketDescriptions() error {
 				s.mappings[market.ID][mappingOutcome.OutcomeID] = mappingOutcome.ProductOutcomeName
 			}
 		}
+
+		// 保存完整的 Mapping 信息
+		s.marketMappings[market.ID] = market.Mappings
 	}
 
 	s.lastUpdated = time.Now()
