@@ -655,26 +655,68 @@ func (s *MarketDescriptionsService) fetchAndCacheVariant(marketID, outcomeID, va
 		return "", fmt.Errorf("failed to parse variant XML: %w", err)
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+s.mu.Lock()
+		defer s.mu.Unlock()
 
-	foundName := ""
+		foundName := ""
 
-	// 处理 outcomes (如果存在)
-	for _, mapping := range variantDesc.Variant.Mappings {
-		for _, o := range mapping.Outcomes {
-			s.mappings[marketID][o.OutcomeID+"|"+variant] = o.ProductOutcomeName
-			if o.OutcomeID == outcomeID {
-				foundName = o.ProductOutcomeName
+		// 新增逻辑：将获取到的outcomes写入数据库和内存缓存
+		if len(variantDesc.Variant.Outcomes) > 0 {
+			tx, err := s.db.Begin()
+			if err != nil {
+				return "", fmt.Errorf("failed to begin transaction: %w", err)
+			}
+			defer tx.Rollback() // Defer rollback in case of error
+
+			stmt, err := tx.Prepare(`
+				INSERT INTO outcome_descriptions (market_id, outcome_id, outcome_name, updated_at)
+				VALUES ($1, $2, $3, NOW())
+				ON CONFLICT (market_id, outcome_id) DO UPDATE
+				SET outcome_name = EXCLUDED.outcome_name, updated_at = NOW();
+			`)
+			if err != nil {
+				return "", fmt.Errorf("failed to prepare statement: %w", err)
+			}
+			defer stmt.Close()
+
+			for _, o := range variantDesc.Variant.Outcomes {
+				// 写入数据库
+				if _, err := stmt.Exec(marketID, o.ID, o.Name); err != nil {
+					logger.Printf("[MarketDescService] ⚠️  Failed to save variant outcome to DB: %v", err)
+					continue // 继续处理下一个
+				}
+
+				// 写入内存缓存 s.outcomes
+				if s.outcomes[marketID] == nil {
+					s.outcomes[marketID] = make(map[string]*OutcomeDescription)
+				}
+				s.outcomes[marketID][o.ID] = &OutcomeDescription{ID: o.ID, Name: o.Name}
+
+				if o.ID == outcomeID {
+					foundName = o.Name
+				}
+			}
+
+			if err := tx.Commit(); err != nil {
+				return "", fmt.Errorf("failed to commit transaction: %w", err)
+			}
+		} else {
+			// 如果API响应中没有<outcomes>，则处理<mappings>作为备用
+			for _, mapping := range variantDesc.Variant.Mappings {
+				for _, o := range mapping.Outcomes {
+					s.mappings[marketID][o.OutcomeID+"|"+variant] = o.ProductOutcomeName
+					if o.OutcomeID == outcomeID {
+						foundName = o.ProductOutcomeName
+					}
+				}
 			}
 		}
-	}
 
-	if foundName != "" {
-		return foundName, nil
-	}
+		if foundName != "" {
+			return foundName, nil
+		}
 
-	return "", fmt.Errorf("outcome %s not found in variant %s", outcomeID, variant)
+		return "", fmt.Errorf("outcome %s not found in variant %s", outcomeID, variant)
 }
 
 // GetOutcomeNameTemplate 获取 outcome 的名称模板
@@ -721,15 +763,18 @@ func (s *MarketDescriptionsService) processAllVariantMarketsAsync() {
 
 	// Query all variant markets that need to be fetched
 	logger.Println("[MarketDescService] Querying database for variant markets...")
-	rows, err := s.db.Query(`
-		SELECT DISTINCT m.sr_market_id, o.outcome_id, md.specifiers
-		FROM odds o
-		JOIN markets m ON o.market_id = m.id
-		JOIN market_descriptions md ON CAST(m.sr_market_id AS VARCHAR) = md.market_id
-		WHERE md.specifiers IS NOT NULL
-		AND md.specifiers LIKE '%variant=%'
-		LIMIT 1000
-	`)
+rows, err := s.db.Query(`
+			SELECT DISTINCT m.sr_market_id, o.outcome_id, o.specifiers
+			FROM odds o
+			JOIN markets m ON o.market_id = m.id
+			WHERE o.specifiers LIKE 'variant=%'
+			AND NOT EXISTS (
+				SELECT 1 FROM outcome_descriptions od
+				WHERE od.market_id = CAST(m.sr_market_id AS VARCHAR)
+				AND od.outcome_id = o.outcome_id
+			)
+			LIMIT 1000
+		`)
 	if err != nil {
 		logger.Printf("[MarketDescService] ⚠️  Failed to query variant markets: %v", err)
 		return
