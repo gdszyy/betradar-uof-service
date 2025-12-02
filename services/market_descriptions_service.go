@@ -714,12 +714,14 @@ func (s *MarketDescriptionsService) processAllVariantMarketsAsync() {
 	// 给服务一些时间启动
 	time.Sleep(5 * time.Second)
 
-	// 查询所有需要获取的变体市场
+	// Query all variant markets that need to be fetched
+	logger.Println("[MarketDescService] Querying database for variant markets...")
 	rows, err := s.db.Query(`
 		SELECT DISTINCT o.market_id, o.outcome_id, m.specifiers
 		FROM odds o
 		JOIN markets m ON o.market_id = m.id
 		WHERE o.outcome_name = o.outcome_id
+		AND m.specifiers IS NOT NULL
 		AND m.specifiers LIKE '%variant=%'
 		LIMIT 1000
 	`)
@@ -749,7 +751,10 @@ func (s *MarketDescriptionsService) processAllVariantMarketsAsync() {
 	}
 
 	if len(variants) == 0 {
-		logger.Println("[MarketDescService] No variant markets found to process")
+		logger.Println("[MarketDescService] No variant markets found to process. This may indicate:")
+		logger.Println("  1. All variant market outcomes already have names cached")
+		logger.Println("  2. No markets in the database have specifiers with 'variant='")
+		logger.Println("  3. The odds table is empty or not yet populated")
 		return
 	}
 
