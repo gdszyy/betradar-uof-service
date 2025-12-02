@@ -1,0 +1,217 @@
+package main
+
+import (
+	"database/sql"
+	"encoding/csv"
+	"flag"
+	"fmt"
+	"log"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+
+	_ "github.com/lib/pq"
+)
+
+// TabConfig represents a tab configuration from CSV
+type TabConfig struct {
+	TabID              string
+	TabLabel           string
+	TabType            string
+	MarketCount        int
+	ChipSpecifiers     string
+	Group              string
+	PrimarySpecifier   string
+	MarketIDsSample    string
+}
+
+// ChipConfig represents a chip configuration from CSV
+type ChipConfig struct {
+	TabID          string
+	TabLabel       string
+	ChipSpecifier  string
+	ChipValue      string
+	ChipLabel      string
+}
+
+func main() {
+	dbConnStr := flag.String("db", "", "Database connection string")
+	tabConfigFile := flag.String("tabs", "", "Path to tab configuration CSV file")
+	chipConfigFile := flag.String("chips", "", "Path to chip configuration CSV file")
+	flag.Parse()
+
+	if *dbConnStr == "" || *tabConfigFile == "" || *chipConfigFile == "" {
+		fmt.Println("Usage: import_tab_chip_config -db <connection_string> -tabs <tab_csv> -chips <chip_csv>")
+		os.Exit(1)
+	}
+
+	// Connect to database
+	db, err := sql.Open("postgres", *dbConnStr)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
+
+	if err := db.Ping(); err != nil {
+		log.Fatalf("Failed to ping database: %v", err)
+	}
+
+	log.Println("Connected to database successfully")
+
+	// Import tab configurations
+	if err := importTabConfigs(db, *tabConfigFile); err != nil {
+		log.Fatalf("Failed to import tab configurations: %v", err)
+	}
+
+	// Import chip configurations
+	if err := importChipConfigs(db, *chipConfigFile); err != nil {
+		log.Fatalf("Failed to import chip configurations: %v", err)
+	}
+
+	log.Println("Tab and chip configurations imported successfully")
+}
+
+func importTabConfigs(db *sql.DB, filePath string) error {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to open tab config file: %w", err)
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return fmt.Errorf("failed to read tab config CSV: %w", err)
+	}
+
+	if len(records) < 2 {
+		return fmt.Errorf("tab config CSV must have header and at least one data row")
+	}
+
+	// Skip header row
+	for i, record := range records[1:] {
+		if len(record) < 8 {
+			log.Printf("Warning: skipping row %d with insufficient columns", i+2)
+			continue
+		}
+
+		marketCount, err := strconv.Atoi(strings.TrimSpace(record[3]))
+		if err != nil {
+			log.Printf("Warning: invalid market count in row %d: %v", i+2, err)
+			marketCount = 0
+		}
+
+		tabID := strings.TrimSpace(record[0])
+		tabLabel := strings.TrimSpace(record[1])
+		tabType := strings.TrimSpace(record[2])
+		chipSpecifiers := strings.TrimSpace(record[4])
+		group := strings.TrimSpace(record[5])
+		primarySpecifier := strings.TrimSpace(record[6])
+
+		// Handle "无" (none) value
+		if chipSpecifiers == "无" {
+			chipSpecifiers = ""
+		}
+		if group == "" {
+			group = ""
+		}
+		if primarySpecifier == "" {
+			primarySpecifier = ""
+		}
+
+		// Insert or update tab configuration
+		query := `
+			INSERT INTO market_tabs (id, label, type, market_count, chip_specifiers, group_name, primary_specifier, display_order, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), NULLIF($7, ''), $8, $9, $9)
+			ON CONFLICT (id) DO UPDATE SET
+				label = EXCLUDED.label,
+				type = EXCLUDED.type,
+				market_count = EXCLUDED.market_count,
+				chip_specifiers = EXCLUDED.chip_specifiers,
+				group_name = EXCLUDED.group_name,
+				primary_specifier = EXCLUDED.primary_specifier,
+				updated_at = EXCLUDED.updated_at
+		`
+
+		displayOrder := i
+		now := time.Now()
+
+		_, err = db.Exec(query, tabID, tabLabel, tabType, marketCount, chipSpecifiers, group, primarySpecifier, displayOrder, now)
+		if err != nil {
+			return fmt.Errorf("failed to insert tab config row %d: %w", i+2, err)
+		}
+
+		log.Printf("Imported tab: %s (%s)", tabID, tabLabel)
+	}
+
+	return nil
+}
+
+func importChipConfigs(db *sql.DB, filePath string) error {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to open chip config file: %w", err)
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return fmt.Errorf("failed to read chip config CSV: %w", err)
+	}
+
+	if len(records) < 2 {
+		return fmt.Errorf("chip config CSV must have header and at least one data row")
+	}
+
+	// Skip header row
+	chipIndex := 0
+	for i, record := range records[1:] {
+		if len(record) < 5 {
+			log.Printf("Warning: skipping row %d with insufficient columns", i+2)
+			continue
+		}
+
+		tabID := strings.TrimSpace(record[0])
+		chipSpecifier := strings.TrimSpace(record[2])
+		chipValue := strings.TrimSpace(record[3])
+		chipLabel := strings.TrimSpace(record[4])
+
+		// Generate chip ID: tab_id_specifier_value
+		chipID := fmt.Sprintf("%s_%s_%s", tabID, chipSpecifier, chipValue)
+
+		// Handle "dynamic" values
+		var specifierPtr *string
+		var valuePtr *string
+
+		if chipSpecifier != "dynamic" && chipSpecifier != "" {
+			specifierPtr = &chipSpecifier
+		}
+		if chipValue != "dynamic" && chipValue != "" {
+			valuePtr = &chipValue
+		}
+
+		// Insert or update chip configuration
+		query := `
+			INSERT INTO market_chips (id, tab_id, specifier, value, label, display_order, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+			ON CONFLICT (id) DO UPDATE SET
+				label = EXCLUDED.label,
+				display_order = EXCLUDED.display_order,
+				updated_at = EXCLUDED.updated_at
+		`
+
+		now := time.Now()
+
+		_, err = db.Exec(query, chipID, tabID, specifierPtr, valuePtr, chipLabel, chipIndex, now)
+		if err != nil {
+			return fmt.Errorf("failed to insert chip config row %d: %w", i+2, err)
+		}
+
+		chipIndex++
+		log.Printf("Imported chip: %s (tab=%s, specifier=%s, value=%s)", chipID, tabID, chipSpecifier, chipValue)
+	}
+
+	return nil
+}

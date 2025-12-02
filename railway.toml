@@ -1,0 +1,28 @@
+# Railway Configuration for betradar-uof-service
+# This file configures the deployment settings for Railway
+
+[build]
+# Build command
+builder = "nix"
+buildCommand = "go build -o main ."
+
+[deploy]
+# Start command
+startCommand = "./main"
+
+# Port configuration
+port = 8080
+
+# Health check
+healthcheckPath = "/api/v1/health"
+healthcheckInterval = 10
+healthcheckTimeout = 5
+
+# Restart policy
+restartPolicyType = "always"
+restartPolicyMaxRetries = 5
+
+# Environment variables (can be overridden in Railway dashboard)
+[env]
+LOG_LEVEL = "info"
+GIN_MODE = "release"
