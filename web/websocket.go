@@ -14,6 +14,7 @@ type WSMessage struct {
 	Type        string  `json:"type"`
 	MessageType string  `json:"message_type,omitempty"`
 	EventID     string  `json:"event_id,omitempty"`
+	MarketID    *int    `json:"market_id,omitempty"` // 新增: 盘口ID
 	ProductID   *int    `json:"product_id,omitempty"`
 	RoutingKey  string  `json:"routing_key,omitempty"`
 	Timestamp   int64   `json:"timestamp,omitempty"`
@@ -23,11 +24,12 @@ type WSMessage struct {
 
 // Client WebSocket客户端
 type Client struct {
-	hub      *Hub
-	conn     *websocket.Conn
-	send     chan []byte
-	filters  map[string]bool // 消息类型过滤器
-	eventIDs map[string]bool // 赛事ID过滤器
+	hub       *Hub
+	conn      *websocket.Conn
+	send      chan []byte
+	filters   map[string]bool // 消息类型过滤器
+	eventIDs  map[string]bool // 赛事ID过滤器
+	marketIDs map[int]bool    // 盘口ID过滤器 (新增)
 }
 
 // Hub WebSocket Hub
@@ -143,7 +145,7 @@ func (h *Hub) marshalMessage(message *WSMessage) []byte {
 // shouldReceive 检查客户端是否应该接收消息
 func (c *Client) shouldReceive(message *WSMessage) bool {
 	// 如果没有设置过滤器,接收所有消息
-	if len(c.filters) == 0 && len(c.eventIDs) == 0 {
+	if len(c.filters) == 0 && len(c.eventIDs) == 0 && len(c.marketIDs) == 0 {
 		return true
 	}
 
@@ -160,6 +162,16 @@ func (c *Client) shouldReceive(message *WSMessage) bool {
 			return false
 		}
 		if _, ok := c.eventIDs[message.EventID]; !ok {
+			return false
+		}
+	}
+
+	// 检查盘口ID过滤器 (新增)
+	if len(c.marketIDs) > 0 {
+		if message.MarketID == nil {
+			return false
+		}
+		if _, ok := c.marketIDs[*message.MarketID]; !ok {
 			return false
 		}
 	}
@@ -263,12 +275,24 @@ func (c *Client) handleMessage(message []byte) {
 			}
 		}
 
-		log.Printf("Client subscribed with filters: %v, events: %v", c.filters, c.eventIDs)
+		// 订阅特定盘口 (新增)
+		if marketIDs, ok := msg["market_ids"].([]interface{}); ok {
+			c.marketIDs = make(map[int]bool)
+			for _, m := range marketIDs {
+				// 处理 float64 (JSON 数字默认类型)
+				if marketID, ok := m.(float64); ok {
+					c.marketIDs[int(marketID)] = true
+				}
+			}
+		}
+
+		log.Printf("Client subscribed with filters: %v, events: %v, markets: %v", c.filters, c.eventIDs, c.marketIDs)
 
 	case "unsubscribe":
 		// 取消订阅
 		c.filters = make(map[string]bool)
 		c.eventIDs = make(map[string]bool)
+		c.marketIDs = make(map[int]bool)
 		log.Println("Client unsubscribed")
 	}
 }

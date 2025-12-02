@@ -1,0 +1,155 @@
+{
+  "tabs": [
+    {
+      "id": "regular_play",
+      "label": "常规玩法",
+      "type": "group",
+      "groups": ["regular_play"],
+      "chipSpecifiers": []
+    },
+    {
+      "id": "halves",
+      "label": "半场",
+      "type": "specifier_aggregate",
+      "groups": ["halves"],
+      "chipSpecifiers": ["hcp"]
+    },
+    {
+      "id": "quarters",
+      "label": "节",
+      "type": "specifier_aggregate",
+      "groups": ["quarters"],
+      "chipSpecifiers": ["quarternr"]
+    },
+    {
+      "id": "periods",
+      "label": "局",
+      "type": "specifier_aggregate",
+      "groups": ["periods"],
+      "chipSpecifiers": ["periodnr"]
+    },
+    {
+      "id": "innings",
+      "label": "局",
+      "type": "specifier_aggregate",
+      "groups": ["innings"],
+      "chipSpecifiers": ["inningnr"]
+    },
+    {
+      "id": "maps",
+      "label": "地图",
+      "type": "specifier_aggregate",
+      "groups": ["maps"],
+      "chipSpecifiers": ["mapnr"]
+    },
+    {
+      "id": "sets",
+      "label": "盘",
+      "type": "specifier_aggregate",
+      "groups": ["sets"],
+      "chipSpecifiers": ["setnr"]
+    },
+    {
+      "id": "games",
+      "label": "局",
+      "type": "specifier_aggregate",
+      "groups": ["games"],
+      "chipSpecifiers": ["gamenr"]
+    },
+    {
+      "id": "rounds",
+      "label": "回合",
+      "type": "specifier_aggregate",
+      "groups": ["rounds"],
+      "chipSpecifiers": ["roundnr"]
+    },
+    {
+      "id": "player_props",
+      "label": "球员道具",
+      "type": "group",
+      "groups": ["player_props"],
+      "chipSpecifiers": []
+    },
+    {
+      "id": "team_props",
+      "label": "球队道具",
+      "type": "group",
+      "groups": ["team_props"],
+      "chipSpecifiers": []
+    },
+    {
+      "id": "specials",
+      "label": "特殊玩法",
+      "type": "group",
+      "groups": ["specials"],
+      "chipSpecifiers": []
+    },
+    {
+      "id": "outrights",
+      "label": "冠军",
+      "type": "group",
+      "groups": ["outrights"],
+      "chipSpecifiers": []
+    },
+    {
+      "id": "combo",
+      "label": "组合玩法",
+      "type": "group",
+      "groups": ["combo"],
+      "chipSpecifiers": []
+    },
+    {
+      "id": "live_betting",
+      "label": "滚球",
+      "type": "group",
+      "groups": ["live_betting"],
+      "chipSpecifiers": []
+    },
+    {
+      "id": "asian_lines",
+      "label": "亚洲盘",
+      "type": "group",
+      "groups": ["asian_lines"],
+      "chipSpecifiers": []
+    },
+    {
+      "id": "other",
+      "label": "其他",
+      "type": "group",
+      "groups": ["other"],
+      "chipSpecifiers": []
+    }
+  ],
+  "chips": {
+    "quarter_1": {
+      "label": "第1节",
+      "specifier": "quarternr",
+      "value": "1"
+    },
+    "quarter_2": {
+      "label": "第2节",
+      "specifier": "quarternr",
+      "value": "2"
+    },
+    "quarter_3": {
+      "label": "第3节",
+      "specifier": "quarternr",
+      "value": "3"
+    },
+    "quarter_4": {
+      "label": "第4节",
+      "specifier": "quarternr",
+      "value": "4"
+    },
+    "half_1": {
+      "label": "上半场",
+      "specifier": "hcp",
+      "value": "1"
+    },
+    "half_2": {
+      "label": "下半场",
+      "specifier": "hcp",
+      "value": "2"
+    }
+  }
+}

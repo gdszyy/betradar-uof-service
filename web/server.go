@@ -205,6 +205,10 @@ api.HandleFunc("/leagues", s.handleGetLeagues).Methods("GET")
 	api.HandleFunc("/market-descriptions/refresh", marketDescHandler.HandleForceRefresh).Methods("POST")
 	api.HandleFunc("/market-descriptions/bulk-update", marketDescHandler.HandleBulkUpdate).Methods("POST")
 	
+	// 盘口分组配置 API (新增 - v2.0 技术方案)
+	marketTabsHandler := NewMarketTabsHandler()
+	api.HandleFunc("/config/market-tabs", marketTabsHandler.HandleGetMarketTabs).Methods("GET")
+	
 	// 数据清理 API
 	api.HandleFunc("/cleanup/stats", s.handleGetTableStats).Methods("GET")
 	api.HandleFunc("/cleanup/manual", s.handleManualCleanup).Methods("POST")

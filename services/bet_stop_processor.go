@@ -53,12 +53,12 @@ func (p *BetStopProcessor) ProcessBetStop(xmlContent string) error {
 // updateMarketStatus 更新市场状态
 func (p *BetStopProcessor) updateMarketStatus(betStop BetStopMessage) error {
 	// 确定要设置的状态值
-	// 根据 Betradar 文档:
-	// - bet_stop 通常表示市场暂停 (suspended)
+	// 根据 Betradar 文档和技术方案 v2.0:
+	// - bet_stop 消息默认表示市场停用 (Deactivated)
 	// - market_status 如果存在,使用该值
 	// Market Status 枚举:
-	//   1 = Active, -1 = Suspended, 0 = Inactive, -3 = Settled, -4 = Cancelled, -2 = Handed over
-	targetStatus := -1 // 默认: -1 = Suspended
+	//   1 = Active, -1 = Suspended, 0 = Deactivated, -3 = Settled, -4 = Cancelled, -2 = Handed over
+	targetStatus := 0 // 默认: 0 = Deactivated (已修正从 v1.0 的 -1)
 
 	if betStop.MarketStatus != nil {
 		targetStatus = *betStop.MarketStatus
@@ -81,8 +81,12 @@ func (p *BetStopProcessor) updateMarketStatus(betStop BetStopMessage) error {
 				return fmt.Errorf("failed to update all markets: %w", err)
 				}
 			rowsAffected, _ := result.RowsAffected()
-		p.logger.Printf("[bet_stop] 比赛 %s 的所有市场已暂停 (%d个市场)",
-			betStop.EventID, rowsAffected)
+		statusName := "停用"
+		if targetStatus == -1 {
+			statusName = "暂停"
+		}
+		p.logger.Printf("[bet_stop] 比赛 %s 的所有市场已%s (状态=%d, %d个市场)",
+			betStop.EventID, statusName, targetStatus, rowsAffected)
 
 	} else {
 		// 更新特定市场组
@@ -105,8 +109,12 @@ func (p *BetStopProcessor) updateMarketStatus(betStop BetStopMessage) error {
 				return fmt.Errorf("failed to update markets by groups: %w", err)
 				}
 			rowsAffected, _ := result.RowsAffected()
-		p.logger.Printf("[bet_stop] 比赛 %s 的市场组 %s 已暂停 (%d个市场)",
-			betStop.EventID, betStop.Groups, rowsAffected)
+		statusName := "停用"
+		if targetStatus == -1 {
+			statusName = "暂停"
+		}
+		p.logger.Printf("[bet_stop] 比赛 %s 的市场组 %s 已%s (状态=%d, %d个市场)",
+			betStop.EventID, betStop.Groups, statusName, targetStatus, rowsAffected)
 	}
 
 	return nil
