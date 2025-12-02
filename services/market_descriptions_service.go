@@ -711,6 +711,7 @@ s.mu.Lock()
 					foundName = o.ProductOutcomeName
 				}
 			}
+			}
 
 			if err := tx.Commit(); err != nil {
 				return "", fmt.Errorf("failed to commit transaction: %w", err)
