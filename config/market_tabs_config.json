@@ -4,152 +4,1094 @@
       "id": "regular_play",
       "label": "常规玩法",
       "type": "group",
-      "groups": ["regular_play"],
-      "chipSpecifiers": []
-    },
-    {
-      "id": "halves",
-      "label": "半场",
-      "type": "specifier_aggregate",
-      "groups": ["halves"],
-      "chipSpecifiers": ["hcp"]
-    },
-    {
-      "id": "quarters",
-      "label": "节",
-      "type": "specifier_aggregate",
-      "groups": ["quarters"],
-      "chipSpecifiers": ["quarternr"]
-    },
-    {
-      "id": "periods",
-      "label": "局",
-      "type": "specifier_aggregate",
-      "groups": ["periods"],
-      "chipSpecifiers": ["periodnr"]
+      "groups": [
+        "regular_play"
+      ],
+      "chipSpecifiers": [],
+      "marketCount": 198,
+      "primarySpecifier": null
     },
     {
       "id": "innings",
-      "label": "局",
+      "label": "分局",
       "type": "specifier_aggregate",
-      "groups": ["innings"],
-      "chipSpecifiers": ["inningnr"]
-    },
-    {
-      "id": "maps",
-      "label": "地图",
-      "type": "specifier_aggregate",
-      "groups": ["maps"],
-      "chipSpecifiers": ["mapnr"]
-    },
-    {
-      "id": "sets",
-      "label": "盘",
-      "type": "specifier_aggregate",
-      "groups": ["sets"],
-      "chipSpecifiers": ["setnr"]
-    },
-    {
-      "id": "games",
-      "label": "局",
-      "type": "specifier_aggregate",
-      "groups": ["games"],
-      "chipSpecifiers": ["gamenr"]
-    },
-    {
-      "id": "rounds",
-      "label": "回合",
-      "type": "specifier_aggregate",
-      "groups": ["rounds"],
-      "chipSpecifiers": ["roundnr"]
+      "groups": [],
+      "chipSpecifiers": [
+        "inningnr",
+        "dismissalnr",
+        "deliverynr"
+      ],
+      "marketCount": 176,
+      "primarySpecifier": "inningnr"
     },
     {
       "id": "player_props",
       "label": "球员道具",
       "type": "group",
-      "groups": ["player_props"],
-      "chipSpecifiers": []
+      "groups": [
+        "player_props"
+      ],
+      "chipSpecifiers": [
+        "count",
+        "appearancenr"
+      ],
+      "marketCount": 135,
+      "primarySpecifier": null
     },
     {
-      "id": "team_props",
-      "label": "球队道具",
+      "id": "micro_market",
+      "label": "微盘口",
       "type": "group",
-      "groups": ["team_props"],
-      "chipSpecifiers": []
+      "groups": [
+        "micro_market"
+      ],
+      "chipSpecifiers": [
+        "pitchnr",
+        "playnr",
+        "pointnr"
+      ],
+      "marketCount": 78,
+      "primarySpecifier": null
     },
     {
-      "id": "specials",
-      "label": "特殊玩法",
-      "type": "group",
-      "groups": ["specials"],
-      "chipSpecifiers": []
+      "id": "sets",
+      "label": "分盘",
+      "type": "specifier_aggregate",
+      "groups": [],
+      "chipSpecifiers": [
+        "setnr",
+        "gamenr",
+        "legnr",
+        "endnr"
+      ],
+      "marketCount": 58,
+      "primarySpecifier": "setnr"
     },
     {
-      "id": "outrights",
-      "label": "冠军",
+      "id": "maps",
+      "label": "分地图",
+      "type": "specifier_aggregate",
+      "groups": [],
+      "chipSpecifiers": [
+        "mapnr",
+        "roundnr"
+      ],
+      "marketCount": 48,
+      "primarySpecifier": "mapnr"
+    },
+    {
+      "id": "bookings",
+      "label": "罚牌",
       "type": "group",
-      "groups": ["outrights"],
-      "chipSpecifiers": []
+      "groups": [
+        "bookings"
+      ],
+      "chipSpecifiers": [],
+      "marketCount": 47,
+      "primarySpecifier": null
+    },
+    {
+      "id": "corners",
+      "label": "角球",
+      "type": "group",
+      "groups": [
+        "corners"
+      ],
+      "chipSpecifiers": [
+        "cornernr"
+      ],
+      "marketCount": 46,
+      "primarySpecifier": null
+    },
+    {
+      "id": "1st_half",
+      "label": "上半场",
+      "type": "group",
+      "groups": [
+        "1st_half"
+      ],
+      "chipSpecifiers": [
+        "goalnr",
+        "pointnr"
+      ],
+      "marketCount": 43,
+      "primarySpecifier": null
+    },
+    {
+      "id": "quarters",
+      "label": "分节",
+      "type": "specifier_aggregate",
+      "groups": [],
+      "chipSpecifiers": [
+        "quarternr"
+      ],
+      "marketCount": 22,
+      "primarySpecifier": "quarternr"
     },
     {
       "id": "combo",
       "label": "组合玩法",
       "type": "group",
-      "groups": ["combo"],
-      "chipSpecifiers": []
+      "groups": [
+        "combo"
+      ],
+      "chipSpecifiers": [],
+      "marketCount": 20,
+      "primarySpecifier": null
     },
     {
-      "id": "live_betting",
-      "label": "滚球",
+      "id": "2nd_half",
+      "label": "下半场",
       "type": "group",
-      "groups": ["live_betting"],
-      "chipSpecifiers": []
+      "groups": [
+        "2nd_half"
+      ],
+      "chipSpecifiers": [
+        "goalnr"
+      ],
+      "marketCount": 20,
+      "primarySpecifier": null
     },
     {
-      "id": "asian_lines",
-      "label": "亚洲盘",
-      "type": "group",
-      "groups": ["asian_lines"],
-      "chipSpecifiers": []
+      "id": "periods",
+      "label": "分时段",
+      "type": "specifier_aggregate",
+      "groups": [],
+      "chipSpecifiers": [
+        "periodnr"
+      ],
+      "marketCount": 20,
+      "primarySpecifier": "periodnr"
     },
     {
-      "id": "other",
-      "label": "其他",
+      "id": "frames",
+      "label": "分Frame",
+      "type": "specifier_aggregate",
+      "groups": [],
+      "chipSpecifiers": [
+        "framenr"
+      ],
+      "marketCount": 20,
+      "primarySpecifier": "framenr"
+    },
+    {
+      "id": "scorers",
+      "label": "射手",
       "type": "group",
-      "groups": ["other"],
-      "chipSpecifiers": []
+      "groups": [
+        "scorers"
+      ],
+      "chipSpecifiers": [
+        "goalnr"
+      ],
+      "marketCount": 13,
+      "primarySpecifier": null
+    },
+    {
+      "id": "overs",
+      "label": "分Over",
+      "type": "specifier_aggregate",
+      "groups": [],
+      "chipSpecifiers": [
+        "overnr"
+      ],
+      "marketCount": 7,
+      "primarySpecifier": "overnr"
+    },
+    {
+      "id": "drives",
+      "label": "分Drive",
+      "type": "specifier_aggregate",
+      "groups": [],
+      "chipSpecifiers": [
+        "drivenr"
+      ],
+      "marketCount": 2,
+      "primarySpecifier": "drivenr"
     }
   ],
   "chips": {
-    "quarter_1": {
+    "1st_half_goalnr_1": {
+      "tabId": "1st_half",
+      "label": "第1球",
+      "specifier": "goalnr",
+      "value": "1"
+    },
+    "1st_half_goalnr_2": {
+      "tabId": "1st_half",
+      "label": "第2球",
+      "specifier": "goalnr",
+      "value": "2"
+    },
+    "1st_half_goalnr_3": {
+      "tabId": "1st_half",
+      "label": "第3球",
+      "specifier": "goalnr",
+      "value": "3"
+    },
+    "1st_half_goalnr_4": {
+      "tabId": "1st_half",
+      "label": "第4球",
+      "specifier": "goalnr",
+      "value": "4"
+    },
+    "1st_half_goalnr_5": {
+      "tabId": "1st_half",
+      "label": "第5球",
+      "specifier": "goalnr",
+      "value": "5"
+    },
+    "2nd_half_goalnr_1": {
+      "tabId": "2nd_half",
+      "label": "第1球",
+      "specifier": "goalnr",
+      "value": "1"
+    },
+    "2nd_half_goalnr_2": {
+      "tabId": "2nd_half",
+      "label": "第2球",
+      "specifier": "goalnr",
+      "value": "2"
+    },
+    "2nd_half_goalnr_3": {
+      "tabId": "2nd_half",
+      "label": "第3球",
+      "specifier": "goalnr",
+      "value": "3"
+    },
+    "2nd_half_goalnr_4": {
+      "tabId": "2nd_half",
+      "label": "第4球",
+      "specifier": "goalnr",
+      "value": "4"
+    },
+    "2nd_half_goalnr_5": {
+      "tabId": "2nd_half",
+      "label": "第5球",
+      "specifier": "goalnr",
+      "value": "5"
+    },
+    "corners_cornernr_1": {
+      "tabId": "corners",
+      "label": "第1个角球",
+      "specifier": "cornernr",
+      "value": "1"
+    },
+    "corners_cornernr_2": {
+      "tabId": "corners",
+      "label": "第2个角球",
+      "specifier": "cornernr",
+      "value": "2"
+    },
+    "corners_cornernr_3": {
+      "tabId": "corners",
+      "label": "第3个角球",
+      "specifier": "cornernr",
+      "value": "3"
+    },
+    "corners_cornernr_4": {
+      "tabId": "corners",
+      "label": "第4个角球",
+      "specifier": "cornernr",
+      "value": "4"
+    },
+    "corners_cornernr_5": {
+      "tabId": "corners",
+      "label": "第5个角球",
+      "specifier": "cornernr",
+      "value": "5"
+    },
+    "drives_drivenr_1": {
+      "tabId": "drives",
+      "label": "1",
+      "specifier": "drivenr",
+      "value": "1"
+    },
+    "drives_drivenr_2": {
+      "tabId": "drives",
+      "label": "2",
+      "specifier": "drivenr",
+      "value": "2"
+    },
+    "drives_drivenr_3": {
+      "tabId": "drives",
+      "label": "3",
+      "specifier": "drivenr",
+      "value": "3"
+    },
+    "drives_drivenr_4": {
+      "tabId": "drives",
+      "label": "4",
+      "specifier": "drivenr",
+      "value": "4"
+    },
+    "drives_drivenr_5": {
+      "tabId": "drives",
+      "label": "5",
+      "specifier": "drivenr",
+      "value": "5"
+    },
+    "drives_drivenr_6": {
+      "tabId": "drives",
+      "label": "6",
+      "specifier": "drivenr",
+      "value": "6"
+    },
+    "drives_drivenr_7": {
+      "tabId": "drives",
+      "label": "7",
+      "specifier": "drivenr",
+      "value": "7"
+    },
+    "drives_drivenr_8": {
+      "tabId": "drives",
+      "label": "8",
+      "specifier": "drivenr",
+      "value": "8"
+    },
+    "drives_drivenr_9": {
+      "tabId": "drives",
+      "label": "9",
+      "specifier": "drivenr",
+      "value": "9"
+    },
+    "drives_drivenr_10": {
+      "tabId": "drives",
+      "label": "10",
+      "specifier": "drivenr",
+      "value": "10"
+    },
+    "drives_drivenr_11": {
+      "tabId": "drives",
+      "label": "11",
+      "specifier": "drivenr",
+      "value": "11"
+    },
+    "drives_drivenr_12": {
+      "tabId": "drives",
+      "label": "12",
+      "specifier": "drivenr",
+      "value": "12"
+    },
+    "drives_drivenr_13": {
+      "tabId": "drives",
+      "label": "13",
+      "specifier": "drivenr",
+      "value": "13"
+    },
+    "drives_drivenr_14": {
+      "tabId": "drives",
+      "label": "14",
+      "specifier": "drivenr",
+      "value": "14"
+    },
+    "drives_drivenr_15": {
+      "tabId": "drives",
+      "label": "15",
+      "specifier": "drivenr",
+      "value": "15"
+    },
+    "drives_drivenr_16": {
+      "tabId": "drives",
+      "label": "16",
+      "specifier": "drivenr",
+      "value": "16"
+    },
+    "drives_drivenr_17": {
+      "tabId": "drives",
+      "label": "17",
+      "specifier": "drivenr",
+      "value": "17"
+    },
+    "drives_drivenr_18": {
+      "tabId": "drives",
+      "label": "18",
+      "specifier": "drivenr",
+      "value": "18"
+    },
+    "drives_drivenr_19": {
+      "tabId": "drives",
+      "label": "19",
+      "specifier": "drivenr",
+      "value": "19"
+    },
+    "drives_drivenr_20": {
+      "tabId": "drives",
+      "label": "20",
+      "specifier": "drivenr",
+      "value": "20"
+    },
+    "frames_framenr_1": {
+      "tabId": "frames",
+      "label": "1",
+      "specifier": "framenr",
+      "value": "1"
+    },
+    "frames_framenr_2": {
+      "tabId": "frames",
+      "label": "2",
+      "specifier": "framenr",
+      "value": "2"
+    },
+    "frames_framenr_3": {
+      "tabId": "frames",
+      "label": "3",
+      "specifier": "framenr",
+      "value": "3"
+    },
+    "frames_framenr_4": {
+      "tabId": "frames",
+      "label": "4",
+      "specifier": "framenr",
+      "value": "4"
+    },
+    "frames_framenr_5": {
+      "tabId": "frames",
+      "label": "5",
+      "specifier": "framenr",
+      "value": "5"
+    },
+    "frames_framenr_6": {
+      "tabId": "frames",
+      "label": "6",
+      "specifier": "framenr",
+      "value": "6"
+    },
+    "frames_framenr_7": {
+      "tabId": "frames",
+      "label": "7",
+      "specifier": "framenr",
+      "value": "7"
+    },
+    "frames_framenr_8": {
+      "tabId": "frames",
+      "label": "8",
+      "specifier": "framenr",
+      "value": "8"
+    },
+    "frames_framenr_9": {
+      "tabId": "frames",
+      "label": "9",
+      "specifier": "framenr",
+      "value": "9"
+    },
+    "frames_framenr_10": {
+      "tabId": "frames",
+      "label": "10",
+      "specifier": "framenr",
+      "value": "10"
+    },
+    "frames_framenr_11": {
+      "tabId": "frames",
+      "label": "11",
+      "specifier": "framenr",
+      "value": "11"
+    },
+    "frames_framenr_12": {
+      "tabId": "frames",
+      "label": "12",
+      "specifier": "framenr",
+      "value": "12"
+    },
+    "frames_framenr_13": {
+      "tabId": "frames",
+      "label": "13",
+      "specifier": "framenr",
+      "value": "13"
+    },
+    "frames_framenr_14": {
+      "tabId": "frames",
+      "label": "14",
+      "specifier": "framenr",
+      "value": "14"
+    },
+    "frames_framenr_15": {
+      "tabId": "frames",
+      "label": "15",
+      "specifier": "framenr",
+      "value": "15"
+    },
+    "frames_framenr_16": {
+      "tabId": "frames",
+      "label": "16",
+      "specifier": "framenr",
+      "value": "16"
+    },
+    "frames_framenr_17": {
+      "tabId": "frames",
+      "label": "17",
+      "specifier": "framenr",
+      "value": "17"
+    },
+    "frames_framenr_18": {
+      "tabId": "frames",
+      "label": "18",
+      "specifier": "framenr",
+      "value": "18"
+    },
+    "frames_framenr_19": {
+      "tabId": "frames",
+      "label": "19",
+      "specifier": "framenr",
+      "value": "19"
+    },
+    "innings_inningnr_1": {
+      "tabId": "innings",
+      "label": "第1局",
+      "specifier": "inningnr",
+      "value": "1"
+    },
+    "innings_inningnr_2": {
+      "tabId": "innings",
+      "label": "第2局",
+      "specifier": "inningnr",
+      "value": "2"
+    },
+    "innings_inningnr_3": {
+      "tabId": "innings",
+      "label": "第3局",
+      "specifier": "inningnr",
+      "value": "3"
+    },
+    "innings_inningnr_4": {
+      "tabId": "innings",
+      "label": "第4局",
+      "specifier": "inningnr",
+      "value": "4"
+    },
+    "innings_inningnr_5": {
+      "tabId": "innings",
+      "label": "第5局",
+      "specifier": "inningnr",
+      "value": "5"
+    },
+    "innings_inningnr_6": {
+      "tabId": "innings",
+      "label": "第6局",
+      "specifier": "inningnr",
+      "value": "6"
+    },
+    "innings_inningnr_7": {
+      "tabId": "innings",
+      "label": "第7局",
+      "specifier": "inningnr",
+      "value": "7"
+    },
+    "innings_inningnr_8": {
+      "tabId": "innings",
+      "label": "第8局",
+      "specifier": "inningnr",
+      "value": "8"
+    },
+    "innings_inningnr_9": {
+      "tabId": "innings",
+      "label": "第9局",
+      "specifier": "inningnr",
+      "value": "9"
+    },
+    "maps_mapnr_1": {
+      "tabId": "maps",
+      "label": "Map 1",
+      "specifier": "mapnr",
+      "value": "1"
+    },
+    "maps_mapnr_2": {
+      "tabId": "maps",
+      "label": "Map 2",
+      "specifier": "mapnr",
+      "value": "2"
+    },
+    "maps_mapnr_3": {
+      "tabId": "maps",
+      "label": "Map 3",
+      "specifier": "mapnr",
+      "value": "3"
+    },
+    "maps_mapnr_4": {
+      "tabId": "maps",
+      "label": "Map 4",
+      "specifier": "mapnr",
+      "value": "4"
+    },
+    "maps_mapnr_5": {
+      "tabId": "maps",
+      "label": "Map 5",
+      "specifier": "mapnr",
+      "value": "5"
+    },
+    "maps_roundnr_1": {
+      "tabId": "maps",
+      "label": "Round 1",
+      "specifier": "roundnr",
+      "value": "1"
+    },
+    "maps_roundnr_2": {
+      "tabId": "maps",
+      "label": "Round 2",
+      "specifier": "roundnr",
+      "value": "2"
+    },
+    "maps_roundnr_3": {
+      "tabId": "maps",
+      "label": "Round 3",
+      "specifier": "roundnr",
+      "value": "3"
+    },
+    "maps_roundnr_4": {
+      "tabId": "maps",
+      "label": "Round 4",
+      "specifier": "roundnr",
+      "value": "4"
+    },
+    "maps_roundnr_5": {
+      "tabId": "maps",
+      "label": "Round 5",
+      "specifier": "roundnr",
+      "value": "5"
+    },
+    "maps_roundnr_6": {
+      "tabId": "maps",
+      "label": "...Round 30",
+      "specifier": "roundnr",
+      "value": "6"
+    },
+    "overs_overnr_1": {
+      "tabId": "overs",
+      "label": "1",
+      "specifier": "overnr",
+      "value": "1"
+    },
+    "overs_overnr_2": {
+      "tabId": "overs",
+      "label": "2",
+      "specifier": "overnr",
+      "value": "2"
+    },
+    "overs_overnr_3": {
+      "tabId": "overs",
+      "label": "3",
+      "specifier": "overnr",
+      "value": "3"
+    },
+    "overs_overnr_4": {
+      "tabId": "overs",
+      "label": "4",
+      "specifier": "overnr",
+      "value": "4"
+    },
+    "overs_overnr_5": {
+      "tabId": "overs",
+      "label": "5",
+      "specifier": "overnr",
+      "value": "5"
+    },
+    "overs_overnr_6": {
+      "tabId": "overs",
+      "label": "6",
+      "specifier": "overnr",
+      "value": "6"
+    },
+    "overs_overnr_7": {
+      "tabId": "overs",
+      "label": "7",
+      "specifier": "overnr",
+      "value": "7"
+    },
+    "overs_overnr_8": {
+      "tabId": "overs",
+      "label": "8",
+      "specifier": "overnr",
+      "value": "8"
+    },
+    "overs_overnr_9": {
+      "tabId": "overs",
+      "label": "9",
+      "specifier": "overnr",
+      "value": "9"
+    },
+    "overs_overnr_10": {
+      "tabId": "overs",
+      "label": "10",
+      "specifier": "overnr",
+      "value": "10"
+    },
+    "overs_overnr_11": {
+      "tabId": "overs",
+      "label": "11",
+      "specifier": "overnr",
+      "value": "11"
+    },
+    "overs_overnr_12": {
+      "tabId": "overs",
+      "label": "12",
+      "specifier": "overnr",
+      "value": "12"
+    },
+    "overs_overnr_13": {
+      "tabId": "overs",
+      "label": "13",
+      "specifier": "overnr",
+      "value": "13"
+    },
+    "overs_overnr_14": {
+      "tabId": "overs",
+      "label": "14",
+      "specifier": "overnr",
+      "value": "14"
+    },
+    "overs_overnr_15": {
+      "tabId": "overs",
+      "label": "15",
+      "specifier": "overnr",
+      "value": "15"
+    },
+    "overs_overnr_16": {
+      "tabId": "overs",
+      "label": "16",
+      "specifier": "overnr",
+      "value": "16"
+    },
+    "overs_overnr_17": {
+      "tabId": "overs",
+      "label": "17",
+      "specifier": "overnr",
+      "value": "17"
+    },
+    "overs_overnr_18": {
+      "tabId": "overs",
+      "label": "18",
+      "specifier": "overnr",
+      "value": "18"
+    },
+    "overs_overnr_19": {
+      "tabId": "overs",
+      "label": "19",
+      "specifier": "overnr",
+      "value": "19"
+    },
+    "overs_overnr_20": {
+      "tabId": "overs",
+      "label": "20",
+      "specifier": "overnr",
+      "value": "20"
+    },
+    "overs_overnr_21": {
+      "tabId": "overs",
+      "label": "21",
+      "specifier": "overnr",
+      "value": "21"
+    },
+    "overs_overnr_22": {
+      "tabId": "overs",
+      "label": "22",
+      "specifier": "overnr",
+      "value": "22"
+    },
+    "overs_overnr_23": {
+      "tabId": "overs",
+      "label": "23",
+      "specifier": "overnr",
+      "value": "23"
+    },
+    "overs_overnr_24": {
+      "tabId": "overs",
+      "label": "24",
+      "specifier": "overnr",
+      "value": "24"
+    },
+    "overs_overnr_25": {
+      "tabId": "overs",
+      "label": "25",
+      "specifier": "overnr",
+      "value": "25"
+    },
+    "overs_overnr_26": {
+      "tabId": "overs",
+      "label": "26",
+      "specifier": "overnr",
+      "value": "26"
+    },
+    "overs_overnr_27": {
+      "tabId": "overs",
+      "label": "27",
+      "specifier": "overnr",
+      "value": "27"
+    },
+    "overs_overnr_28": {
+      "tabId": "overs",
+      "label": "28",
+      "specifier": "overnr",
+      "value": "28"
+    },
+    "overs_overnr_29": {
+      "tabId": "overs",
+      "label": "29",
+      "specifier": "overnr",
+      "value": "29"
+    },
+    "overs_overnr_30": {
+      "tabId": "overs",
+      "label": "30",
+      "specifier": "overnr",
+      "value": "30"
+    },
+    "overs_overnr_31": {
+      "tabId": "overs",
+      "label": "31",
+      "specifier": "overnr",
+      "value": "31"
+    },
+    "overs_overnr_32": {
+      "tabId": "overs",
+      "label": "32",
+      "specifier": "overnr",
+      "value": "32"
+    },
+    "overs_overnr_33": {
+      "tabId": "overs",
+      "label": "33",
+      "specifier": "overnr",
+      "value": "33"
+    },
+    "overs_overnr_34": {
+      "tabId": "overs",
+      "label": "34",
+      "specifier": "overnr",
+      "value": "34"
+    },
+    "overs_overnr_35": {
+      "tabId": "overs",
+      "label": "35",
+      "specifier": "overnr",
+      "value": "35"
+    },
+    "overs_overnr_36": {
+      "tabId": "overs",
+      "label": "36",
+      "specifier": "overnr",
+      "value": "36"
+    },
+    "overs_overnr_37": {
+      "tabId": "overs",
+      "label": "37",
+      "specifier": "overnr",
+      "value": "37"
+    },
+    "overs_overnr_38": {
+      "tabId": "overs",
+      "label": "38",
+      "specifier": "overnr",
+      "value": "38"
+    },
+    "overs_overnr_39": {
+      "tabId": "overs",
+      "label": "39",
+      "specifier": "overnr",
+      "value": "39"
+    },
+    "overs_overnr_40": {
+      "tabId": "overs",
+      "label": "40",
+      "specifier": "overnr",
+      "value": "40"
+    },
+    "overs_overnr_41": {
+      "tabId": "overs",
+      "label": "41",
+      "specifier": "overnr",
+      "value": "41"
+    },
+    "overs_overnr_42": {
+      "tabId": "overs",
+      "label": "42",
+      "specifier": "overnr",
+      "value": "42"
+    },
+    "overs_overnr_43": {
+      "tabId": "overs",
+      "label": "43",
+      "specifier": "overnr",
+      "value": "43"
+    },
+    "overs_overnr_44": {
+      "tabId": "overs",
+      "label": "44",
+      "specifier": "overnr",
+      "value": "44"
+    },
+    "overs_overnr_45": {
+      "tabId": "overs",
+      "label": "45",
+      "specifier": "overnr",
+      "value": "45"
+    },
+    "overs_overnr_46": {
+      "tabId": "overs",
+      "label": "46",
+      "specifier": "overnr",
+      "value": "46"
+    },
+    "overs_overnr_47": {
+      "tabId": "overs",
+      "label": "47",
+      "specifier": "overnr",
+      "value": "47"
+    },
+    "overs_overnr_48": {
+      "tabId": "overs",
+      "label": "48",
+      "specifier": "overnr",
+      "value": "48"
+    },
+    "overs_overnr_49": {
+      "tabId": "overs",
+      "label": "49",
+      "specifier": "overnr",
+      "value": "49"
+    },
+    "overs_overnr_50": {
+      "tabId": "overs",
+      "label": "50",
+      "specifier": "overnr",
+      "value": "50"
+    },
+    "periods_periodnr_1": {
+      "tabId": "periods",
+      "label": "上半场",
+      "specifier": "periodnr",
+      "value": "1"
+    },
+    "periods_periodnr_2": {
+      "tabId": "periods",
+      "label": "下半场",
+      "specifier": "periodnr",
+      "value": "2"
+    },
+    "periods_periodnr_3": {
+      "tabId": "periods",
+      "label": "第3节",
+      "specifier": "periodnr",
+      "value": "3"
+    },
+    "quarters_quarternr_1": {
+      "tabId": "quarters",
       "label": "第1节",
       "specifier": "quarternr",
       "value": "1"
     },
-    "quarter_2": {
+    "quarters_quarternr_2": {
+      "tabId": "quarters",
       "label": "第2节",
       "specifier": "quarternr",
       "value": "2"
     },
-    "quarter_3": {
+    "quarters_quarternr_3": {
+      "tabId": "quarters",
       "label": "第3节",
       "specifier": "quarternr",
       "value": "3"
     },
-    "quarter_4": {
+    "quarters_quarternr_4": {
+      "tabId": "quarters",
       "label": "第4节",
       "specifier": "quarternr",
       "value": "4"
     },
-    "half_1": {
-      "label": "上半场",
-      "specifier": "hcp",
+    "scorers_goalnr_1": {
+      "tabId": "scorers",
+      "label": "第1球",
+      "specifier": "goalnr",
       "value": "1"
     },
-    "half_2": {
-      "label": "下半场",
-      "specifier": "hcp",
+    "scorers_goalnr_2": {
+      "tabId": "scorers",
+      "label": "第2球",
+      "specifier": "goalnr",
       "value": "2"
+    },
+    "scorers_goalnr_3": {
+      "tabId": "scorers",
+      "label": "第3球",
+      "specifier": "goalnr",
+      "value": "3"
+    },
+    "scorers_goalnr_4": {
+      "tabId": "scorers",
+      "label": "第4球",
+      "specifier": "goalnr",
+      "value": "4"
+    },
+    "scorers_goalnr_5": {
+      "tabId": "scorers",
+      "label": "第5球",
+      "specifier": "goalnr",
+      "value": "5"
+    },
+    "sets_setnr_1": {
+      "tabId": "sets",
+      "label": "第1盘",
+      "specifier": "setnr",
+      "value": "1"
+    },
+    "sets_setnr_2": {
+      "tabId": "sets",
+      "label": "第2盘",
+      "specifier": "setnr",
+      "value": "2"
+    },
+    "sets_setnr_3": {
+      "tabId": "sets",
+      "label": "第3盘",
+      "specifier": "setnr",
+      "value": "3"
+    },
+    "sets_setnr_4": {
+      "tabId": "sets",
+      "label": "第4盘",
+      "specifier": "setnr",
+      "value": "4"
+    },
+    "sets_setnr_5": {
+      "tabId": "sets",
+      "label": "第5盘",
+      "specifier": "setnr",
+      "value": "5"
+    },
+    "sets_gamenr_1": {
+      "tabId": "sets",
+      "label": "Game 1",
+      "specifier": "gamenr",
+      "value": "1"
+    },
+    "sets_gamenr_2": {
+      "tabId": "sets",
+      "label": "Game 2",
+      "specifier": "gamenr",
+      "value": "2"
+    },
+    "sets_gamenr_3": {
+      "tabId": "sets",
+      "label": "Game 3",
+      "specifier": "gamenr",
+      "value": "3"
+    },
+    "sets_gamenr_4": {
+      "tabId": "sets",
+      "label": "Game 4",
+      "specifier": "gamenr",
+      "value": "4"
+    },
+    "sets_gamenr_5": {
+      "tabId": "sets",
+      "label": "Game 5",
+      "specifier": "gamenr",
+      "value": "5"
+    },
+    "sets_gamenr_6": {
+      "tabId": "sets",
+      "label": "...Game 13",
+      "specifier": "gamenr",
+      "value": "6"
     }
   }
 }
