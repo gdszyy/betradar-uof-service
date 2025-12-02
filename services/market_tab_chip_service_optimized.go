@@ -9,12 +9,6 @@ import (
 	"time"
 )
 
-// SpecifierPair represents a specifier key-value pair
-type SpecifierPair struct {
-	Name  string
-	Value string
-}
-
 // MarketTabChipServiceOptimized provides optimized operations for market tab/chip assignment
 // Key features:
 // 1. Incremental updates - only processes markets without tab_id
