@@ -118,8 +118,13 @@ func (s *MarketDescriptionsService) Start() error {
 		if err == nil {
 			logger.Printf("[MarketDescService] ✅ Loaded %d markets from database cache", len(s.markets))
 
-			// 启动定期刷新 (每24小时)
+			// 启动定期刷新 (24小时)
 			go s.refreshLoop()
+
+			// 启动后台任务处理 Variant Market
+			logger.Println("[MarketDescService] Starting asynchronous processing of all variant markets...")
+			go s.processAllVariantMarketsAsync()
+
 			return nil
 		}
 		logger.Printf("[MarketDescService] ⚠️  Failed to load from database, falling back to API: %v", err)
@@ -130,7 +135,7 @@ func (s *MarketDescriptionsService) Start() error {
 		return fmt.Errorf("failed to load market descriptions: %w", err)
 	}
 
-	// 启动定期刷新 (每24小时)
+	// 启动定期刷新 (24小时)
 	go s.refreshLoop()
 
 	return nil
