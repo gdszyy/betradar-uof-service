@@ -374,8 +374,7 @@ func (s *MarketDescriptionsService) saveMappingsToDatabase() (int, error) {
 	mappingStmt, err := tx.Prepare(`
 		INSERT INTO mapping_outcomes (market_id, outcome_id, product_outcome_name, product_id, sport_id)
 		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (market_id, outcome_id, product_id, sport_id) DO UPDATE
-		SET product_outcome_name = EXCLUDED.product_outcome_name
+		ON CONFLICT DO NOTHING
 	`)
 	if err != nil {
 		return 0, fmt.Errorf("failed to prepare mapping statement: %w", err)
