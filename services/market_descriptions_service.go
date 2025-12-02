@@ -706,13 +706,92 @@ func (s *MarketDescriptionsService) GetMarketNameTemplate(marketID string) (stri
 func (s *MarketDescriptionsService) processAllVariantMarketsAsync() {
 	logger.Println("[MarketDescService] Background task started: processing all variant markets.")
 
-	// 在实际的实现中，你应该查询 `odds` 表来找出所有需要获取的变体市场
-	// 示例查询：
-	// SELECT DISTINCT market_id, outcome_id, specifiers FROM odds WHERE outcome_name = outcome_id;
-	
-	// 然后对每一个变体市场，调用 fetchAndCacheVariant 来获取和缓存其描述
-	
-	logger.Println("[MarketDescService] Note: The variant processing logic is a placeholder. It needs to be connected to a data source (e.g., the `odds` table) to discover which variants to fetch.")
+	if s.db == nil {
+		logger.Println("[MarketDescService] Database not available, skipping variant market processing")
+		return
+	}
+
+	// 给服务一些时间启动
+	time.Sleep(5 * time.Second)
+
+	// 查询所有需要获取的变体市场
+	rows, err := s.db.Query(`
+		SELECT DISTINCT o.market_id, o.outcome_id, m.specifiers
+		FROM odds o
+		JOIN markets m ON o.market_id = m.id
+		WHERE o.outcome_name = o.outcome_id
+		AND m.specifiers LIKE '%variant=%'
+		LIMIT 1000
+	`)
+	if err != nil {
+		logger.Printf("[MarketDescService] ⚠️  Failed to query variant markets: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	type VariantMarket struct {
+		MarketID   string
+		OutcomeID  string
+		Specifiers string
+	}
+
+	var variants []VariantMarket
+	for rows.Next() {
+		var marketID, outcomeID, specifiers string
+		if err := rows.Scan(&marketID, &outcomeID, &specifiers); err != nil {
+			continue
+		}
+		variants = append(variants, VariantMarket{
+			MarketID:   marketID,
+			OutcomeID:  outcomeID,
+			Specifiers: specifiers,
+		})
+	}
+
+	if len(variants) == 0 {
+		logger.Println("[MarketDescService] No variant markets found to process")
+		return
+	}
+
+	logger.Printf("[MarketDescService] Found %d variant markets to process", len(variants))
+
+	// 处理每个变体市场
+	processedCount := 0
+	for _, variant := range variants {
+		// 从 specifiers 中提取 variant URN
+		variantURN := s.extractVariantURN(variant.Specifiers)
+		if variantURN == "" {
+			continue
+		}
+
+		// 获取并缓存变体描述
+		if _, err := s.fetchAndCacheVariant(variant.MarketID, variant.OutcomeID, variantURN); err != nil {
+			logger.Printf("[MarketDescService] ⚠️  Failed to fetch variant %s/%s: %v", variant.MarketID, variantURN, err)
+			continue
+		}
+
+		processedCount++
+
+		// 为了避免过度请求 API，每处理 10 个变体后休息 1 秒
+		if processedCount%10 == 0 {
+			time.Sleep(1 * time.Second)
+		}
+	}
+
+	logger.Printf("[MarketDescService] ✅ Processed %d variant markets", processedCount)
+}
+
+// extractVariantURN 从 specifiers 中提取 variant URN
+func (s *MarketDescriptionsService) extractVariantURN(specifiers string) string {
+	// specifiers 格式: "variant=sr:point_range:6+" 或 "variant=sr:exact_goals:3+"
+	pairs := strings.Split(specifiers, "|")
+	for _, pair := range pairs {
+		parts := strings.Split(pair, "=")
+		if len(parts) == 2 && parts[0] == "variant" {
+			return parts[1]
+		}
+	}
+	return ""
 }
 
 // GetStatus 获取服务状态
