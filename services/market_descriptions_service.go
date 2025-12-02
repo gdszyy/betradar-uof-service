@@ -675,7 +675,7 @@ s.mu.Lock()
 		foundName := ""
 
 		// 新增逻辑：将获取到的outcomes写入数据库和内存缓存
-		if len(variantDesc.Variant.Outcomes) > 0 {
+		if len(variantDesc.Variant.Mappings) > 0 {
 			tx, err := s.db.Begin()
 			if err != nil {
 				return "", fmt.Errorf("failed to begin transaction: %w", err)
@@ -683,19 +683,20 @@ s.mu.Lock()
 			defer tx.Rollback() // Defer rollback in case of error
 
 			stmt, err := tx.Prepare(`
-				INSERT INTO outcome_descriptions (market_id, outcome_id, outcome_name, updated_at)
-				VALUES ($1, $2, $3, NOW())
+				INSERT INTO outcome_descriptions (market_id, outcome_id, outcome_name, is_variant, variant_urn, updated_at)
+				VALUES ($1, $2, $3, $4, $5, NOW())
 				ON CONFLICT (market_id, outcome_id) DO UPDATE
-				SET outcome_name = EXCLUDED.outcome_name, updated_at = NOW();
+				SET outcome_name = EXCLUDED.outcome_name, is_variant = EXCLUDED.is_variant, variant_urn = EXCLUDED.variant_urn, updated_at = NOW();
 			`)
 			if err != nil {
 				return "", fmt.Errorf("failed to prepare statement: %w", err)
 			}
 			defer stmt.Close()
 
-			for _, o := range variantDesc.Variant.Outcomes {
+			for _, mapping := range variantDesc.Variant.Mappings {
+				for _, o := range mapping.Outcomes {
 				// 写入数据库
-				if _, err := stmt.Exec(marketID, o.ID, o.Name); err != nil {
+				if _, err := stmt.Exec(marketID, o.OutcomeID, o.ProductOutcomeName, true, variant); err != nil {
 					logger.Printf("[MarketDescService] ⚠️  Failed to save variant outcome to DB: %v", err)
 					continue // 继续处理下一个
 				}
@@ -704,10 +705,10 @@ s.mu.Lock()
 				if s.outcomes[marketID] == nil {
 					s.outcomes[marketID] = make(map[string]*OutcomeDescription)
 				}
-				s.outcomes[marketID][o.ID] = &OutcomeDescription{ID: o.ID, Name: o.Name}
+				s.outcomes[marketID][o.OutcomeID] = &OutcomeDescription{ID: o.OutcomeID, Name: o.ProductOutcomeName}
 
-				if o.ID == outcomeID {
-					foundName = o.Name
+				if o.OutcomeID == outcomeID {
+					foundName = o.ProductOutcomeName
 				}
 			}
 
