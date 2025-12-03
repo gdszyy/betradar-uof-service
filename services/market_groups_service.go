@@ -111,24 +111,27 @@ func (s *MarketGroupsService) AssignTabsBasedOnGroups() (int, error) {
 			continue
 		}
 
-		// 解析 groups（可能是 JSON 数组或逗号分隔的字符串）
+		// 解析 groups（竖线分隔的字符串，SportRader 格式）
 		var groups []string
 		if strings.HasPrefix(groupsStr, "[") {
 			// JSON 数组格式
 			err := json.Unmarshal([]byte(groupsStr), &groups)
 			if err != nil {
-				// 如果 JSON 解析失败，尝试作为逗号分隔的字符串
-				groups = strings.Split(groupsStr, ",")
+				// 如果 JSON 解析失败，尝试作为竖线分隔的字符串
+				groups = strings.Split(groupsStr, "|")
 			}
 		} else {
-			// 逗号分隔的字符串
-			groups = strings.Split(groupsStr, ",")
+			// 竖线分隔的字符串（SportRader 格式）
+			groups = strings.Split(groupsStr, "|")
 		}
 
-		// 查找第一个匹配的 group
+		// 查找第一个匹配的 group（跳过通用标签 'all'）
 		var tabID string
 		for _, group := range groups {
 			group = strings.TrimSpace(group)
+			if group == "all" {
+				continue // 跳过通用标签
+			}
 			if mappedTab, exists := groupTabMapping[group]; exists {
 				tabID = mappedTab
 				break
