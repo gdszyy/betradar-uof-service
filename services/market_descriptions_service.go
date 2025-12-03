@@ -624,9 +624,21 @@ func (s *MarketDescriptionsService) GetOutcomeName(marketID, outcomeID, specifie
 	return outcomeID
 }
 
-// VariantDescription 动态盘口描述
+// MarketVariantDescription 正确的 Market Variant 描述
+// 根据 Sportradar 文档，/descriptions/{language}/markets/{market_id}/variants/{variant_urn} 端点
+// 返回的根元素是 <market_descriptions> 而不是 <variant_descriptions>
+type MarketVariantDescription struct {
+	XMLName xml.Name `xml:"market_descriptions"`
+	Market struct {
+		ID       string                   `xml:"id,attr"`
+		Outcomes []OutcomeDescription     `xml:"outcomes>outcome"`
+		Mappings []Mapping                `xml:"mappings>mapping"`
+	} `xml:"market"`
+}
+
+// VariantDescription 府上保留，以便兼容旧代码
 type VariantDescription struct {
-	XMLName xml.Name `xml:"variant_description"`
+	XMLName xml.Name `xml:"variant_descriptions"`
 	Variant struct {
 		ID       string                   `xml:"id,attr"`
 		Outcomes []OutcomeDescription     `xml:"outcomes>outcome"`
@@ -668,13 +680,13 @@ func (s *MarketDescriptionsService) fetchAndCacheVariant(marketID, outcomeID, va
 
 	logger.Printf("[MarketDescService] API response body length: %d bytes", len(body))
 
-	var variantDesc VariantDescription
-	if err := xml.Unmarshal(body, &variantDesc); err != nil {
+	var marketVariantDesc MarketVariantDescription
+	if err := xml.Unmarshal(body, &marketVariantDesc); err != nil {
 		logger.Printf("[MarketDescService] XML parsing error: %v", err)
-		return "", fmt.Errorf("failed to parse variant XML: %w", err)
+		return "", fmt.Errorf("failed to parse market variant XML: %w", err)
 	}
 
-	logger.Printf("[MarketDescService] Parsed variant: outcomes=%d, mappings=%d", len(variantDesc.Variant.Outcomes), len(variantDesc.Variant.Mappings))
+	logger.Printf("[MarketDescService] Parsed market variant: outcomes=%d, mappings=%d", len(marketVariantDesc.Market.Outcomes), len(marketVariantDesc.Market.Mappings))
 
 s.mu.Lock()
 		defer s.mu.Unlock()
@@ -682,7 +694,7 @@ s.mu.Lock()
 		foundName := ""
 
 		// 优先使用 <outcomes> 中的标准结果描述
-		if len(variantDesc.Variant.Outcomes) > 0 {
+		if len(marketVariantDesc.Market.Outcomes) > 0 {
 			tx, err := s.db.Begin()
 			if err != nil {
 				return "", fmt.Errorf("failed to begin transaction: %w", err)
@@ -701,7 +713,7 @@ s.mu.Lock()
 			defer stmt.Close()
 
 			// 使用 <outcomes> 中的标准结果描述
-			for _, outcome := range variantDesc.Variant.Outcomes {
+			for _, outcome := range marketVariantDesc.Market.Outcomes {
 				// 写入数据库
 				if _, err := stmt.Exec(marketID, outcome.ID, outcome.Name, true, variant); err != nil {
 					logger.Printf("[MarketDescService] ⚠️  Failed to save variant outcome to DB: %v", err)
@@ -722,7 +734,7 @@ s.mu.Lock()
 			if err := tx.Commit(); err != nil {
 				return "", fmt.Errorf("failed to commit transaction: %w", err)
 			}
-		} else if len(variantDesc.Variant.Mappings) > 0 {
+		} else if len(marketVariantDesc.Market.Mappings) > 0 {
 			// 备用：如果没有 <outcomes>，使用 <mappings> 中的 product_outcome_name
 			tx, err := s.db.Begin()
 			if err != nil {
@@ -742,7 +754,7 @@ s.mu.Lock()
 			defer stmt.Close()
 
 			// 使用 <mappings> 中的 product_outcome_name 作为备用
-			for _, mapping := range variantDesc.Variant.Mappings {
+			for _, mapping := range marketVariantDesc.Market.Mappings {
 				for _, o := range mapping.Outcomes {
 					// 写入数据库
 					if _, err := stmt.Exec(marketID, o.OutcomeID, o.ProductOutcomeName, true, variant); err != nil {
