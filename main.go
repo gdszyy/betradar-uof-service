@@ -123,6 +123,37 @@ func main() {
 	tabChipService.Start()
 	logger.Println("[TabChipService] ✅ Tab/Chip Assignment service started")
 	
+	// 创建 Market Groups 服务 (用于同步 groups 字段和分配 tabs)
+	marketGroupsService := services.NewMarketGroupsService(db)
+	
+	// 同步 groups 字段从 market_descriptions 到 markets
+	if syncedCount, err := marketGroupsService.SyncMarketGroupsFromDescriptions(); err != nil {
+		logger.Errorf("[MarketGroupsService] ⚠️  Failed to sync groups: %v", err)
+	} else {
+		logger.Printf("[MarketGroupsService] ✅ Synced groups for %d markets", syncedCount)
+	}
+	
+	// 基于 groups 分配 tabs
+	if assignedCount, err := marketGroupsService.AssignTabsBasedOnGroups(); err != nil {
+		logger.Errorf("[MarketGroupsService] ⚠️  Failed to assign tabs based on groups: %v", err)
+	} else {
+		logger.Printf("[MarketGroupsService] ✅ Assigned tabs for %d markets based on groups", assignedCount)
+	}
+	
+	// 基于 specifiers 分配 tabs (用于时序相关的市场)
+	if assignedCount, err := marketGroupsService.AssignTabsBasedOnSpecifiers(); err != nil {
+		logger.Errorf("[MarketGroupsService] ⚠️  Failed to assign tabs based on specifiers: %v", err)
+	} else {
+		logger.Printf("[MarketGroupsService] ✅ Assigned tabs for %d markets based on specifiers", assignedCount)
+	}
+	
+	// 为未分配的市场分配默认 tab
+	if assignedCount, err := marketGroupsService.AssignDefaultTab("full_match"); err != nil {
+		logger.Errorf("[MarketGroupsService] ⚠️  Failed to assign default tab: %v", err)
+	} else {
+		logger.Printf("[MarketGroupsService] ✅ Assigned default tab for %d markets", assignedCount)
+	}
+	
 	// 创建 Producer 监控服务
 	producerMonitor := services.NewProducerMonitor(db, larkNotifier, cfg.ProducerCheckIntervalSeconds, cfg.ProducerDownThresholdSeconds)
 	go producerMonitor.Start()
