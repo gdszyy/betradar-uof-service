@@ -818,16 +818,16 @@ func (s *MarketDescriptionsService) processAllVariantMarketsAsync() {
 	// Query all variant markets that need to be fetched
 	logger.Println("[MarketDescService] Querying database for variant markets...")
 rows, err := s.db.Query(`
-			SELECT DISTINCT m.sr_market_id, o.outcome_id, o.specifiers
-			FROM odds o
-			JOIN markets m ON o.market_id = m.id
-			WHERE o.specifiers LIKE 'variant=%'
-			AND NOT EXISTS (
-				SELECT 1 FROM outcome_descriptions od
-				WHERE od.market_id = CAST(m.sr_market_id AS VARCHAR)
-				AND od.outcome_id = o.outcome_id
-			)
-			LIMIT 1000
+				SELECT DISTINCT m.sr_market_id, o.outcome_id, m.specifiers
+				FROM odds o
+				JOIN markets m ON o.market_id = m.id
+				WHERE m.specifiers LIKE 'variant=%'
+				AND NOT EXISTS (
+					SELECT 1 FROM outcome_descriptions od
+					WHERE od.market_id = CAST(m.sr_market_id AS VARCHAR)
+					AND od.outcome_id = o.outcome_id
+				)
+				LIMIT 1000
 		`)
 	if err != nil {
 		logger.Printf("[MarketDescService] ⚠️  Failed to query variant markets: %v", err)
