@@ -297,6 +297,9 @@ CREATE TABLE IF NOT EXISTS outcome_descriptions (
     market_id VARCHAR(200) NOT NULL,
     outcome_id VARCHAR(200) NOT NULL,
     outcome_name TEXT NOT NULL,
+    is_variant BOOLEAN DEFAULT FALSE,
+    variant_urn VARCHAR(500),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(market_id, outcome_id)
 );
 

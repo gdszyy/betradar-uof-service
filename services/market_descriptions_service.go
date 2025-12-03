@@ -628,8 +628,9 @@ func (s *MarketDescriptionsService) GetOutcomeName(marketID, outcomeID, specifie
 type VariantDescription struct {
 	XMLName xml.Name `xml:"variant_description"`
 	Variant struct {
-		ID       string    `xml:"id,attr"`
-		Mappings []Mapping `xml:"mappings>mapping"`
+		ID       string                   `xml:"id,attr"`
+		Outcomes []OutcomeDescription     `xml:"outcomes>outcome"`
+		Mappings []Mapping                `xml:"mappings>mapping"`
 	} `xml:"variant"`
 }
 
@@ -637,7 +638,7 @@ type VariantDescription struct {
 func (s *MarketDescriptionsService) fetchAndCacheVariant(marketID, outcomeID, variant string) (string, error) {
 	// 构造 URL
 	apiBase := strings.TrimSuffix(s.apiBaseURL, "/v1")
-	url := fmt.Sprintf("%s/v1/descriptions/en/markets/%s/variants/%s?include_mappings=true", apiBase, marketID, variant)
+	url := fmt.Sprintf("%s/v1/descriptions/en/markets/%s/variant/%s?include_mappings=true", apiBase, marketID, variant)
 
 	logger.Printf("[MarketDescService] ⚡️ Dynamically fetching variant description from: %s", url)
 
