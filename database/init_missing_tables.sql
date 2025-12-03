@@ -53,8 +53,8 @@ CREATE INDEX IF NOT EXISTS idx_rollback_bet_cancels_timestamp ON rollback_bet_ca
 -- 4. Mapping Outcomes Table (结果映射表)
 CREATE TABLE IF NOT EXISTS mapping_outcomes (
     id SERIAL PRIMARY KEY,
-    market_id VARCHAR(50) NOT NULL,
-    outcome_id VARCHAR(50) NOT NULL,
+    market_id VARCHAR(200) NOT NULL,
+    outcome_id VARCHAR(200) NOT NULL,
     product_outcome_name TEXT,
     product_id INTEGER,
     sport_id VARCHAR(50),

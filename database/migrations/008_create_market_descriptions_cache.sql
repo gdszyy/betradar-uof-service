@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS outcome_descriptions (
     market_id VARCHAR(200) NOT NULL,
     outcome_id VARCHAR(200) NOT NULL,
     outcome_name TEXT NOT NULL,
+    is_variant BOOLEAN DEFAULT FALSE,
+    variant_urn VARCHAR(500),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(market_id, outcome_id)
@@ -26,6 +28,7 @@ CREATE TABLE IF NOT EXISTS outcome_descriptions (
 
 CREATE INDEX IF NOT EXISTS idx_outcome_descriptions_market_id ON outcome_descriptions(market_id);
 CREATE INDEX IF NOT EXISTS idx_outcome_descriptions_updated_at ON outcome_descriptions(updated_at);
+CREATE INDEX IF NOT EXISTS idx_outcome_descriptions_is_variant ON outcome_descriptions(is_variant) WHERE is_variant = TRUE;
 
 -- 完成
 SELECT '✅ Migration 008: Market descriptions cache tables created' AS status;
