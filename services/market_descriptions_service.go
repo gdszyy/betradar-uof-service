@@ -637,8 +637,9 @@ type VariantDescription struct {
 // fetchAndCacheVariant 动态加载并缓存 variant 描述
 func (s *MarketDescriptionsService) fetchAndCacheVariant(marketID, outcomeID, variant string) (string, error) {
 	// 构造 URL
+	// 根据 Sportradar 文档，正确的路径是 /variants/（复数）而不是 /variant/（单数）
 	apiBase := strings.TrimSuffix(s.apiBaseURL, "/v1")
-	url := fmt.Sprintf("%s/v1/descriptions/en/markets/%s/variant/%s?include_mappings=true", apiBase, marketID, variant)
+	url := fmt.Sprintf("%s/v1/descriptions/en/markets/%s/variants/%s?include_mappings=true", apiBase, marketID, variant)
 
 	logger.Printf("[MarketDescService] ⚡️ Dynamically fetching variant description from: %s", url)
 
