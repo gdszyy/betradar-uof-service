@@ -675,8 +675,8 @@ s.mu.Lock()
 
 		foundName := ""
 
-		// 新增逻辑：将获取到的outcomes写入数据库和内存缓存
-		if len(variantDesc.Variant.Mappings) > 0 {
+		// 优先使用 <outcomes> 中的标准结果描述
+		if len(variantDesc.Variant.Outcomes) > 0 {
 			tx, err := s.db.Begin()
 			if err != nil {
 				return "", fmt.Errorf("failed to begin transaction: %w", err)
@@ -694,38 +694,70 @@ s.mu.Lock()
 			}
 			defer stmt.Close()
 
-			for _, mapping := range variantDesc.Variant.Mappings {
-				for _, o := range mapping.Outcomes {
+			// 使用 <outcomes> 中的标准结果描述
+			for _, outcome := range variantDesc.Variant.Outcomes {
 				// 写入数据库
-				if _, err := stmt.Exec(marketID, o.OutcomeID, o.ProductOutcomeName, true, variant); err != nil {
+				if _, err := stmt.Exec(marketID, outcome.ID, outcome.Name, true, variant); err != nil {
 					logger.Printf("[MarketDescService] ⚠️  Failed to save variant outcome to DB: %v", err)
-					continue // 继续处理下一个
+					continue
 				}
 
-				// 写入内存缓存 s.outcomes
+				// 写入内存缓存
 				if s.outcomes[marketID] == nil {
 					s.outcomes[marketID] = make(map[string]*OutcomeDescription)
 				}
-				s.outcomes[marketID][o.OutcomeID] = &OutcomeDescription{ID: o.OutcomeID, Name: o.ProductOutcomeName}
+				s.outcomes[marketID][outcome.ID] = &OutcomeDescription{ID: outcome.ID, Name: outcome.Name}
 
-				if o.OutcomeID == outcomeID {
-					foundName = o.ProductOutcomeName
+				if outcome.ID == outcomeID {
+					foundName = outcome.Name
 				}
-			}
 			}
 
 			if err := tx.Commit(); err != nil {
 				return "", fmt.Errorf("failed to commit transaction: %w", err)
 			}
-		} else {
-			// 如果API响应中没有<outcomes>，则处理<mappings>作为备用
+		} else if len(variantDesc.Variant.Mappings) > 0 {
+			// 备用：如果没有 <outcomes>，使用 <mappings> 中的 product_outcome_name
+			tx, err := s.db.Begin()
+			if err != nil {
+				return "", fmt.Errorf("failed to begin transaction: %w", err)
+			}
+			defer tx.Rollback()
+
+			stmt, err := tx.Prepare(`
+				INSERT INTO outcome_descriptions (market_id, outcome_id, outcome_name, is_variant, variant_urn, updated_at)
+				VALUES ($1, $2, $3, $4, $5, NOW())
+				ON CONFLICT (market_id, outcome_id) DO UPDATE
+				SET outcome_name = EXCLUDED.outcome_name, is_variant = EXCLUDED.is_variant, variant_urn = EXCLUDED.variant_urn, updated_at = NOW();
+			`)
+			if err != nil {
+				return "", fmt.Errorf("failed to prepare statement: %w", err)
+			}
+			defer stmt.Close()
+
+			// 使用 <mappings> 中的 product_outcome_name 作为备用
 			for _, mapping := range variantDesc.Variant.Mappings {
 				for _, o := range mapping.Outcomes {
-					s.mappings[marketID][o.OutcomeID+"|"+variant] = o.ProductOutcomeName
+					// 写入数据库
+					if _, err := stmt.Exec(marketID, o.OutcomeID, o.ProductOutcomeName, true, variant); err != nil {
+						logger.Printf("[MarketDescService] ⚠️  Failed to save variant outcome to DB: %v", err)
+						continue
+					}
+
+					// 写入内存缓存
+					if s.outcomes[marketID] == nil {
+						s.outcomes[marketID] = make(map[string]*OutcomeDescription)
+					}
+					s.outcomes[marketID][o.OutcomeID] = &OutcomeDescription{ID: o.OutcomeID, Name: o.ProductOutcomeName}
+
 					if o.OutcomeID == outcomeID {
 						foundName = o.ProductOutcomeName
 					}
 				}
+			}
+
+			if err := tx.Commit(); err != nil {
+				return "", fmt.Errorf("failed to commit transaction: %w", err)
 			}
 		}
 

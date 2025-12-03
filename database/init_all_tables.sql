@@ -189,16 +189,24 @@ CREATE INDEX IF NOT EXISTS idx_bet_stops_timestamp ON bet_stops(timestamp);
 CREATE TABLE IF NOT EXISTS bet_settlements (
     id BIGSERIAL PRIMARY KEY,
     event_id VARCHAR(100) NOT NULL,
-    product_id INTEGER,
+    producer_id INTEGER,
+    sr_market_id VARCHAR(200),
+    specifiers TEXT,
+    outcome_id VARCHAR(200),
+    result INTEGER,
+    void_factor DECIMAL(5, 4),
+    dead_heat_factor DECIMAL(5, 4),
     timestamp BIGINT,
     certainty INTEGER,
     market_count INTEGER DEFAULT 0,
     xml_content TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (event_id, sr_market_id, specifiers, outcome_id, producer_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_bet_settlements_event_id ON bet_settlements(event_id);
 CREATE INDEX IF NOT EXISTS idx_bet_settlements_timestamp ON bet_settlements(timestamp);
+CREATE INDEX IF NOT EXISTS idx_bet_settlements_market_id ON bet_settlements(sr_market_id);
 
 -- 10. Bet Cancels Table (投注取消记录)
 CREATE TABLE IF NOT EXISTS bet_cancels (
