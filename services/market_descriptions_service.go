@@ -665,10 +665,15 @@ func (s *MarketDescriptionsService) fetchAndCacheVariant(marketID, outcomeID, va
 		return "", fmt.Errorf("failed to read response: %w", err)
 	}
 
+	logger.Printf("[MarketDescService] API response body length: %d bytes", len(body))
+
 	var variantDesc VariantDescription
 	if err := xml.Unmarshal(body, &variantDesc); err != nil {
+		logger.Printf("[MarketDescService] XML parsing error: %v", err)
 		return "", fmt.Errorf("failed to parse variant XML: %w", err)
 	}
+
+	logger.Printf("[MarketDescService] Parsed variant: outcomes=%d, mappings=%d", len(variantDesc.Variant.Outcomes), len(variantDesc.Variant.Mappings))
 
 s.mu.Lock()
 		defer s.mu.Unlock()
@@ -860,29 +865,36 @@ rows, err := s.db.Query(`
 	logger.Printf("[MarketDescService] Found %d variant markets to process", len(variants))
 
 	// 处理每个变体市场
-	processedCount := 0
-	for _, variant := range variants {
-		// 从 specifiers 中提取 variant URN
-		variantURN := s.extractVariantURN(variant.Specifiers)
-		if variantURN == "" {
-			continue
+		processedCount := 0
+		failedCount := 0
+		for i, variant := range variants {
+			// 从 specifiers 中提取 variant URN
+			variantURN := s.extractVariantURN(variant.Specifiers)
+			if variantURN == "" {
+				logger.Printf("[MarketDescService] ⚠️  Failed to extract variant URN from specifiers: %s", variant.Specifiers)
+				failedCount++
+				continue
+			}
+
+			logger.Printf("[MarketDescService] Processing variant %d/%d: marketID=%s, outcomeID=%s, variantURN=%s", i+1, len(variants), variant.MarketID, variant.OutcomeID, variantURN)
+
+			// 获取并缓存变体描述
+			if _, err := s.fetchAndCacheVariant(variant.MarketID, variant.OutcomeID, variantURN); err != nil {
+				logger.Printf("[MarketDescService] ❌ Failed to fetch variant %s/%s: %v", variant.MarketID, variantURN, err)
+				failedCount++
+				continue
+			}
+
+			logger.Printf("[MarketDescService] ✓ Successfully cached variant %s/%s", variant.MarketID, variantURN)
+			processedCount++
+
+			// 为了避免过度请求 API，每处理 10 个变体后休息 1 秒
+			if processedCount%10 == 0 {
+				time.Sleep(1 * time.Second)
+			}
 		}
 
-		// 获取并缓存变体描述
-		if _, err := s.fetchAndCacheVariant(variant.MarketID, variant.OutcomeID, variantURN); err != nil {
-			logger.Printf("[MarketDescService] ⚠️  Failed to fetch variant %s/%s: %v", variant.MarketID, variantURN, err)
-			continue
-		}
-
-		processedCount++
-
-		// 为了避免过度请求 API，每处理 10 个变体后休息 1 秒
-		if processedCount%10 == 0 {
-			time.Sleep(1 * time.Second)
-		}
-	}
-
-	logger.Printf("[MarketDescService] ✅ Processed %d variant markets", processedCount)
+		logger.Printf("[MarketDescService] ✅ Variant market processing completed: %d succeeded, %d failed out of %d total", processedCount, failedCount, len(variants))
 }
 
 // extractVariantURN 从 specifiers 中提取 variant URN
