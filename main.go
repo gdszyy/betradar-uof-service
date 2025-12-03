@@ -118,6 +118,11 @@ func main() {
 		logger.Println("[MarketDescService] ✅ Market descriptions service started")
 	}
 	
+	// 创建 Tab/Chip Assignment 服务 (在 Market Descriptions 之后)
+	tabChipService := services.NewTabChipAssignmentService(db, playersService)
+	tabChipService.Start()
+	logger.Println("[TabChipService] ✅ Tab/Chip Assignment service started")
+	
 	// 创建 Producer 监控服务
 	producerMonitor := services.NewProducerMonitor(db, larkNotifier, cfg.ProducerCheckIntervalSeconds, cfg.ProducerDownThresholdSeconds)
 	go producerMonitor.Start()
