@@ -816,12 +816,14 @@ func (s *MarketDescriptionsService) processAllVariantMarketsAsync() {
 	time.Sleep(5 * time.Second)
 
 	// Query all variant markets that need to be fetched
+	// Note: Only process sr: variants (Sportradar standard markets)
+	// pre: variants (player props) are not supported by the /variant/ API endpoint
 	logger.Println("[MarketDescService] Querying database for variant markets...")
 rows, err := s.db.Query(`
 				SELECT DISTINCT m.sr_market_id, o.outcome_id, m.specifiers
 				FROM odds o
 				JOIN markets m ON o.market_id = m.id
-				WHERE m.specifiers LIKE 'variant=%'
+				WHERE m.specifiers LIKE 'variant=sr:%'
 				AND NOT EXISTS (
 					SELECT 1 FROM outcome_descriptions od
 					WHERE od.market_id = CAST(m.sr_market_id AS VARCHAR)
@@ -862,7 +864,7 @@ rows, err := s.db.Query(`
 		return
 	}
 
-	logger.Printf("[MarketDescService] Found %d variant markets to process", len(variants))
+	logger.Printf("[MarketDescService] Found %d sr: variant markets to process (pre: variants are not supported by the API)", len(variants))
 
 	// 处理每个变体市场
 		processedCount := 0
@@ -876,7 +878,7 @@ rows, err := s.db.Query(`
 				continue
 			}
 
-			logger.Printf("[MarketDescService] Processing variant %d/%d: marketID=%s, outcomeID=%s, variantURN=%s", i+1, len(variants), variant.MarketID, variant.OutcomeID, variantURN)
+			logger.Printf("[MarketDescService] [%d/%d] Processing sr: variant marketID=%s, outcomeID=%s, variantURN=%s", i+1, len(variants), variant.MarketID, variant.OutcomeID, variantURN)
 
 			// 获取并缓存变体描述
 			if _, err := s.fetchAndCacheVariant(variant.MarketID, variant.OutcomeID, variantURN); err != nil {
