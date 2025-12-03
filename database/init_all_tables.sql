@@ -379,7 +379,7 @@ CREATE TABLE IF NOT EXISTS betstop_reasons (
 CREATE TABLE IF NOT EXISTS players (
     player_id VARCHAR(50) PRIMARY KEY,
     player_name VARCHAR(200) NOT NULL,
-    nationality VARCHAR(10),
+    nationality VARCHAR(100),
     date_of_birth DATE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

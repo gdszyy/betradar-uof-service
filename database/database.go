@@ -72,12 +72,12 @@ func Migrate(db *sql.DB) error {
 		
 		// 球员信息
 		`CREATE TABLE IF NOT EXISTS players (
-	    player_id VARCHAR(50) PRIMARY KEY,
-	    player_name VARCHAR(200) NOT NULL,
-	    nationality VARCHAR(10),
-	    date_of_birth DATE,
-	    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	);`,
+		    player_id VARCHAR(50) PRIMARY KEY,
+		    player_name VARCHAR(200) NOT NULL,
+		    nationality VARCHAR(100),
+		    date_of_birth DATE,
+		    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);`,
 		
 		// 队伍信息
 		`CREATE TABLE IF NOT EXISTS teams (
