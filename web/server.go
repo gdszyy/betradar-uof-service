@@ -168,6 +168,9 @@ func (s *Server) Start() error {
 	marketQueryHandler := NewMarketQueryHandler(s.marketQueryService)
 	api.HandleFunc("/events/{event_id}/markets", marketQueryHandler.GetEventMarkets).Methods("GET")
 	
+	// 赛事详情API - 包含所有市场、specifier和outcomes
+	api.HandleFunc("/events/{eventId}", s.handleGetEventDetail).Methods("GET")
+	
 	// Pre-match API
 	api.HandleFunc("/prematch/trigger", s.handleTriggerPrematchBooking).Methods("POST")
 	api.HandleFunc("/prematch/events", s.handleGetPrematchEvents).Methods("GET")
