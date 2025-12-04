@@ -119,9 +119,11 @@ func main() {
 	}
 	
 	// 创建 Tab/Chip Assignment 服务 (在 Market Descriptions 之后)
-	tabChipService := services.NewTabChipAssignmentService(db, playersService)
-	tabChipService.Start()
-	logger.Println("[TabChipService] ✅ Tab/Chip Assignment service started")
+	// 注意: TabChipAssignmentService 已被停用，因为其逻辑存在缺陷
+	// 现在使用 MarketGroupsService 进行 tab_id 分配
+	// tabChipService := services.NewTabChipAssignmentService(db, playersService)
+	// tabChipService.Start()
+	// logger.Println("[TabChipService] ✅ Tab/Chip Assignment service started")
 	
 	// 创建 Market Groups 服务 (用于同步 groups 字段和分配 tabs)
 	marketGroupsService := services.NewMarketGroupsService(db)
@@ -147,11 +149,11 @@ func main() {
 		logger.Printf("[MarketGroupsService] ✅ Assigned tabs for %d markets based on specifiers", assignedCount)
 	}
 	
-	// 为未分配的市场分配默认 tab
-	if assignedCount, err := marketGroupsService.AssignDefaultTab("full_match"); err != nil {
+	// 为未分配的市场分配默认 tab (使用 regular_play 而不是 full_match)
+	if assignedCount, err := marketGroupsService.AssignDefaultTab("regular_play"); err != nil {
 		logger.Errorf("[MarketGroupsService] ⚠️  Failed to assign default tab: %v", err)
 	} else {
-		logger.Printf("[MarketGroupsService] ✅ Assigned default tab for %d markets", assignedCount)
+		logger.Printf("[MarketGroupsService] ✅ Assigned default tab 'regular_play' for %d markets", assignedCount)
 	}
 	
 	// 创建 Producer 监控服务
