@@ -175,7 +175,8 @@ func (s *Server) getEventMarketsWithSpecifiers(eventID string) ([]MarketWithSpec
 
 	for rows.Next() {
 		var marketID int
-		var srMarketID, marketName, marketType, status string
+		var srMarketID, marketType, status string
+		var marketName sql.NullString
 		var producerID int
 		var specifiers sql.NullString
 		var updatedAt string
@@ -214,13 +215,19 @@ func (s *Server) getEventMarketsWithSpecifiers(eventID string) ([]MarketWithSpec
 			UpdatedAt:           updatedAt,
 		}
 
+		// 处理 marketName 可能为 NULL 的情况
+		marketNameStr := ""
+		if marketName.Valid {
+			marketNameStr = marketName.String
+		}
+
 		// 如果market已存在，则添加specifier分组；否则创建新的market
 		if market, exists := marketMap[srMarketID]; exists {
 			market.SpecifierGroups = append(market.SpecifierGroups, specifierGroup)
 		} else {
 			marketMap[srMarketID] = &MarketWithSpecifiersGroup{
 				MarketID:        srMarketID,
-				MarketName:      marketName,
+				MarketName:      marketNameStr,
 				MarketType:      marketType,
 				Status:          status,
 				ProducerID:      producerID,
