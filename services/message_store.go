@@ -14,7 +14,13 @@ func NewMessageStore(db *sql.DB) *MessageStore {
 }
 
 // SaveMessage 保存消息到数据库
+// DISABLED: 停止uof_messages落库以节省数据库空间
 func (s *MessageStore) SaveMessage(messageType, eventID string, productID *int, sportID *string, routingKey, xmlContent string, timestamp int64) error {
+	// 禁用消息保存功能
+	return nil
+	
+	// 原始代码已注释
+	/*
 	query := `
 		INSERT INTO uof_messages (message_type, event_id, product_id, sport_id, routing_key, xml_content, timestamp, received_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -27,6 +33,7 @@ func (s *MessageStore) SaveMessage(messageType, eventID string, productID *int, 
 
 	_, err := s.db.Exec(query, messageType, eventIDPtr, productID, sportID, routingKey, xmlContent, timestamp, time.Now())
 	return err
+	*/
 }
 
 // SaveOddsChange 保存赔率变化
