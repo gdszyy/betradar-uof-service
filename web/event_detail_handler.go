@@ -7,10 +7,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
-
-	"uof-service/database"
 )
 
 // EventDetailResponse 赛事详情响应结构
@@ -188,7 +185,7 @@ func (s *Server) getEventMarketsWithSpecifiers(eventID string) ([]MarketWithSpec
 		}
 
 		// 获取该市场的outcomes
-		outcomes, err := s.getMarketOutcomes(marketID)
+		outcomes, err := s.getEventDetailOutcomes(marketID)
 		if err != nil {
 			log.Printf("Warning: failed to get outcomes for market %d: %v", marketID, err)
 			outcomes = []OutcomeWithTabChip{}
@@ -245,8 +242,8 @@ func (s *Server) getEventMarketsWithSpecifiers(eventID string) ([]MarketWithSpec
 	return markets, nil
 }
 
-// getMarketOutcomes 获取市场的所有outcomes
-func (s *Server) getMarketOutcomes(marketID int) ([]OutcomeWithTabChip, error) {
+// getEventDetailOutcomes 获取市场的所有outcomes
+func (s *Server) getEventDetailOutcomes(marketID int) ([]OutcomeWithTabChip, error) {
 	query := `
 		SELECT 
 			outcome_id,
