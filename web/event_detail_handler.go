@@ -21,10 +21,12 @@ type EventDetailResponse struct {
 	HomeTeamName  *string                     `json:"home_team_name"`
 	AwayTeamID    *string                     `json:"away_team_id"`
 	AwayTeamName  *string                     `json:"away_team_name"`
-	HomeScore     *int                        `json:"home_score"`
-	AwayScore     *int                        `json:"away_score"`
-	MatchStatus   *string                     `json:"match_status"`
-	MatchTime     *string                     `json:"match_time"`
+	HomeScore            *int                        `json:"home_score"`
+	AwayScore            *int                        `json:"away_score"`
+	MatchStatus          *string                     `json:"match_status"`
+	MatchStatusDesc      *string                     `json:"match_status_desc"`      // 英文描述
+	MatchStatusDescCN    *string                     `json:"match_status_desc_cn"`   // 中文描述
+	MatchTime            *string                     `json:"match_time"`
 	CreatedAt     string                      `json:"created_at"`
 	UpdatedAt     string                      `json:"updated_at"`
 	Markets       []MarketWithSpecifiersGroup `json:"markets"`
@@ -142,6 +144,13 @@ func (s *Server) getEventDetailFromDB(eventID string) (*EventDetailResponse, err
 
 	if err != nil {
 		return nil, err
+	}
+	
+	// 添加 match_status 描述
+	if event.MatchStatus != nil && s.matchStatusService != nil {
+		enDesc, cnDesc := s.matchStatusService.GetDescriptionWithFallback(*event.MatchStatus)
+		event.MatchStatusDesc = &enDesc
+		event.MatchStatusDescCN = &cnDesc
 	}
 
 	return &event, nil

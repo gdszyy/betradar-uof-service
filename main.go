@@ -290,6 +290,34 @@ func main() {
 	
 	logger.Println("Subscription cleanup started (hourly)")
 	
+	// 启动过期live比赛清理服务 (每2小时执行一次)
+	staleLiveCleanup := services.NewStaleLiveCleanupService(cfg, db, larkNotifier)
+	
+	go func() {
+		// 启动后10分钟执行第一次
+		time.Sleep(10 * time.Minute)
+		
+		if result, err := staleLiveCleanup.ExecuteCleanup(); err != nil {
+			logger.Errorf("[StaleLiveCleanup] ❌ Failed: %v", err)
+		} else {
+			logger.Printf("[StaleLiveCleanup] ✅ Completed: %d deleted, %d updated", result.Deleted, result.Updated)
+		}
+		
+		// 之后每2小时执行一次
+		ticker := time.NewTicker(2 * time.Hour)
+		defer ticker.Stop()
+		
+		for range ticker.C {
+			if result, err := staleLiveCleanup.ExecuteCleanup(); err != nil {
+				logger.Errorf("[StaleLiveCleanup] ❌ Failed: %v", err)
+			} else {
+				logger.Printf("[StaleLiveCleanup] ✅ Completed: %d deleted, %d updated", result.Deleted, result.Updated)
+			}
+		}
+	}()
+	
+	logger.Println("Stale live cleanup started (every 2 hours)")
+	
 	// 启动数据清理服务 (每天凌晨 2 点执行一次)
 	cleanupConfig := services.CleanupConfig{
 		RetainDaysMessages: cfg.CleanupRetainDaysMessages,

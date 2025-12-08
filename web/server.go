@@ -32,6 +32,7 @@ type Server struct {
 	srMapper            *services.SRMapper
 	producerMonitor     *services.ProducerMonitor
 	marketDescService   *services.MarketDescriptionsService
+	matchStatusService  *services.MatchStatusService
 	subscriptionSync    *services.SubscriptionSyncService
 	messageHistoryService *services.MessageHistoryService
 	marketQueryService  *services.MarketQueryService
@@ -72,6 +73,7 @@ func NewServer(cfg *config.Config, db *sql.DB, hub *Hub, larkNotifier *services.
 		autoBookingController: autoBookingController,
 		producerMonitor:   services.NewProducerMonitor(db, larkNotifier, cfg.ProducerCheckIntervalSeconds, cfg.ProducerDownThresholdSeconds),
 		marketDescService: marketDescService,
+		matchStatusService: services.NewMatchStatusService(cfg),
 		subscriptionSync:  services.NewSubscriptionSyncService(db, cfg.AccessToken, cfg.APIBaseURL, cfg.SubscriptionSyncIntervalMinutes),
 		messageHistoryService: services.NewMessageHistoryService(db),
 		marketQueryService: services.NewMarketQueryService(db),
@@ -95,6 +97,14 @@ func (s *Server) Start() error {
 	} else {
 			status := s.marketDescService.GetStatus()
 			log.Printf("[Server] ✅ Market Descriptions Service started. Status: %s", status)
+	}
+	
+	// 启动 Match Status Service
+	if err := s.matchStatusService.Start(); err != nil {
+		log.Printf("[Server] ⚠️  Failed to start Match Status Service: %v", err)
+		log.Println("[Server] Continuing with fallback match status names...")
+	} else {
+		log.Println("[Server] ✅ Match Status Service started")
 	}
 	
 	// 启动 Subscription Sync Service
