@@ -57,9 +57,9 @@ type EnhancedEvent struct {
 
 // MarketGroup 按 market_id 分组的盘口信息
 type MarketGroup struct {
-	MarketID   string                     `json:"sr_market_id"`
-	MarketName string                     `json:"market_name"`
-	Specifiers map[string]SpecifierGroup `json:"specifiers"`
+	MarketID   string            `json:"sr_market_id"`
+	MarketName string            `json:"market_name"`
+	Specifiers []SpecifierGroup `json:"specifiers"`
 }
 
 // SpecifierGroup 按 specifier 分组的盘口信息
@@ -515,40 +515,34 @@ func (s *Server) getEventMarketsGrouped(eventID string, producer string, marketI
 			prodID = int(producerID.Int64)
 		}
 		
-		// 获取或创建 MarketGroup
-		marketGroup, exists := marketsMap[marketID]
-		if !exists {
-			marketGroup = MarketGroup{
-				MarketID:   marketID,
-				MarketName: s.getMarketName(marketID, homeTeamName, awayTeamName, specifierStr),
-				Specifiers: make(map[string]SpecifierGroup),
+			// 获取或创建 MarketGroup
+			marketGroup, exists := marketsMap[marketID]
+			if !exists {
+				marketGroup = MarketGroup{
+					MarketID:   marketID,
+					MarketName: s.getMarketName(marketID, homeTeamName, awayTeamName, specifierStr),
+					Specifiers: []SpecifierGroup{},
+				}
 			}
-		}
-		
-		// 获取该盘口的赔率
-		outcomes, err := s.getMarketOutcomes(marketPK, marketID, homeTeamName, awayTeamName, specifierStr)
-		if err != nil {
-			log.Printf("[API] Failed to get outcomes for market %s: %v", marketID, err)
-			outcomes = []OutcomeInfo{}
-		}
-		
-		// 使用 specifier 作为 key，如果为空则使用 "default"
-		specifierKey := specifierStr
-		if specifierKey == "" {
-			specifierKey = "default"
-		}
-		
-		// 添加 SpecifierGroup
-		marketGroup.Specifiers[specifierKey] = SpecifierGroup{
-			Specifier:  specifierStr,
-			Status:     status,
-			ProducerID: prodID,
-			Outcomes:   outcomes,
-			UpdatedAt:  updatedAt,
-		}
-		
-		// 更新 marketsMap
-		marketsMap[marketID] = marketGroup
+			
+			// 获取该盘口的赔率
+			outcomes, err := s.getMarketOutcomes(marketPK, marketID, homeTeamName, awayTeamName, specifierStr)
+			if err != nil {
+				log.Printf("[API] Failed to get outcomes for market %s: %v", marketID, err)
+				outcomes = []OutcomeInfo{}
+			}
+			
+			// 添加 SpecifierGroup 到列表
+			marketGroup.Specifiers = append(marketGroup.Specifiers, SpecifierGroup{
+				Specifier:  specifierStr,
+				Status:     status,
+				ProducerID: prodID,
+				Outcomes:   outcomes,
+				UpdatedAt:  updatedAt,
+			})
+			
+			// 更新 marketsMap
+			marketsMap[marketID] = marketGroup
 	}
 	
 	return marketsMap, nil
