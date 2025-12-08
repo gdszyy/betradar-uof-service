@@ -196,8 +196,8 @@ func main() {
 	
 	go func() {
 		if err := amqpConsumer.Start(msgs); err != nil {
-	logger.Fatalf("AMQP consumer error: %v", err)
-	larkNotifier.NotifyError("AMQP Consumer", err.Error())
+			logger.Fatalf("AMQP consumer error: %v", err)
+			larkNotifier.NotifyError("AMQP Consumer", err.Error())
 		}
 	}()
 		
