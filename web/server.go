@@ -240,6 +240,9 @@ api.HandleFunc("/leagues", s.handleGetLeagues).Methods("GET")
 	// WebSocket路由
 	router.HandleFunc("/ws", s.handleWebSocket)
 
+	// 监控前端静态文件
+	router.PathPrefix("/monitor/").Handler(http.StripPrefix("/monitor/", http.FileServer(http.Dir("./static/monitor"))))
+
 	// 静态文件(如果需要)
 	router.PathPrefix("/").Handler(http.FileServer(http.Dir("./static")))
 

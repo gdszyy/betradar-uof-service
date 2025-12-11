@@ -18,8 +18,8 @@ type WSMessage struct {
 	ProductID   *int    `json:"product_id,omitempty"`
 	RoutingKey  string  `json:"routing_key,omitempty"`
 	Timestamp   int64   `json:"timestamp,omitempty"`
+	XML         string  `json:"xml,omitempty"` // 原始XML内容
 	Data        interface{} `json:"data,omitempty"`
-	// XML 字段已移除,使用 Data 字段传递结构化数据
 }
 
 // Client WebSocket客户端
@@ -121,12 +121,15 @@ func (h *Hub) Broadcast(message interface{}) {
 		if v, ok := msgMap["routing_key"].(string); ok {
 			wsMsg.RoutingKey = v
 		}
-		if v, ok := msgMap["timestamp"].(int64); ok {
-			wsMsg.Timestamp = v
-		}
-		if v, ok := msgMap["data"]; ok {
-			wsMsg.Data = v
-		}
+			if v, ok := msgMap["timestamp"].(int64); ok {
+				wsMsg.Timestamp = v
+			}
+			if v, ok := msgMap["xml"].(string); ok {
+				wsMsg.XML = v
+			}
+			if v, ok := msgMap["data"]; ok {
+				wsMsg.Data = v
+			}
 		
 		h.broadcast <- wsMsg
 	}

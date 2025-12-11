@@ -127,7 +127,8 @@ func (p *MessageProcessor) processMessage(msg BrokerMessage) {
 	timestamp := base.Timestamp
 
 	// 广播到WebSocket客户端 (从 AMQPConsumer 迁移过来)
-	if p.broadcaster != nil {
+	// 过滤alive心跳消息
+	if p.broadcaster != nil && messageType != "alive" {
 		data := p.extractMessageData(messageType, xmlContent)
 		p.broadcaster.Broadcast(map[string]interface{}{
 			"type":         "message",
@@ -135,6 +136,7 @@ func (p *MessageProcessor) processMessage(msg BrokerMessage) {
 			"event_id":     eventID,
 			"product_id":   productID,
 			"timestamp":    timestamp,
+			"xml":          xmlContent,
 			"data":         data,
 		})
 	}
