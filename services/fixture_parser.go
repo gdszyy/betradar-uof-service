@@ -17,8 +17,74 @@ type FixtureParser struct {
 	srnMappingService *SRNMappingService
 	logger           *log.Logger
 	apiBaseURL       string
-	accessToken      string
-}
+		accessToken      string
+	}
+	
+	// SportEventSummary summary接口响应结构 (与 stale_live_cleanup.go 保持一致)
+	type SportEventSummary struct {
+		XMLName xml.Name `xml:"match_summary"`
+		SportEvent struct {
+			ID     string `xml:"id,attr"`
+			Status string `xml:"status,attr"` // not_started, live, ended, closed, cancelled, postponed
+			Tournament struct {
+				Sport struct {
+					ID   string `xml:"id,attr"` // sport_id
+					Name string `xml:"name,attr"`
+				} `xml:"sport"`
+			} `xml:"tournament"`
+		} `xml:"sport_event"`
+		SportEventStatus struct {
+			Status      string `xml:"status,attr"`
+			MatchStatus string `xml:"match_status,attr"`
+			HomeScore   *int   `xml:"home_score,attr"`
+			AwayScore   *int   `xml:"away_score,attr"`
+		} `xml:"sport_event_status"`
+	}
+	
+	// fetchSportIDFromSummary 调用 Summary API 获取 sport_id
+	func (p *FixtureParser) fetchSportIDFromSummary(eventID string) (string, error) {
+		url := fmt.Sprintf("%s/sports/en/sport_events/%s/summary.xml", p.apiBaseURL, eventID)
+	
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return "", fmt.Errorf("failed to create request for summary: %w", err)
+		}
+	
+		req.Header.Set("x-access-token", p.accessToken)
+	
+		resp, err := http.DefaultClient.Do(req) // 使用 http.DefaultClient 避免循环依赖
+		if err != nil {
+			return "", fmt.Errorf("failed to send request for summary: %w", err)
+		}
+		defer resp.Body.Close()
+	
+		if resp.StatusCode != http.StatusOK {
+			if resp.StatusCode == http.StatusNotFound {
+				return "", nil // 404 不作为错误，返回空 sport_id
+			}
+			body, _ := io.ReadAll(resp.Body)
+			return "", fmt.Errorf("summary API returned status %d: %s", resp.StatusCode, string(body))
+		}
+	
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return "", fmt.Errorf("failed to read summary response body: %w", err)
+		}
+	
+		var summary SportEventSummary
+		if err := xml.Unmarshal(body, &summary); err != nil {
+			return "", fmt.Errorf("failed to parse summary XML: %w", err)
+		}
+	
+		sportID := summary.SportEvent.Tournament.Sport.ID
+		if sportID != "" {
+			p.logger.Printf("[FixtureParser] ✓ Fetched sport_id=%s for event %s from Summary API", sportID, eventID)
+		} else {
+			p.logger.Printf("[FixtureParser] ⚠️  Summary API returned empty sport_id for event %s", eventID)
+		}
+	
+		return sportID, nil
+	}
 
 // FixtureMessage Fixture 消息结构
 type FixtureMessage struct {
@@ -117,7 +183,18 @@ func (p *FixtureParser) ParseAndStore(xmlContent string) error {
 		if err := p.storeFixtureData(
 			fixture.EventID,
 			srnID,
-			fixture.Sport.ID,
+				// 检查 fixture 消息中是否包含 sport_id
+				sportID := fixture.Sport.ID
+				if sportID == "" {
+					// 如果缺失，则调用 Summary API 作为兜底
+					fetchedSportID, err := p.fetchSportIDFromSummary(fixture.EventID)
+					if err != nil {
+						p.logger.Printf("[FixtureParser] ❌ Failed to fetch sport_id from Summary API for %s: %v", fixture.EventID, err)
+					} else if fetchedSportID != "" {
+						sportID = fetchedSportID
+					}
+				}
+				sportID,
 			fixture.Tournament.Category.ID,
 			fixture.Tournament.Category.Name,
 			fixture.Tournament.ID,

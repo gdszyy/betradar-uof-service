@@ -224,6 +224,12 @@ type SportEventSummary struct {
 	SportEvent struct {
 		ID     string `xml:"id,attr"`
 		Status string `xml:"status,attr"` // not_started, live, ended, closed, cancelled, postponed
+		Tournament struct {
+			Sport struct {
+				ID   string `xml:"id,attr"` // sport_id
+				Name string `xml:"name,attr"`
+			} `xml:"sport"`
+		} `xml:"tournament"`
 	} `xml:"sport_event"`
 	SportEventStatus struct {
 		Status      string `xml:"status,attr"`
@@ -245,19 +251,22 @@ func (s *StaleLiveCleanupService) updateMatchInDB(eventID string, summary *Sport
 	
 	// 如果比赛已结束，可以选择删除或更新状态
 	if status == "ended" || status == "closed" || status == "cancelled" {
-		// 更新为ended状态而不是删除，保留历史记录
-		query := `
-			UPDATE tracked_events 
-			SET status = $1, 
-			    match_status = $2,
-			    home_score = $3,
-			    away_score = $4,
-			    updated_at = $5
-			WHERE event_id = $6
-		`
-		_, err := s.db.Exec(query, status, matchStatus, homeScore, awayScore, time.Now(), eventID)
-		return err
-	}
+// 更新为ended状态而不是删除，保留历史记录
+			sportID := summary.SportEvent.Tournament.Sport.ID
+			
+			query := `
+				UPDATE tracked_events 
+				SET status = $1, 
+				    match_status = $2,
+				    home_score = $3,
+				    away_score = $4,
+				    sport_id = COALESCE(NULLIF($5, ''), sport_id), -- 仅在 sport_id 不为空时更新
+				    updated_at = $6
+				WHERE event_id = $7
+			`
+			_, err := s.db.Exec(query, status, matchStatus, homeScore, awayScore, sportID, time.Now(), eventID)
+			return err
+		}
 	
 	// 比赛仍在进行，更新状态信息
 	query := `
