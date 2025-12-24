@@ -218,26 +218,7 @@ func (s *StaleLiveCleanupService) updateMatchStatus(eventID string) error {
 	return s.updateMatchInDB(eventID, &summary)
 }
 
-// SportEventSummary summary接口响应结构
-type SportEventSummary struct {
-	XMLName xml.Name `xml:"match_summary"`
-	SportEvent struct {
-		ID     string `xml:"id,attr"`
-		Status string `xml:"status,attr"` // not_started, live, ended, closed, cancelled, postponed
-		Tournament struct {
-			Sport struct {
-				ID   string `xml:"id,attr"` // sport_id
-				Name string `xml:"name,attr"`
-			} `xml:"sport"`
-		} `xml:"tournament"`
-	} `xml:"sport_event"`
-	SportEventStatus struct {
-		Status      string `xml:"status,attr"`
-		MatchStatus string `xml:"match_status,attr"`
-		HomeScore   *int   `xml:"home_score,attr"`
-		AwayScore   *int   `xml:"away_score,attr"`
-	} `xml:"sport_event_status"`
-}
+
 
 // updateMatchInDB 更新数据库中的比赛状态
 func (s *StaleLiveCleanupService) updateMatchInDB(eventID string, summary *SportEventSummary) error {
