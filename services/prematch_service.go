@@ -40,6 +40,20 @@ type PrematchSport struct {
 	Name string `xml:"name,attr"`
 }
 
+// PrematchCategory 分类结构
+type PrematchCategory struct {
+	ID   string `xml:"id,attr"`
+	Name string `xml:"name,attr"`
+}
+
+// PrematchTournament 锦标赛结构
+type PrematchTournament struct {
+	ID       string            `xml:"id,attr"`
+	Name     string            `xml:"name,attr"`
+	Sport    PrematchSport     `xml:"sport"`
+	Category PrematchCategory  `xml:"category"`
+}
+
 // PrematchEvent Pre-match 赛事结构
 type PrematchEvent struct {
 	ID          string               `xml:"id,attr"`
@@ -47,6 +61,7 @@ type PrematchEvent struct {
 	Status      string               `xml:"status,attr"`
 	LiveOdds    string               `xml:"liveodds,attr"`
 	Sport       PrematchSport        `xml:"sport"`
+	Tournament  PrematchTournament   `xml:"tournament"`
 	Competitors []PrematchCompetitor `xml:"competitors>competitor"`
 }
 
@@ -151,9 +166,13 @@ func (s *PrematchService) StorePrematchEvents(events []PrematchEvent) (int, erro
 			}
 		}
 
-		// 获取 sport_id
-		sportID := event.Sport.ID
-		if sportID == "" {
+		// 获取 sport_id: 优先从 Tournament.Sport 获取,其次从 Sport 获取
+		sportID := ""
+		if event.Tournament.Sport.ID != "" {
+			sportID = event.Tournament.Sport.ID
+		} else if event.Sport.ID != "" {
+			sportID = event.Sport.ID
+		} else {
 			sportID = "unknown"
 		}
 

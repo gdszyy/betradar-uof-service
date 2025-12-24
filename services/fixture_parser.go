@@ -178,37 +178,49 @@ func (p *FixtureParser) ParseAndStore(xmlContent string) error {
 		scheduleTime = &t
 	}
 
-			// 存储到数据库
-			statusOrder := p.getStatusOrder(fixture.Status)
+	// 存储到数据库
+	statusOrder := p.getStatusOrder(fixture.Status)
 
-			// 检查 fixture 消息中是否包含 sport_id
-			sportID := fixture.Sport.ID
-			if sportID == "" {
-				// 如果缺失，则调用 Summary API 作为兜底
-				fetchedSportID, err := p.fetchSportIDFromSummary(fixture.EventID)
-				if err != nil {
-					p.logger.Printf("[FixtureParser] ❌ Failed to fetch sport_id from Summary API for %s: %v", fixture.EventID, err)
-				} else if fetchedSportID != "" {
-					sportID = fetchedSportID
-				}
-			}
+	// 获取 sport_id: 优先从 Tournament.Sport 获取,其次从 Sport 获取,最后调用 Summary API
+	sportID := ""
+	if fixture.Tournament.Sport.ID != "" {
+		sportID = fixture.Tournament.Sport.ID
+		p.logger.Printf("[FixtureParser] ✓ Got sport_id=%s from Tournament.Sport for event %s", sportID, fixture.EventID)
+	} else if fixture.Sport.ID != "" {
+		sportID = fixture.Sport.ID
+		p.logger.Printf("[FixtureParser] ✓ Got sport_id=%s from Sport for event %s", sportID, fixture.EventID)
+	}
+	
+	// 如果仍然为空,则调用 Summary API 作为兜底
+	if sportID == "" {
+		p.logger.Printf("[FixtureParser] ⚠️  sport_id missing in Fixture message for %s, calling Summary API...", fixture.EventID)
+		fetchedSportID, err := p.fetchSportIDFromSummary(fixture.EventID)
+		if err != nil {
+			p.logger.Printf("[FixtureParser] ❌ Failed to fetch sport_id from Summary API for %s: %v", fixture.EventID, err)
+		} else if fetchedSportID != "" {
+			sportID = fetchedSportID
+			p.logger.Printf("[FixtureParser] ✓ Fetched sport_id=%s from Summary API for event %s", sportID, fixture.EventID)
+		} else {
+			p.logger.Printf("[FixtureParser] ⚠️  Summary API returned empty sport_id for event %s", fixture.EventID)
+		}
+	}
 
-			if err := p.storeFixtureData(
-				fixture.EventID,
-				srnID,
-				sportID,
-				fixture.Tournament.Category.ID,
-			fixture.Tournament.Category.Name,
-			fixture.Tournament.ID,
-			fixture.Tournament.Name,
-			scheduleTime,
-			homeTeamID,
-			homeTeamName,
-			awayTeamID,
-			awayTeamName,
-			fixture.Status,
-			statusOrder,
-		); err != nil {
+	if err := p.storeFixtureData(
+		fixture.EventID,
+		srnID,
+		sportID,
+		fixture.Tournament.Category.ID,
+		fixture.Tournament.Category.Name,
+		fixture.Tournament.ID,
+		fixture.Tournament.Name,
+		scheduleTime,
+		homeTeamID,
+		homeTeamName,
+		awayTeamID,
+		awayTeamName,
+		fixture.Status,
+		statusOrder,
+	); err != nil {
 		return fmt.Errorf("failed to store fixture data: %w", err)
 	}
 
