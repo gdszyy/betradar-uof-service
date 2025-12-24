@@ -178,24 +178,26 @@ func (p *FixtureParser) ParseAndStore(xmlContent string) error {
 		scheduleTime = &t
 	}
 
-		// 存储到数据库
-		statusOrder := p.getStatusOrder(fixture.Status)
-		if err := p.storeFixtureData(
-			fixture.EventID,
-			srnID,
-				// 检查 fixture 消息中是否包含 sport_id
-				sportID := fixture.Sport.ID
-				if sportID == "" {
-					// 如果缺失，则调用 Summary API 作为兜底
-					fetchedSportID, err := p.fetchSportIDFromSummary(fixture.EventID)
-					if err != nil {
-						p.logger.Printf("[FixtureParser] ❌ Failed to fetch sport_id from Summary API for %s: %v", fixture.EventID, err)
-					} else if fetchedSportID != "" {
-						sportID = fetchedSportID
-					}
+			// 存储到数据库
+			statusOrder := p.getStatusOrder(fixture.Status)
+
+			// 检查 fixture 消息中是否包含 sport_id
+			sportID := fixture.Sport.ID
+			if sportID == "" {
+				// 如果缺失，则调用 Summary API 作为兜底
+				fetchedSportID, err := p.fetchSportIDFromSummary(fixture.EventID)
+				if err != nil {
+					p.logger.Printf("[FixtureParser] ❌ Failed to fetch sport_id from Summary API for %s: %v", fixture.EventID, err)
+				} else if fetchedSportID != "" {
+					sportID = fetchedSportID
 				}
+			}
+
+			if err := p.storeFixtureData(
+				fixture.EventID,
+				srnID,
 				sportID,
-			fixture.Tournament.Category.ID,
+				fixture.Tournament.Category.ID,
 			fixture.Tournament.Category.Name,
 			fixture.Tournament.ID,
 			fixture.Tournament.Name,
