@@ -76,10 +76,10 @@ func main() {
 	// 创建 Feishu 通知器
 	larkNotifier := services.NewLarkNotifier(cfg.LarkWebhook)
 	
-	// 发送服务启动通知
-	if err := larkNotifier.NotifyServiceStart(cfg.BookmakerID, cfg.Products); err != nil {
-		logger.Errorf("Failed to send startup notification: %v", err)
-	}
+		// 发送服务启动通知 (已根据要求关闭常规报送)
+		// if err := larkNotifier.NotifyServiceStart(cfg.BookmakerID, cfg.Products); err != nil {
+		// 	logger.Errorf("Failed to send startup notification: %v", err)
+		// }
 
 	// 创建消息存储服务
 	messageStore := services.NewMessageStore(db)
@@ -244,20 +244,18 @@ func main() {
 	logger.Printf("Web server started on port %s", cfg.Port)
 
 	// 启动比赛监控 (每小时执行一次)
-	matchMonitor := services.NewMatchMonitor(cfg, nil)
-	
-	// 立即执行一次
-	go matchMonitor.CheckAndReportWithNotifier(larkNotifier)
-	
-	// 定期执行
-	go func() {
-		ticker := time.NewTicker(1 * time.Hour)
-		defer ticker.Stop()
+	matchMonitor := services.NewMatchMonit		// 启动后立即执行一次
+		go matchMonitor.CheckAndReportWithNotifier(nil) // 传入 nil 以关闭常规报送
 		
-		for range ticker.C {
-	matchMonitor.CheckAndReportWithNotifier(larkNotifier)
-		}
-	}()
+		// 定期执行
+		go func() {
+			ticker := time.NewTicker(1 * time.Hour)
+			defer ticker.Stop()
+			
+			for range ticker.C {
+		matchMonitor.CheckAndReportWithNotifier(nil) // 传入 nil 以关闭常规报送
+			}
+		}()
 	
 	logger.Println("Match monitor started (hourly)")
 	
@@ -316,20 +314,41 @@ func main() {
 		}
 	}()
 	
-	logger.Println("Stale live cleanup started (every 2 hours)")
-	
-	// 启动数据清理服务 (每天凌晨 2 点执行一次)
-	cleanupConfig := services.CleanupConfig{
-		RetainDaysMessages: cfg.CleanupRetainDaysMessages,
-		RetainDaysOdds:     cfg.CleanupRetainDaysOdds,
-		RetainDaysBets:     cfg.CleanupRetainDaysBets,
-		RetainDaysLiveData: cfg.CleanupRetainDaysLiveData,
-		RetainDaysEvents:   cfg.CleanupRetainDaysEvents,
-	}
-	dataCleanup := services.NewDataCleanupService(db, cleanupConfig)
-	
-	// 定期执行数据清理
-	go func() {
+		logger.Println("Stale live cleanup started (every 2 hours)")
+		
+		// 启动业务监控服务
+		businessMonitor := services.NewBusinessMonitor(db, larkNotifier)
+		businessMonitor.Start()
+		logger.Println("Business monitor started (every 10 minutes)")
+		
+			// 启动数据清理服务 (每天凌晨 2 点执行一次)
+		cleanupConfig := services.CleanupConfig{
+			RetainDaysMessages: 3, // 强制设置为 3 天
+			RetainDaysOdds:     cfg.CleanupRetainDaysOdds,
+			RetainDaysBets:     cfg.CleanupRetainDaysBets,
+			RetainDaysLiveData: cfg.CleanupRetainDaysLiveData,
+			RetainDaysEvents:   cfg.CleanupRetainDaysEvents,
+		}
+		dataCleanup := services.NewDataCleanupService(db, cleanupConfig)
+		
+		// 启动时立即执行一次清理
+		go func() {
+			logger.Println("[DataCleanup] Running initial cleanup...")
+			if results, err := dataCleanup.ExecuteCleanup(); err != nil {
+				logger.Errorf("[DataCleanup] ❌ Initial cleanup failed: %v", err)
+			} else {
+				totalDeleted := int64(0)
+				for _, result := range results {
+					if result.DeletedRows > 0 {
+						totalDeleted += result.DeletedRows
+					}
+				}
+				logger.Printf("[DataCleanup] ✅ Initial cleanup completed: %d total rows deleted", totalDeleted)
+			}
+		}()
+		
+		// 定期执行数据清理
+		go func() {
 		// 计算到下一个凌晨 2 点的时间
 		now := time.Now()
 		nextRun := time.Date(now.Year(), now.Month(), now.Day(), 2, 0, 0, 0, now.Location())
@@ -356,13 +375,11 @@ func main() {
 	totalDeleted += result.DeletedRows
 		}
 	}
-	logger.Printf("[DataCleanup] ✅ Cleanup completed: %d total rows deleted", totalDeleted)
-	
-	// 发送通知
-	if totalDeleted > 0 {
-		larkNotifier.NotifyDataCleanup(totalDeleted, results)
-	}
-		}
+	logger.Printf("[DataCl		logger.Printf("[DataCleanup] ✅ Cleanup completed: %d total rows deleted", totalDeleted)
+		
+		// larkNotifier.NotifyDataCleanup(totalDeleted, results) // 关闭常规报送
+			}
+		}()		}
 		
 		// 之后每 24 小时执行一次
 		ticker := time.NewTicker(24 * time.Hour)
@@ -456,7 +473,7 @@ func main() {
 	
 	// 发送通知
 	if result.Success > 0 {
-		larkNotifier.NotifyPrematchBooking(result.TotalEvents, result.Bookable, result.Success, result.Failed)
+		// larkNotifier.NotifyPrematchBooking(result.TotalEvents, result.Bookable, result.Success, result.Failed)
 	}
 		}
 	}()
