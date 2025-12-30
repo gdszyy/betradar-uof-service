@@ -189,7 +189,7 @@ func (s *StartupBookingService) bookMatch(matchID string) error {
 	
 	// 更新数据库订阅状态
 	_, err = s.db.Exec(
-		"UPDATE tracked_events SET subscribed = true, updated_at = $1 WHERE event_id = $2",
+		"UPDATE tracked_events SET subscribed = true, live_odds = 'booked', updated_at = $1 WHERE event_id = $2",
 		time.Now(), matchID,
 	)
 	if err != nil {

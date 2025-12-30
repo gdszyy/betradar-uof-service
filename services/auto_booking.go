@@ -67,8 +67,8 @@ func (s *AutoBookingService) BookMatch(matchID string) error {
 	// 更新数据库中的订阅状态
 	if s.db != nil {
 		_, err = s.db.Exec(
-			"UPDATE tracked_events SET subscribed = true WHERE event_id = $1",
-			matchID,
+			"UPDATE tracked_events SET subscribed = true, live_odds = 'booked', updated_at = $1 WHERE event_id = $2",
+			time.Now(), matchID,
 		)
 		if err != nil {
 			logger.Printf("[AutoBooking] ⚠️  Failed to update subscribed status: %v", err)
