@@ -227,7 +227,7 @@ func (p *FixtureParser) ParseAndStore(xmlContent string) error {
 	}
 
 	p.logger.Printf("Stored fixture data for event %s: home=%s, away=%s, live_odds=%s, scheduled=%v",
-		eventID, homeTeamName, awayTeamName, liveOdds, scheduleTime)
+		srnID, homeTeamName, awayTeamName, fixture.LiveOdds, scheduleTime)
 
 	return nil
 }
