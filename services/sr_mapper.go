@@ -81,11 +81,12 @@ var SportMapping = map[string]string{
 	"sr:sport:6":  "handball",      // 手球
 	"sr:sport:12": "rugby",         // 橄榄球
 	"sr:sport:16": "aussie_rules",  // 澳式足球
-	"sr:sport:21": "volleyball",    // 排球
-	"sr:sport:22": "cricket",       // 板球
-	"sr:sport:23": "darts",         // 飞镖
-	"sr:sport:31": "badminton",     // 羽毛球
-}
+		"sr:sport:20": "table_tennis",  // 乒乓球
+		"sr:sport:21": "cricket",       // 板球
+		"sr:sport:22": "darts",         // 飞镖
+		"sr:sport:23": "volleyball",    // 排球
+		"sr:sport:31": "badminton",     // 羽毛球
+	}
 
 // SportChineseName 运动类型中文名称
 var SportChineseName = map[string]string{
@@ -97,11 +98,12 @@ var SportChineseName = map[string]string{
 	"sr:sport:6":  "手球",
 	"sr:sport:12": "橄榄球",
 	"sr:sport:16": "澳式足球",
-	"sr:sport:21": "排球",
-	"sr:sport:22": "板球",
-	"sr:sport:23": "飞镖",
-	"sr:sport:31": "羽毛球",
-}
+		"sr:sport:20": "乒乓球",
+		"sr:sport:21": "板球",
+		"sr:sport:22": "飞镖",
+		"sr:sport:23": "排球",
+		"sr:sport:31": "羽毛球",
+	}
 
 // EventStatusMapping 赛事状态映射
 var EventStatusMapping = map[string]string{
