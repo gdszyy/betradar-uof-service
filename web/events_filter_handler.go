@@ -423,18 +423,18 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 			argIndex += 2
 		}
 		
-	// 联赛 ID 筛选 (支持多选)
-	if len(filters.TournamentIDs) > 0 {
-		placeholders := []string{}
-		for _, tournamentID := range filters.TournamentIDs {
-			placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
-			args = append(args, tournamentID)
-			argIndex++
+		// 联赛 ID 筛选 (支持多选)
+		if len(filters.TournamentIDs) > 0 {
+			placeholders := []string{}
+			for _, tournamentID := range filters.TournamentIDs {
+				placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
+				args = append(args, tournamentID)
+				argIndex++
+			}
+			if len(placeholders) > 0 {
+				conditions = append(conditions, fmt.Sprintf("e.tournament_id IN (%s)", strings.Join(placeholders, ", ")))
+			}
 		}
-		if len(placeholders) > 0 {
-			conditions = append(conditions, fmt.Sprintf("e.tournament_id IN (%s)", strings.Join(placeholders, ", ")))
-		}
-	}
 		
 		// 搜索 (队伍名称或赛事 ID)
 		if filters.Search != "" {
