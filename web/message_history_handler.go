@@ -34,7 +34,7 @@ func (h *MessageHistoryHandler) GetEventMessages(w http.ResponseWriter, r *http.
 
 	// 获取 limit 参数
 	limit := 5
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+	if limitStr := getQueryParam(r, "limit"); limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
 			limit = l
 		}
@@ -57,14 +57,14 @@ func (h *MessageHistoryHandler) GetEventMessages(w http.ResponseWriter, r *http.
 func (h *MessageHistoryHandler) GetRecentMessages(w http.ResponseWriter, r *http.Request) {
 	// 获取 limit 参数
 	limit := 10
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+	if limitStr := getQueryParam(r, "limit"); limitStr != "" {
 		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
 			limit = l
 		}
 	}
 
 	// 获取 type 参数
-	messageType := r.URL.Query().Get("type")
+	messageType := getQueryParam(r, "type")
 
 	// 获取消息历史
 	response, err := h.service.GetRecentMessages(limit, messageType)

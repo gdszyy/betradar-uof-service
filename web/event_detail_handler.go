@@ -427,7 +427,7 @@ func extractEventIDFromPath(path string, prefix string) string {
 // 支持 /api/events/{eventId} 和 /api/event/{eventId}
 func (s *Server) handleGetEventDetailByID(w http.ResponseWriter, r *http.Request) {
 	// 尝试从URL参数中获取eventId
-	eventID := r.URL.Query().Get("event_id")
+	eventID := getQueryParam(r, "event_id")
 	
 	if eventID == "" {
 		// 尝试从路径中提取

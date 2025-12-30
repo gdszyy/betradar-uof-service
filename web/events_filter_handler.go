@@ -164,6 +164,15 @@ type EventFilters struct {
 	MinPopularity float64 // 最小热门度评分 (0-100)
 }
 
+// getQueryParam 获取查询参数，如果值为 "null" 则忽略
+func getQueryParam(r *http.Request, key string) string {
+	val := r.URL.Query().Get(key)
+	if strings.ToLower(val) == "null" {
+		return ""
+	}
+	return val
+}
+
 // parseEventFilters 解析查询参数
 func parseEventFilters(r *http.Request) *EventFilters {
 	filters := &EventFilters{
@@ -172,35 +181,35 @@ func parseEventFilters(r *http.Request) *EventFilters {
 	}
 	
 	// 分页参数
-	if pageParam := r.URL.Query().Get("page"); pageParam != "" {
+	if pageParam := getQueryParam(r, "page"); pageParam != "" {
 		if p, err := strconv.Atoi(pageParam); err == nil && p > 0 {
 			filters.Page = p
 		}
 	}
 	
-	if pageSizeParam := r.URL.Query().Get("page_size"); pageSizeParam != "" {
+	if pageSizeParam := getQueryParam(r, "page_size"); pageSizeParam != "" {
 		if ps, err := strconv.Atoi(pageSizeParam); err == nil && ps > 0 && ps <= 500 {
 			filters.PageSize = ps
 		}
 	}
 	
 	// 状态筛选
-	if isLiveParam := r.URL.Query().Get("is_live"); isLiveParam != "" {
+	if isLiveParam := getQueryParam(r, "is_live"); isLiveParam != "" {
 		isLive := isLiveParam == "true" || isLiveParam == "1"
 		filters.IsLive = &isLive
 	}
 	
-	filters.Status = r.URL.Query().Get("status")
+	filters.Status = getQueryParam(r, "status")
 	
 	// include_ended 参数 (默认 false, 排除已结束的比赛)
-	if includeEndedParam := r.URL.Query().Get("include_ended"); includeEndedParam != "" {
+	if includeEndedParam := getQueryParam(r, "include_ended"); includeEndedParam != "" {
 		filters.IncludeEnded = includeEndedParam == "true" || includeEndedParam == "1"
 	}
 	
 	// 联赛筛选 (支持多选,逗号分隔) - 同时支持 tournament_id 和 league_id
-	tournamentID := r.URL.Query().Get("tournament_id")
+	tournamentID := getQueryParam(r, "tournament_id")
 	if tournamentID == "" {
-		tournamentID = r.URL.Query().Get("league_id")
+		tournamentID = getQueryParam(r, "league_id")
 	}
 	if tournamentID != "" {
 		filters.TournamentIDs = strings.Split(tournamentID, ",")
@@ -210,7 +219,7 @@ func parseEventFilters(r *http.Request) *EventFilters {
 	}
 	
 	// 体育类型筛选 (支持多选,逗号分隔)
-	if sportID := r.URL.Query().Get("sport_id"); sportID != "" {
+	if sportID := getQueryParam(r, "sport_id"); sportID != "" {
 		filters.SportIDs = strings.Split(sportID, ",")
 		// 去除空格
 		for i := range filters.SportIDs {
@@ -219,23 +228,23 @@ func parseEventFilters(r *http.Request) *EventFilters {
 	}
 	
 	// 开赛时间筛选
-	if startFrom := r.URL.Query().Get("start_time_from"); startFrom != "" {
+	if startFrom := getQueryParam(r, "start_time_from"); startFrom != "" {
 		if t, err := parseDateTime(startFrom); err == nil {
 			filters.StartTimeFrom = &t
 		}
 	}
 	
-	if startTo := r.URL.Query().Get("start_time_to"); startTo != "" {
+	if startTo := getQueryParam(r, "start_time_to"); startTo != "" {
 		if t, err := parseDateTime(startTo); err == nil {
 			filters.StartTimeTo = &t
 		}
 	}
 	
 	// 盘口组筛选
-	filters.MarketGroup = r.URL.Query().Get("market_group")
+	filters.MarketGroup = getQueryParam(r, "market_group")
 	
 	// 盘口类型筛选 (支持多选,逗号分隔)
-	if marketID := r.URL.Query().Get("market_id"); marketID != "" {
+	if marketID := getQueryParam(r, "market_id"); marketID != "" {
 		filters.MarketIDs = strings.Split(marketID, ",")
 		for i := range filters.MarketIDs {
 			filters.MarketIDs[i] = strings.TrimSpace(filters.MarketIDs[i])
@@ -243,28 +252,28 @@ func parseEventFilters(r *http.Request) *EventFilters {
 	}
 	
 	// 队伍筛选 (支持多选,逗号分隔)
-	if teamID := r.URL.Query().Get("team_id"); teamID != "" {
+	if teamID := getQueryParam(r, "team_id"); teamID != "" {
 		filters.TeamIDs = strings.Split(teamID, ",")
 		for i := range filters.TeamIDs {
 			filters.TeamIDs[i] = strings.TrimSpace(filters.TeamIDs[i])
 		}
 	}
-	filters.TeamName = r.URL.Query().Get("team_name")
+	filters.TeamName = getQueryParam(r, "team_name")
 	
 
 	
 	// 搜索
-	filters.Search = r.URL.Query().Get("search")
+	filters.Search = getQueryParam(r, "search")
 	
 	// 热门度筛选
-	if popularParam := r.URL.Query().Get("popular"); popularParam != "" {
+	if popularParam := getQueryParam(r, "popular"); popularParam != "" {
 		popular := popularParam == "true" || popularParam == "1"
 		filters.Popular = &popular
 	}
 	
-	filters.SortBy = r.URL.Query().Get("sort_by")
+	filters.SortBy = getQueryParam(r, "sort_by")
 	
-	if minPopParam := r.URL.Query().Get("min_popularity"); minPopParam != "" {
+	if minPopParam := getQueryParam(r, "min_popularity"); minPopParam != "" {
 		if minPop, err := strconv.ParseFloat(minPopParam, 64); err == nil && minPop >= 0 && minPop <= 100 {
 			filters.MinPopularity = minPop
 		}

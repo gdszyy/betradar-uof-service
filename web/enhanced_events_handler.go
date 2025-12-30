@@ -98,37 +98,37 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 	log.Println("[API] Getting enhanced events with markets...")
 	
 	// 查询参数
-	status := r.URL.Query().Get("status")
-	subscribed := r.URL.Query().Get("subscribed")
-	sportID := r.URL.Query().Get("sport_id")
-	search := r.URL.Query().Get("search")
-	producer := r.URL.Query().Get("producer")
-	isLive := r.URL.Query().Get("is_live")
-	isEnded := r.URL.Query().Get("is_ended")
-		hasMarkets := r.URL.Query().Get("has_markets")
-		tournamentID := r.URL.Query().Get("tournament_id")
-		if tournamentID == "" {
-			tournamentID = r.URL.Query().Get("league_id")
-		}
-		marketIDs := r.URL.Query().Get("market_ids") // 新增: 逗号分隔的 market ID 列表
-	sortBy := r.URL.Query().Get("sort_by") // 新增: 排序方式 (time, popularity)
-	sortOrder := r.URL.Query().Get("sort_order") // 新增: 排序顺序 (asc, desc)
+	status := getQueryParam(r, "status")
+	subscribed := getQueryParam(r, "subscribed")
+	sportID := getQueryParam(r, "sport_id")
+	search := getQueryParam(r, "search")
+	producer := getQueryParam(r, "producer")
+	isLive := getQueryParam(r, "is_live")
+	isEnded := getQueryParam(r, "is_ended")
+	hasMarkets := getQueryParam(r, "has_markets")
+	tournamentID := getQueryParam(r, "tournament_id")
+	if tournamentID == "" {
+		tournamentID = getQueryParam(r, "league_id")
+	}
+	marketIDs := getQueryParam(r, "market_ids") // 新增: 逗号分隔的 market ID 列表
+	sortBy := getQueryParam(r, "sort_by") // 新增: 排序方式 (time, popularity)
+	sortOrder := getQueryParam(r, "sort_order") // 新增: 排序顺序 (asc, desc)
 	
 	page := 1
 	pageSize := 20 // 默认改为 20，降低负载
 	
-	if pageParam := r.URL.Query().Get("page"); pageParam != "" {
+	if pageParam := getQueryParam(r, "page"); pageParam != "" {
 		if p, err := strconv.Atoi(pageParam); err == nil && p > 0 {
 			page = p
 		}
 	}
 	
 	// 限制最大 page_size 为 50，防止查询过载
-	if pageSizeParam := r.URL.Query().Get("page_size"); pageSizeParam != "" {
+	if pageSizeParam := getQueryParam(r, "page_size"); pageSizeParam != "" {
 		if ps, err := strconv.Atoi(pageSizeParam); err == nil && ps > 0 && ps <= 50 {
 			pageSize = ps
 		}
-	} else if limitParam := r.URL.Query().Get("limit"); limitParam != "" {
+	} else if limitParam := getQueryParam(r, "limit"); limitParam != "" {
 		if l, err := strconv.Atoi(limitParam); err == nil && l > 0 && l <= 50 {
 			pageSize = l
 		}
@@ -244,7 +244,7 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 	// 业务规则：默认排除未订阅且已开赛的比赛
 	// 原因：未订阅 = 没有滚球盘口，已开赛 = 赛前盘已结束，这类比赛没有可用盘口
 	// 可通过 include_unsubscribed_started=true 参数覆盖此行为
-	includeUnsubscribedStarted := r.URL.Query().Get("include_unsubscribed_started")
+	includeUnsubscribedStarted := getQueryParam(r, "include_unsubscribed_started")
 	if includeUnsubscribedStarted != "true" {
 		// 排除：subscribed = false AND schedule_time < NOW()
 		whereClauses = append(whereClauses, 
