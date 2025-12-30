@@ -14,58 +14,59 @@ func NewPopularityCalculator() *PopularityCalculator {
 
 // PopularityFactors 热门度因素
 type PopularityFactors struct {
-	Attendance         *int  // 到场人数
-	Sellout            *bool // 是否售罄
-	FeatureMatch       *bool // 是否焦点赛
-	LiveVideoAvailable *bool // 是否提供直播
-	LiveDataAvailable  *bool // 是否提供实时数据
-	BroadcastsCount    *int  // 转播平台数量
+	Status             string // 比赛状态 (active, ended, cancelled, etc.)
+	Attendance         *int   // 到场人数
+	Sellout            *bool  // 是否售罄
+	FeatureMatch       *bool  // 是否焦点赛
+	LiveVideoAvailable *bool  // 是否提供直播
+	LiveDataAvailable  *bool  // 是否提供实时数据
+	BroadcastsCount    *int   // 转播平台数量
+	ActiveMarketCount  int    // 活跃盘口数量
 }
 
 // CalculatePopularityScore 计算热门度评分 (0-100)
 //
 // 评分规则:
-// - 焦点赛: +30 分
-// - 售罄: +25 分
-// - 到场人数: 最高 +20 分 (根据人数比例计算)
+// - 焦点赛: +20 分
+// - 售罄: +15 分
+// - 到场人数: 最高 +15 分 (根据人数比例计算)
 // - 转播平台数量: 每个平台 +5 分，最高 +15 分
 // - 提供直播视频: +5 分
 // - 提供实时数据: +5 分
+// - 活跃盘口数量: 最高 +25 分 (根据数量分段计算)
 //
 // 总分最高 100 分
 func (c *PopularityCalculator) CalculatePopularityScore(factors PopularityFactors) float64 {
+	// 如果比赛已结束或已取消，热度为 0
+	if factors.Status != "" {
+		switch factors.Status {
+		case "ended", "closed", "cancelled", "abandoned":
+			return 0.0
+		}
+	}
+
 	score := 0.0
 	
-	// 1. 焦点赛 (+30 分)
+	// 1. 焦点赛 (+20 分)
 	if factors.FeatureMatch != nil && *factors.FeatureMatch {
-		score += 30.0
+		score += 20.0
 	}
 	
-	// 2. 售罄 (+25 分)
+	// 2. 售罄 (+15 分)
 	if factors.Sellout != nil && *factors.Sellout {
-		score += 25.0
+		score += 15.0
 	}
 	
-	// 3. 到场人数 (最高 +20 分)
+	// 3. 到场人数 (最高 +15 分)
 	if factors.Attendance != nil && *factors.Attendance > 0 {
 		attendance := float64(*factors.Attendance)
 		
-		// 根据人数分段计算分数
 		if attendance >= 50000 {
-			// 5万人以上: 满分 20 分
-			score += 20.0
-		} else if attendance >= 30000 {
-			// 3-5万人: 15-20 分
-			score += 15.0 + (attendance-30000)/20000*5.0
+			score += 15.0
 		} else if attendance >= 10000 {
-			// 1-3万人: 10-15 分
-			score += 10.0 + (attendance-10000)/20000*5.0
-		} else if attendance >= 5000 {
-			// 5千-1万人: 5-10 分
-			score += 5.0 + (attendance-5000)/5000*5.0
+			score += 5.0 + (attendance-10000)/40000*10.0
 		} else {
-			// 5千人以下: 0-5 分
-			score += attendance / 5000 * 5.0
+			score += attendance / 10000 * 5.0
 		}
 	}
 	
@@ -86,6 +87,22 @@ func (c *PopularityCalculator) CalculatePopularityScore(factors PopularityFactor
 	// 6. 提供实时数据 (+5 分)
 	if factors.LiveDataAvailable != nil && *factors.LiveDataAvailable {
 		score += 5.0
+	}
+
+	// 7. 活跃盘口数量 (最高 +25 分)
+	if factors.ActiveMarketCount > 0 {
+		marketCount := float64(factors.ActiveMarketCount)
+		if marketCount >= 200 {
+			score += 25.0
+		} else if marketCount >= 100 {
+			score += 15.0 + (marketCount-100)/100*10.0
+		} else if marketCount >= 50 {
+			score += 10.0 + (marketCount-50)/50*5.0
+		} else if marketCount >= 20 {
+			score += 5.0 + (marketCount-20)/30*5.0
+		} else {
+			score += marketCount / 20 * 5.0
+		}
 	}
 	
 	// 限制在 0-100 范围内
