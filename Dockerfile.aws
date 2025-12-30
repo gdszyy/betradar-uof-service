@@ -25,8 +25,10 @@ WORKDIR /root/
 # 从构建阶段复制二进制文件
 COPY --from=builder /app/main .
 
-# 复制静态文件
+# 复制静态文件和脚本、配置
 COPY --from=builder /app/static ./static
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/config ./config
 
 # 暴露端口
 EXPOSE 8080
