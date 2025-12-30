@@ -3,9 +3,18 @@ package services
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 	"uof-service/logger"
 )
+
+// ExceptionInfo 异常信息结构
+type ExceptionInfo struct {
+	Type     string
+	EventID  string
+	Message  string
+	Severity string
+}
 
 // BusinessMonitor 业务监控服务
 type BusinessMonitor struct {
@@ -21,29 +30,22 @@ func NewBusinessMonitor(db *sql.DB, larkNotifier *LarkNotifier) *BusinessMonitor
 	}
 }
 
-// RecordException 记录异常到数据库并报送到飞书
-func (m *BusinessMonitor) RecordException(excType, eventID, message, severity string) {
-	// 1. 记录到数据库
+// recordToDB 仅记录异常到数据库
+func (m *BusinessMonitor) recordToDB(excType, eventID, message, severity string) bool {
 	query := "INSERT INTO exceptions (type, event_id, message, severity) VALUES ($1, $2, $3, $4)"
 	_, err := m.db.Exec(query, excType, eventID, message, severity)
 	if err != nil {
 		logger.Errorf("[BusinessMonitor] Failed to record exception to DB: %v", err)
+		return false
 	}
-
-	// 2. 报送到飞书 (仅当 severity 为 high 或 critical 时，或者根据需求全部报送)
-	if m.larkNotifier != nil {
-		alertMsg := fmt.Sprintf("🚨 **业务异常告警**\n类型: %s\n赛事ID: %s\n详情: %s\n级别: %s\n时间: %s",
-			excType, eventID, message, severity, time.Now().Format("2006-01-02 15:04:05"))
-		m.larkNotifier.NotifyError("BusinessMonitor", alertMsg)
-	}
+	return true
 }
 
 // CheckMatchStartStatus 检查比赛是否如期开赛
-func (m *BusinessMonitor) CheckMatchStartStatus() {
+func (m *BusinessMonitor) CheckMatchStartStatus() []ExceptionInfo {
 	logger.Println("[BusinessMonitor] Checking match start status...")
+	var newExceptions []ExceptionInfo
 
-	// 查找已经过了开赛时间 15 分钟，但状态仍为 'not_started' 的比赛
-	// 排除已经取消或结束的比赛
 	query := `
 		SELECT event_id, home_team_name, away_team_name, schedule_time 
 		FROM tracked_events 
@@ -52,7 +54,6 @@ func (m *BusinessMonitor) CheckMatchStartStatus() {
 		AND schedule_time > $2
 	`
 	
-	// 检查过去 2 小时内应该开始但没开始的比赛
 	now := time.Now()
 	threshold := now.Add(-15 * time.Minute)
 	lookback := now.Add(-2 * time.Hour)
@@ -60,7 +61,7 @@ func (m *BusinessMonitor) CheckMatchStartStatus() {
 	rows, err := m.db.Query(query, threshold, lookback)
 	if err != nil {
 		logger.Errorf("[BusinessMonitor] Failed to query late start matches: %v", err)
-		return
+		return nil
 	}
 	defer rows.Close()
 
@@ -71,24 +72,31 @@ func (m *BusinessMonitor) CheckMatchStartStatus() {
 			continue
 		}
 
-		msg := fmt.Sprintf("比赛未如期开赛: %s vs %s (预计开赛时间: %s)", 
-			home, away, scheduleTime.Format("2006-01-02 15:04:05"))
+		msg := fmt.Sprintf("%s vs %s (预计: %s)", 
+			home, away, scheduleTime.Format("15:04:05"))
 		
-		// 检查是否已经记录过该异常，避免重复告警
 		var exists bool
 		m.db.QueryRow("SELECT EXISTS(SELECT 1 FROM exceptions WHERE event_id = $1 AND type = 'LATE_START')", eventID).Scan(&exists)
 		
 		if !exists {
-			m.RecordException("LATE_START", eventID, msg, "high")
+			if m.recordToDB("LATE_START", eventID, msg, "high") {
+				newExceptions = append(newExceptions, ExceptionInfo{
+					Type:     "LATE_START",
+					EventID:  eventID,
+					Message:  msg,
+					Severity: "high",
+				})
+			}
 		}
 	}
+	return newExceptions
 }
 
 // CheckOddsStagnation 检查赔率是否停滞
-func (m *BusinessMonitor) CheckOddsStagnation() {
+func (m *BusinessMonitor) CheckOddsStagnation() []ExceptionInfo {
 	logger.Println("[BusinessMonitor] Checking odds stagnation...")
+	var newExceptions []ExceptionInfo
 
-	// 查找状态为 'live' 且超过 30 分钟没有收到消息的比赛
 	query := `
 		SELECT event_id, home_team_name, away_team_name, last_message_at 
 		FROM tracked_events 
@@ -100,7 +108,7 @@ func (m *BusinessMonitor) CheckOddsStagnation() {
 	rows, err := m.db.Query(query, threshold)
 	if err != nil {
 		logger.Errorf("[BusinessMonitor] Failed to query stagnant odds: %v", err)
-		return
+		return nil
 	}
 	defer rows.Close()
 
@@ -111,24 +119,32 @@ func (m *BusinessMonitor) CheckOddsStagnation() {
 			continue
 		}
 
-		msg := fmt.Sprintf("滚球赔率停滞: %s vs %s (最后收到消息时间: %s)", 
-			home, away, lastMsgAt.Format("2006-01-02 15:04:05"))
+		msg := fmt.Sprintf("%s vs %s (最后消息: %s)", 
+			home, away, lastMsgAt.Format("15:04:05"))
 		
 		var exists bool
 		m.db.QueryRow("SELECT EXISTS(SELECT 1 FROM exceptions WHERE event_id = $1 AND type = 'ODDS_STAGNATION' AND created_at > $2)", 
 			eventID, time.Now().Add(-1 * time.Hour)).Scan(&exists)
 		
 		if !exists {
-			m.RecordException("ODDS_STAGNATION", eventID, msg, "medium")
+			if m.recordToDB("ODDS_STAGNATION", eventID, msg, "medium") {
+				newExceptions = append(newExceptions, ExceptionInfo{
+					Type:     "ODDS_STAGNATION",
+					EventID:  eventID,
+					Message:  msg,
+					Severity: "medium",
+				})
+			}
 		}
 	}
+	return newExceptions
 }
 
 // CheckMissingSettlements 检查是否缺失结算消息
-func (m *BusinessMonitor) CheckMissingSettlements() {
+func (m *BusinessMonitor) CheckMissingSettlements() []ExceptionInfo {
 	logger.Println("[BusinessMonitor] Checking missing settlements...")
+	var newExceptions []ExceptionInfo
 
-	// 查找状态为 'ended' 超过 2 小时，但在 bet_settlements 表中没有记录的比赛
 	query := `
 		SELECT e.event_id, e.home_team_name, e.away_team_name, e.updated_at 
 		FROM tracked_events e
@@ -146,7 +162,7 @@ func (m *BusinessMonitor) CheckMissingSettlements() {
 	rows, err := m.db.Query(query, threshold, lookback)
 	if err != nil {
 		logger.Errorf("[BusinessMonitor] Failed to query missing settlements: %v", err)
-		return
+		return nil
 	}
 	defer rows.Close()
 
@@ -157,16 +173,82 @@ func (m *BusinessMonitor) CheckMissingSettlements() {
 			continue
 		}
 
-		msg := fmt.Sprintf("赛事结束但缺失结算: %s vs %s (结束时间: %s)", 
-			home, away, updatedAt.Format("2006-01-02 15:04:05"))
+		msg := fmt.Sprintf("%s vs %s (结束: %s)", 
+			home, away, updatedAt.Format("15:04:05"))
 		
 		var exists bool
 		m.db.QueryRow("SELECT EXISTS(SELECT 1 FROM exceptions WHERE event_id = $1 AND type = 'MISSING_SETTLEMENT')", eventID).Scan(&exists)
 		
 		if !exists {
-			m.RecordException("MISSING_SETTLEMENT", eventID, msg, "high")
+			if m.recordToDB("MISSING_SETTLEMENT", eventID, msg, "high") {
+				newExceptions = append(newExceptions, ExceptionInfo{
+					Type:     "MISSING_SETTLEMENT",
+					EventID:  eventID,
+					Message:  msg,
+					Severity: "high",
+				})
+			}
 		}
 	}
+	return newExceptions
+}
+
+// SendConsolidatedReport 发送整合后的异常报告
+func (m *BusinessMonitor) SendConsolidatedReport(newExceptions []ExceptionInfo) {
+	if len(newExceptions) == 0 || m.larkNotifier == nil {
+		return
+	}
+
+	// 按类型分组
+	grouped := make(map[string][]string)
+	for _, ex := range newExceptions {
+		grouped[ex.Type] = append(grouped[ex.Type], ex.Message)
+	}
+
+	var reportBuilder strings.Builder
+	reportBuilder.WriteString("🚨 **业务异常整合告警**\n\n")
+
+	for excType, messages := range grouped {
+		// 查询该类型的累积总数 (过去 24 小时)
+		var total int
+		m.db.QueryRow("SELECT COUNT(*) FROM exceptions WHERE type = $1 AND created_at > $2", 
+			excType, time.Now().Add(-24*time.Hour)).Scan(&total)
+
+		typeName := m.getFriendlyTypeName(excType)
+		reportBuilder.WriteString(fmt.Sprintf("【%s】累积 %d 条，新增:\n", typeName, total))
+		for _, msg := range messages {
+			reportBuilder.WriteString(fmt.Sprintf("• %s\n", msg))
+		}
+		reportBuilder.WriteString("\n")
+	}
+
+	reportBuilder.WriteString(fmt.Sprintf("时间: %s", time.Now().Format("2006-01-02 15:04:05")))
+	
+	m.larkNotifier.SendText(reportBuilder.String())
+}
+
+func (m *BusinessMonitor) getFriendlyTypeName(excType string) string {
+	switch excType {
+	case "LATE_START":
+		return "未如期开赛"
+	case "ODDS_STAGNATION":
+		return "赔率停滞"
+	case "MISSING_SETTLEMENT":
+		return "缺失结算"
+	default:
+		return excType
+	}
+}
+
+// RunOnce 执行一次完整的监控检查
+func (m *BusinessMonitor) RunOnce() {
+	var allNew []ExceptionInfo
+	
+	allNew = append(allNew, m.CheckMatchStartStatus()...)
+	allNew = append(allNew, m.CheckOddsStagnation()...)
+	allNew = append(allNew, m.CheckMissingSettlements()...)
+	
+	m.SendConsolidatedReport(allNew)
 }
 
 // Start 启动监控任务
@@ -175,16 +257,10 @@ func (m *BusinessMonitor) Start() {
 	ticker := time.NewTicker(10 * time.Minute)
 	go func() {
 		for range ticker.C {
-			m.CheckMatchStartStatus()
-			m.CheckOddsStagnation()
-			m.CheckMissingSettlements()
+			m.RunOnce()
 		}
 	}()
 	
 	// 启动时立即执行一次
-	go func() {
-		m.CheckMatchStartStatus()
-		m.CheckOddsStagnation()
-		m.CheckMissingSettlements()
-	}()
+	go m.RunOnce()
 }
