@@ -226,8 +226,13 @@ func (p *FixtureParser) ParseAndStore(xmlContent string) error {
 		return fmt.Errorf("failed to store fixture data: %w", err)
 	}
 
+	// 调试：记录原始 XML 中的 live_odds 属性
+	liveOddsVal := fixture.LiveOdds
+	if liveOddsVal == "" {
+		liveOddsVal = "unknown"
+	}
 	p.logger.Printf("Stored fixture data for event %s: home=%s, away=%s, live_odds=%s, scheduled=%v",
-		srnID, homeTeamName, awayTeamName, fixture.LiveOdds, scheduleTime)
+		srnID, homeTeamName, awayTeamName, liveOddsVal, scheduleTime)
 
 	return nil
 }

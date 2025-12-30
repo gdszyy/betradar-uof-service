@@ -215,12 +215,15 @@ func (m *BusinessMonitor) SendConsolidatedReport(newExceptions []ExceptionInfo) 
 
 	// 如果没有新异常，发送“运行正常”心跳报告
 	if len(newExceptions) == 0 {
-		var totalLive, bookedLive int
+		var totalLive, bookedLive, upcoming, ended int
+		// 统计各类比赛数量
 		m.db.QueryRow("SELECT COUNT(*) FROM tracked_events WHERE status = 'live'").Scan(&totalLive)
 		m.db.QueryRow("SELECT COUNT(*) FROM tracked_events WHERE status = 'live' AND (live_odds = 'booked' OR live_odds = 'bookable')").Scan(&bookedLive)
+		m.db.QueryRow("SELECT COUNT(*) FROM tracked_events WHERE status = 'not_started'").Scan(&upcoming)
+		m.db.QueryRow("SELECT COUNT(*) FROM tracked_events WHERE status = 'ended'").Scan(&ended)
 		
-		msg := fmt.Sprintf("✅ **UOF 业务监控运行正常**\n\n当前未发现业务异常。\n- 正在进行的比赛: %d\n- 监控中的滚球比赛: %d\n\n⏰ 时间: %s", 
-			totalLive, bookedLive, time.Now().Format("2006-01-02 15:04:05"))
+		msg := fmt.Sprintf("✅ **UOF 业务监控运行正常**\n\n当前未发现业务异常。\n\n**监控统计:**\n- 🕒 待开赛 (监控未如期): %d\n- 🎮 滚球中 (监控赔率停滞): %d (滚球支持: %d)\n- 🏁 已结束 (监控缺失结算): %d\n\n⏰ 时间: %s", 
+			upcoming, totalLive, bookedLive, ended, time.Now().Format("2006-01-02 15:04:05"))
 		m.larkNotifier.SendText(msg)
 		return
 	}

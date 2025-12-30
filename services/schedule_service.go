@@ -111,10 +111,14 @@ func (s *ScheduleService) FetchUpcomingSchedule() ([]string, error) {
 		eventIDs[i] = event.ID
 		// 更新数据库中的 live_odds 状态
 		if s.db != nil {
-			logger.Printf("[Schedule] Updating live_odds for %s to %s", event.ID, event.LiveOdds)
+			liveOdds := event.LiveOdds
+			if liveOdds == "" {
+				liveOdds = "unknown"
+			}
+			logger.Printf("[Schedule] Updating live_odds for %s to %s", event.ID, liveOdds)
 			_, err := s.db.Exec(
 				"UPDATE tracked_events SET live_odds = $1, updated_at = $2 WHERE event_id = $3",
-				event.LiveOdds, time.Now(), event.ID,
+				liveOdds, time.Now(), event.ID,
 			)
 			if err != nil {
 				logger.Errorf("[Schedule] Failed to update live_odds for %s: %v", event.ID, err)
