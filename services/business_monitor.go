@@ -101,16 +101,29 @@ func (m *BusinessMonitor) CheckOddsStagnation() []ExceptionInfo {
 		SELECT event_id, home_team_name, away_team_name, last_message_at 
 		FROM tracked_events 
 		WHERE status = 'live' 
-		AND live_odds = 'booked'
+		AND (live_odds = 'booked' OR live_odds = 'bookable')
 		AND last_message_at < $1
 	`
 	
 	threshold := time.Now().Add(-30 * time.Minute)
+	logger.Printf("[BusinessMonitor] Querying odds stagnation with threshold: %v", threshold)
 	rows, err := m.db.Query(query, threshold)
 	if err != nil {
-		logger.Errorf("[BusinessMonitor] Failed to query stagnant odds: %v", err)
+		logger.Errorf("[BusinessMonitor] Failed to query odds stagnation: %v", err)
 		return nil
 	}
+
+	// 调试：检查 live_odds 字段的分布情况
+	var totalLive int
+	m.db.QueryRow("SELECT COUNT(*) FROM tracked_events WHERE status = 'live'").Scan(&totalLive)
+	var bookedLive int
+	m.db.QueryRow("SELECT COUNT(*) FROM tracked_events WHERE status = 'live' AND live_odds = 'booked'").Scan(&bookedLive)
+	var bookableLive int
+	m.db.QueryRow("SELECT COUNT(*) FROM tracked_events WHERE status = 'live' AND live_odds = 'bookable'").Scan(&bookableLive)
+	var nullLive int
+	m.db.QueryRow("SELECT COUNT(*) FROM tracked_events WHERE status = 'live' AND (live_odds IS NULL OR live_odds = '')").Scan(&nullLive)
+	logger.Printf("[BusinessMonitor] Debug: total live: %d, booked: %d, bookable: %d, null/empty: %d", totalLive, bookedLive, bookableLive, nullLive)
+
 	defer rows.Close()
 
 	for rows.Next() {

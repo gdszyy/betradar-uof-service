@@ -226,8 +226,8 @@ func (p *FixtureParser) ParseAndStore(xmlContent string) error {
 		return fmt.Errorf("failed to store fixture data: %w", err)
 	}
 
-	p.logger.Printf("Stored fixture data for event %s: home=%s, away=%s, scheduled=%v",
-		fixture.EventID, homeTeamName, awayTeamName, scheduleTime)
+	p.logger.Printf("Stored fixture data for event %s: home=%s, away=%s, live_odds=%s, scheduled=%v",
+		eventID, homeTeamName, awayTeamName, liveOdds, scheduleTime)
 
 	return nil
 }
