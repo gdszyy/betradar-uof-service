@@ -521,33 +521,22 @@ func (s *MarketDescriptionsService) refreshLoop() {
 }
 
 // GetMarketName 获取市场名称
+// 支持完整的模板替换，包括序数、正负号等特殊前缀
 func (s *MarketDescriptionsService) GetMarketName(marketID string, specifiers string, ctx *ReplacementContext) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	if market, ok := s.markets[marketID]; ok {
 		name := market.Name
-		// 替换变量
+
+		// 1. 替换 specifiers (包括特殊前缀)
+		name = replaceSpecifiers(name, specifiers)
+
+		// 2. 替换竞争者占位符
 		if ctx != nil {
-			name = strings.ReplaceAll(name, "{$competitor1}", ctx.HomeTeamName)
-			name = strings.ReplaceAll(name, "{$competitor2}", ctx.AwayTeamName)
+			name = replaceCompetitors(name, ctx.HomeTeamName, ctx.AwayTeamName)
 		}
 
-		// 替换 specifiers
-		if specifiers != "" {
-			pairs := strings.Split(specifiers, "|")
-			for _, pair := range pairs {
-				parts := strings.Split(pair, "=")
-				if len(parts) == 2 {
-					key := parts[0]
-					value := parts[1]
-					name = strings.ReplaceAll(name, "{"+key+"}", value)
-					name = strings.ReplaceAll(name, "{+"+key+"}", "+"+value)
-					name = strings.ReplaceAll(name, "{-"+key+"}", "-"+value)
-					name = strings.ReplaceAll(name, "{!"+key+"}", value)
-				}
-			}
-		}
 		return name
 	}
 
@@ -556,6 +545,7 @@ func (s *MarketDescriptionsService) GetMarketName(marketID string, specifiers st
 }
 
 // GetOutcomeName 获取结果名称
+// 支持完整的模板替换和 Variant Market 的同步查询
 func (s *MarketDescriptionsService) GetOutcomeName(marketID, outcomeID, specifiers string, ctx *ReplacementContext) string {
 	s.mu.RLock()
 
@@ -564,62 +554,67 @@ func (s *MarketDescriptionsService) GetOutcomeName(marketID, outcomeID, specifie
 		if outcome, ok := outcomes[outcomeID]; ok {
 			s.mu.RUnlock()
 			name := outcome.Name
-			// 替换变量
+
+			// 1. 替换 specifiers (包括特殊前缀)
+			name = replaceSpecifiers(name, specifiers)
+
+			// 2. 替换竞争者占位符
 			if ctx != nil {
-				name = strings.ReplaceAll(name, "{$competitor1}", ctx.HomeTeamName)
-				name = strings.ReplaceAll(name, "{$competitor2}", ctx.AwayTeamName)
+				name = replaceCompetitors(name, ctx.HomeTeamName, ctx.AwayTeamName)
 			}
 
-			// 替换 specifiers
-			if specifiers != "" {
-				pairs := strings.Split(specifiers, "|")
-				for _, pair := range pairs {
-					parts := strings.Split(pair, "=")
-					if len(parts) == 2 {
-						key := parts[0]
-						value := parts[1]
-						name = strings.ReplaceAll(name, "{"+key+"}", value)
-						name = strings.ReplaceAll(name, "{+"+key+"}", "+"+value)
-						name = strings.ReplaceAll(name, "{-"+key+"}", "-"+value)
-						name = strings.ReplaceAll(name, "{!"+key+"}", value)
-					}
+			return name
+		}
+	}
+
+	s.mu.RUnlock()
+
+	// 第二优先级: 检查是否是 Variant Market
+	if strings.Contains(specifiers, "variant=") {
+		variantURN := s.extractVariantURN(specifiers)
+		if variantURN != "" {
+			// 再次检查缓存 (可能在上面的 RUnlock 之后被其他协程填充)
+			s.mu.RLock()
+			if outcomes, ok := s.outcomes[marketID]; ok {
+				if outcome, ok := outcomes[outcomeID]; ok {
+					s.mu.RUnlock()
+					return outcome.Name
 				}
+			}
+			s.mu.RUnlock()
+
+			// 缓存中仍然没有，同步调用 API
+			logger.Printf("[MarketDescService] ⚡️ Variant outcome not cached, fetching synchronously: marketID=%s, outcomeID=%s, variant=%s", marketID, outcomeID, variantURN)
+			name, err := s.fetchAndCacheVariant(marketID, outcomeID, variantURN)
+			if err != nil {
+				logger.Printf("[MarketDescService] ⚠️  Failed to fetch variant synchronously: %v", err)
+				// 降级: 返回 outcomeID
+				return outcomeID
 			}
 			return name
 		}
 	}
 
-	// The logic for dynamically fetching variants has been moved to the background process
-	// to prevent blocking. This function will now only return data from the cache.
+	// 第三优先级: 检查是否是球员市场
+	if strings.HasPrefix(outcomeID, "sr:player:") {
+		if s.playersService != nil {
+			playerName := s.playersService.GetPlayerName(outcomeID)
+			return playerName
+		}
+		return outcomeID
+	}
 
-	s.mu.RUnlock()
-
-	// 第三优先级: 从 mappings 中查询 (仅用于特殊情况的降级)
+	// 第四优先级: 从 mappings 中查询 (仅用于特殊情况的降级)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	if mappings, ok := s.mappings[marketID]; ok {
 		if productOutcomeName, ok := mappings[outcomeID]; ok {
-			// 如果 product_outcome_name 是简单的数字或字母,可能需要进一步处理
-			// 这里我们记录一个警告,表明使用了降级方案
 			logger.Printf("[MarketDescService] ℹ️  Using mapping fallback for marketID=%s, outcomeID=%s, name=%s", marketID, outcomeID, productOutcomeName)
 			return productOutcomeName
 		}
 	}
 
-	// 检查是否是球员市场 (outcomeID 是球员 URN)
-	if strings.HasPrefix(outcomeID, "sr:player:") {
-		// 尝试从 PlayersService 获取球员姓名
-		if s.playersService != nil {
-			// 解锁以调用 playersService
-			playerName := s.playersService.GetPlayerName(outcomeID)
-
-			// GetPlayerName 总是返回一个值,如果找不到会返回 "Player {id}"
-			// 我们直接返回这个值
-			return playerName
-		}
-		// 如果找不到球员信息,返回球员 ID (不输出警告,因为这是正常情况)
-		return outcomeID
-	}
-
-	// 对于非球员市场,输出警告日志
+	// 最终降级: 返回 outcomeID
 	logger.Printf("[MarketDescService] ⚠️  Outcome name not found: marketID=%s, outcomeID=%s, specifiers=%s", marketID, outcomeID, specifiers)
 	return outcomeID
 }
@@ -647,11 +642,21 @@ type VariantDescription struct {
 }
 
 // fetchAndCacheVariant 动态加载并缓存 variant 描述
+// 支持所有类型的 variant: sr:, pre:, liveodds:, wns: 等
 func (s *MarketDescriptionsService) fetchAndCacheVariant(marketID, outcomeID, variant string) (string, error) {
+	// 根据 variant URN 的前缀判断产品类型
+	product := extractProductFromVariant(variant)
+	
 	// 构造 URL
-	// 根据 Sportradar 文档，正确的路径是 /variants/（复数）而不是 /variant/（单数）
 	apiBase := strings.TrimSuffix(s.apiBaseURL, "/v1")
-	url := fmt.Sprintf("%s/v1/descriptions/en/markets/%s/variants/%s?include_mappings=true", apiBase, marketID, variant)
+	var url string
+	if product == "sr" || product == "" {
+		// 标准 Variant API
+		url = fmt.Sprintf("%s/v1/descriptions/en/markets/%s/variants/%s?include_mappings=true", apiBase, marketID, variant)
+	} else {
+		// 产品特定 Variant API
+		url = fmt.Sprintf("%s/v1/%s/descriptions/en/markets/%s/variants/%s?include_mappings=true", apiBase, product, marketID, variant)
+	}
 
 	logger.Printf("[MarketDescService] ⚡️ Dynamically fetching variant description from: %s", url)
 
@@ -829,21 +834,20 @@ func (s *MarketDescriptionsService) processAllVariantMarketsAsync() {
 	time.Sleep(5 * time.Second)
 
 	// Query all variant markets that need to be fetched
-	// Note: Only process sr: variants (Sportradar standard markets)
-	// pre: variants (player props) are not supported by the /variant/ API endpoint
+	// 支持所有类型的 variant: sr:, pre:, liveodds:, wns: 等
 	logger.Println("[MarketDescService] Querying database for variant markets...")
-rows, err := s.db.Query(`
-				SELECT DISTINCT m.sr_market_id, o.outcome_id, m.specifiers
-				FROM odds o
-				JOIN markets m ON o.market_id = m.id
-				WHERE m.specifiers LIKE 'variant=sr:%'
-				AND NOT EXISTS (
-					SELECT 1 FROM outcome_descriptions od
-					WHERE od.market_id = CAST(m.sr_market_id AS VARCHAR)
-					AND od.outcome_id = o.outcome_id
-				)
-				LIMIT 1000
-		`)
+	rows, err := s.db.Query(`
+		SELECT DISTINCT m.sr_market_id, o.outcome_id, m.specifiers
+		FROM odds o
+		JOIN markets m ON o.market_id = m.id
+		WHERE m.specifiers LIKE '%variant=%'
+		AND NOT EXISTS (
+			SELECT 1 FROM outcome_descriptions od
+			WHERE od.market_id = CAST(m.sr_market_id AS VARCHAR)
+			AND od.outcome_id = o.outcome_id
+		)
+		LIMIT 1000
+	`)
 	if err != nil {
 		logger.Printf("[MarketDescService] ⚠️  Failed to query variant markets: %v", err)
 		return
@@ -877,39 +881,41 @@ rows, err := s.db.Query(`
 		return
 	}
 
-	logger.Printf("[MarketDescService] Found %d sr: variant markets to process (pre: variants are not supported by the API)", len(variants))
+	logger.Printf("[MarketDescService] Found %d variant markets to process (all types: sr:, pre:, liveodds:, wns:)", len(variants))
 
 	// 处理每个变体市场
-		processedCount := 0
-		failedCount := 0
-		for i, variant := range variants {
-			// 从 specifiers 中提取 variant URN
-			variantURN := s.extractVariantURN(variant.Specifiers)
-			if variantURN == "" {
-				logger.Printf("[MarketDescService] ⚠️  Failed to extract variant URN from specifiers: %s", variant.Specifiers)
-				failedCount++
-				continue
-			}
-
-			logger.Printf("[MarketDescService] [%d/%d] Processing sr: variant marketID=%s, outcomeID=%s, variantURN=%s", i+1, len(variants), variant.MarketID, variant.OutcomeID, variantURN)
-
-			// 获取并缓存变体描述
-			if _, err := s.fetchAndCacheVariant(variant.MarketID, variant.OutcomeID, variantURN); err != nil {
-				logger.Printf("[MarketDescService] ❌ Failed to fetch variant %s/%s: %v", variant.MarketID, variantURN, err)
-				failedCount++
-				continue
-			}
-
-			logger.Printf("[MarketDescService] ✓ Successfully cached variant %s/%s", variant.MarketID, variantURN)
-			processedCount++
-
-			// 为了避免过度请求 API，每处理 10 个变体后休息 1 秒
-			if processedCount%10 == 0 {
-				time.Sleep(1 * time.Second)
-			}
+	processedCount := 0
+	failedCount := 0
+	for i, variant := range variants {
+		// 从 specifiers 中提取 variant URN
+		variantURN := s.extractVariantURN(variant.Specifiers)
+		if variantURN == "" {
+			logger.Printf("[MarketDescService] ⚠️  Failed to extract variant URN from specifiers: %s", variant.Specifiers)
+			failedCount++
+			continue
 		}
 
-		logger.Printf("[MarketDescService] ✅ Variant market processing completed: %d succeeded, %d failed out of %d total", processedCount, failedCount, len(variants))
+		// 提取产品类型
+		product := extractProductFromVariant(variantURN)
+		logger.Printf("[MarketDescService] [%d/%d] Processing %s variant marketID=%s, outcomeID=%s, variantURN=%s", i+1, len(variants), product, variant.MarketID, variant.OutcomeID, variantURN)
+
+		// 获取并缓存变体描述
+		if _, err := s.fetchAndCacheVariant(variant.MarketID, variant.OutcomeID, variantURN); err != nil {
+			logger.Printf("[MarketDescService] ❌ Failed to fetch variant %s/%s: %v", variant.MarketID, variantURN, err)
+			failedCount++
+			continue
+		}
+
+		logger.Printf("[MarketDescService] ✓ Successfully cached variant %s/%s", variant.MarketID, variantURN)
+		processedCount++
+
+		// 为了避免过度请求 API，每处理10个变体后休息1秒
+		if processedCount%10 == 0 {
+			time.Sleep(1 * time.Second)
+		}
+	}
+
+	logger.Printf("[MarketDescService] ✅ Variant market processing completed: %d succeeded, %d failed out of %d total", processedCount, failedCount, len(variants))
 }
 
 // extractVariantURN 从 specifiers 中提取 variant URN
@@ -922,6 +928,24 @@ func (s *MarketDescriptionsService) extractVariantURN(specifiers string) string 
 			return parts[1]
 		}
 	}
+	return ""
+}
+
+// extractProductFromVariant 从 variant URN 中提取产品类型
+// 例如: "pre:markettext:1234" -> "pre"
+//       "sr:exact_games:bestof:5:39" -> "sr"
+//       "liveodds:correct_score:2:3" -> "liveodds"
+func extractProductFromVariant(variant string) string {
+	if variant == "" {
+		return ""
+	}
+	
+	// variant URN 格式: "{product}:{type}:{params}"
+	parts := strings.Split(variant, ":")
+	if len(parts) > 0 {
+		return parts[0]
+	}
+	
 	return ""
 }
 
