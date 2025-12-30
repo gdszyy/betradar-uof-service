@@ -197,6 +197,18 @@ func parseEventFilters(r *http.Request) *EventFilters {
 		filters.IncludeEnded = includeEndedParam == "true" || includeEndedParam == "1"
 	}
 	
+	// 联赛筛选 (支持多选,逗号分隔) - 同时支持 tournament_id 和 league_id
+	tournamentID := r.URL.Query().Get("tournament_id")
+	if tournamentID == "" {
+		tournamentID = r.URL.Query().Get("league_id")
+	}
+	if tournamentID != "" {
+		filters.TournamentIDs = strings.Split(tournamentID, ",")
+		for i := range filters.TournamentIDs {
+			filters.TournamentIDs[i] = strings.TrimSpace(filters.TournamentIDs[i])
+		}
+	}
+	
 	// 体育类型筛选 (支持多选,逗号分隔)
 	if sportID := r.URL.Query().Get("sport_id"); sportID != "" {
 		filters.SportIDs = strings.Split(sportID, ",")
@@ -239,13 +251,7 @@ func parseEventFilters(r *http.Request) *EventFilters {
 	}
 	filters.TeamName = r.URL.Query().Get("team_name")
 	
-	// 联赛筛选 (支持多选,逗号分隔)
-	if tournamentID := r.URL.Query().Get("tournament_id"); tournamentID != "" {
-		filters.TournamentIDs = strings.Split(tournamentID, ",")
-		for i := range filters.TournamentIDs {
-			filters.TournamentIDs[i] = strings.TrimSpace(filters.TournamentIDs[i])
-		}
-	}
+
 	
 	// 搜索
 	filters.Search = r.URL.Query().Get("search")
@@ -335,7 +341,7 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 		// 默认排除已结束的比赛 (除非明确请求包含)
 		if !filters.IncludeEnded && filters.Status == "" {
 			// 如果没有明确指定 status, 则排除 ended 状态
-			conditions = append(conditions, "e.status::text != 'ended'")
+			conditions = append(conditions, "e.status::text NOT IN ('ended', 'closed', 'cancelled', 'abandoned')")
 		}
 	
 		// 体育类型筛选 (支持多选)
@@ -527,7 +533,7 @@ func buildEventCountQuery(filters *EventFilters) (string, []interface{}) {
 	
 		// 默认排除已结束的比赛 (除非明确请求包含)
 		if !filters.IncludeEnded && filters.Status == "" {
-			conditions = append(conditions, "e.status::text != 'ended'")
+			conditions = append(conditions, "e.status::text NOT IN ('ended', 'closed', 'cancelled', 'abandoned')")
 		}
 	
 	// 体育类型筛选 (支持多选)

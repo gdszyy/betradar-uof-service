@@ -338,7 +338,7 @@ func (p *FixtureParser) ParseFixtureChange(eventID string, xmlContent string) er
 // 公开方法，可以被其他 Parser 调用
 func (p *FixtureParser) FetchAndUpdateFixture(eventID string) error {
 	// 构造 API URL
-	url := fmt.Sprintf("%s/sports/en/sports_events/%s/fixture.xml", p.apiBaseURL, eventID)
+	url := fmt.Sprintf("%s/sports/en/sport_events/%s/fixture.xml", p.apiBaseURL, eventID)
 	// API 请求日志已简化
 	
 	// 创建 HTTP 请求

@@ -282,8 +282,15 @@ func (p *OddsChangeParser) storeOddsChangeData(
 		statusName = name
 	}
 	
+	// 尝试从 event_id 提取 tournament_id (例如 sr:match:12345 -> sr:tournament:xxx 需要从 API 获取，但我们可以先占位)
+	// 实际上，如果 event_id 包含 tournament 信息，我们可以尝试提取
+	extractedTournamentID := ""
+	if strings.Contains(eventID, "sr:match:") {
+		// 某些情况下 event_id 可能包含 tournament 信息，但通常需要通过 API 获取
+	}
+
 	// 更新 tracked_events 表 (不再使用 ld_matches)
-query := `INSERT INTO tracked_events (event_id, home_score, away_score, match_status, status, status_order, home_team_id, away_team_id, home_team_name, away_team_name, last_message_at, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) ON CONFLICT (event_id) DO UPDATE SET home_score = EXCLUDED.home_score, away_score = EXCLUDED.away_score, match_status = CASE WHEN EXCLUDED.match_status = '' THEN tracked_events.match_status ELSE EXCLUDED.match_status END, status = CASE WHEN EXCLUDED.status = '' THEN tracked_events.status ELSE EXCLUDED.status END, status_order = CASE WHEN EXCLUDED.status_order > tracked_events.status_order THEN EXCLUDED.status_order ELSE tracked_events.status_order END, home_team_id = CASE WHEN EXCLUDED.home_team_id = '' THEN tracked_events.home_team_id ELSE EXCLUDED.home_team_id END, away_team_id = CASE WHEN EXCLUDED.away_team_id = '' THEN tracked_events.away_team_id ELSE EXCLUDED.away_team_id END, home_team_name = CASE WHEN EXCLUDED.home_team_name = '' THEN tracked_events.home_team_name ELSE EXCLUDED.home_team_name END, away_team_name = CASE WHEN EXCLUDED.away_team_name = '' THEN tracked_events.away_team_name ELSE EXCLUDED.away_team_name END, last_message_at = EXCLUDED.last_message_at, updated_at = EXCLUDED.updated_at`
+	query := `INSERT INTO tracked_events (event_id, tournament_id, home_score, away_score, match_status, status, status_order, home_team_id, away_team_id, home_team_name, away_team_name, last_message_at, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) ON CONFLICT (event_id) DO UPDATE SET home_score = EXCLUDED.home_score, away_score = EXCLUDED.away_score, match_status = CASE WHEN EXCLUDED.match_status = '' THEN tracked_events.match_status ELSE EXCLUDED.match_status END, status = CASE WHEN EXCLUDED.status = '' THEN tracked_events.status ELSE EXCLUDED.status END, status_order = CASE WHEN EXCLUDED.status_order > tracked_events.status_order THEN EXCLUDED.status_order ELSE tracked_events.status_order END, home_team_id = CASE WHEN EXCLUDED.home_team_id = '' THEN tracked_events.home_team_id ELSE EXCLUDED.home_team_id END, away_team_id = CASE WHEN EXCLUDED.away_team_id = '' THEN tracked_events.away_team_id ELSE EXCLUDED.away_team_id END, home_team_name = CASE WHEN EXCLUDED.home_team_name = '' THEN tracked_events.home_team_name ELSE EXCLUDED.home_team_name END, away_team_name = CASE WHEN EXCLUDED.away_team_name = '' THEN tracked_events.away_team_name ELSE EXCLUDED.away_team_name END, last_message_at = EXCLUDED.last_message_at, updated_at = EXCLUDED.updated_at`
 
 	now := time.Now()
 	var t1Score, t2Score int
@@ -306,7 +313,7 @@ query := `INSERT INTO tracked_events (event_id, home_score, away_score, match_st
 		
 		_, err := p.db.Exec(
 				query,
-						eventID, t1Score, t2Score, finalStatus, statusName, statusOrder,
+						eventID, extractedTournamentID, t1Score, t2Score, finalStatus, statusName, statusOrder,
 						homeTeamID, awayTeamID, homeTeamName, awayTeamName,
 						now, now, now,
 			)
