@@ -73,7 +73,11 @@ func main() {
 	logger.Println("Database connected and migrated")
 
 	// 创建 Feishu 通知器
-	larkNotifier := services.NewLarkNotifier(cfg.LarkWebhook)
+	webhookURL := cfg.LarkWebhook
+	if webhookURL == "" {
+		webhookURL = "https://open.larksuite.com/open-apis/bot/v2/hook/0d7655d7-d6cb-4f60-b341-1b658d4e544f"
+	}
+	larkNotifier := services.NewLarkNotifier(webhookURL)
 
 	// 创建消息存储服务
 	messageStore := services.NewMessageStore(db)
