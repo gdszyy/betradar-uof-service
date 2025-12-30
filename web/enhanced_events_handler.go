@@ -105,8 +105,12 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 	producer := r.URL.Query().Get("producer")
 	isLive := r.URL.Query().Get("is_live")
 	isEnded := r.URL.Query().Get("is_ended")
-	hasMarkets := r.URL.Query().Get("has_markets")
-	marketIDs := r.URL.Query().Get("market_ids") // 新增: 逗号分隔的 market ID 列表
+		hasMarkets := r.URL.Query().Get("has_markets")
+		tournamentID := r.URL.Query().Get("tournament_id")
+		if tournamentID == "" {
+			tournamentID = r.URL.Query().Get("league_id")
+		}
+		marketIDs := r.URL.Query().Get("market_ids") // 新增: 逗号分隔的 market ID 列表
 	sortBy := r.URL.Query().Get("sort_by") // 新增: 排序方式 (time, popularity)
 	sortOrder := r.URL.Query().Get("sort_order") // 新增: 排序顺序 (asc, desc)
 	
@@ -139,8 +143,9 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 		"producer":    producer,
 		"is_live":     isLive,
 		"is_ended":    isEnded,
-		"has_markets": hasMarkets,
-		"market_ids":  marketIDs,
+			"has_markets": hasMarkets,
+			"tournament_id": tournamentID,
+			"market_ids":  marketIDs,
 		"sort_by":     sortBy,
 		"sort_order":  sortOrder,
 		"page":        page,
@@ -175,11 +180,27 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 			args = append(args, subscribedBool)
 		}
 		
-			// 添加 sport_id 过滤
-			if sportID != "" {
-				whereClauses = append(whereClauses, "te.sport_id::text = $"+fmt.Sprintf("%d", len(args)+1))
-				args = append(args, sportID)
-			}
+				// 添加 sport_id 过滤
+				if sportID != "" {
+					whereClauses = append(whereClauses, "te.sport_id::text = $"+fmt.Sprintf("%d", len(args)+1))
+					args = append(args, sportID)
+				}
+
+				// 添加 tournament_id 过滤
+				if tournamentID != "" {
+					tIDs := strings.Split(tournamentID, ",")
+					placeholders := []string{}
+					for _, id := range tIDs {
+						id = strings.TrimSpace(id)
+						if id != "" {
+							placeholders = append(placeholders, "$"+fmt.Sprintf("%d", len(args)+1))
+							args = append(args, id)
+						}
+					}
+					if len(placeholders) > 0 {
+						whereClauses = append(whereClauses, "te.tournament_id IN ("+strings.Join(placeholders, ", ")+")")
+					}
+				}
 		
 		// 添加 search 过滤 (event_id 精确匹配或队伍名称模糊匹配)
 		if search != "" {

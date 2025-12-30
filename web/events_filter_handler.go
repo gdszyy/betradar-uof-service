@@ -433,9 +433,11 @@ func buildEventFilterQuery(filters *EventFilters) (string, []interface{}) {
 		if len(filters.TournamentIDs) > 0 {
 			placeholders := []string{}
 			for _, tournamentID := range filters.TournamentIDs {
-				placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
-				args = append(args, tournamentID)
-				argIndex++
+				if tournamentID != "" {
+					placeholders = append(placeholders, fmt.Sprintf("$%d", argIndex))
+					args = append(args, tournamentID)
+					argIndex++
+				}
 			}
 			if len(placeholders) > 0 {
 				conditions = append(conditions, fmt.Sprintf("e.tournament_id IN (%s)", strings.Join(placeholders, ", ")))
