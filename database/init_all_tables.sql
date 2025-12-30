@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS tracked_events (
     message_count INTEGER DEFAULT 0,
     last_message_at TIMESTAMP,
     subscribed BOOLEAN DEFAULT FALSE,
+    live_odds VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     

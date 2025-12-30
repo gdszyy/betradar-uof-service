@@ -101,6 +101,7 @@ func (m *BusinessMonitor) CheckOddsStagnation() []ExceptionInfo {
 		SELECT event_id, home_team_name, away_team_name, last_message_at 
 		FROM tracked_events 
 		WHERE status = 'live' 
+		AND live_odds = 'booked'
 		AND last_message_at < $1
 	`
 	

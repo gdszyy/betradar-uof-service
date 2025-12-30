@@ -22,7 +22,8 @@ type ScheduleService struct {
 type TournamentScheduleResponse struct {
 	XMLName xml.Name `xml:"schedule"`
 	SportEvents []struct {
-		ID string `xml:"id,attr"`
+		ID       string `xml:"id,attr"`
+		LiveOdds string `xml:"liveodds,attr"`
 	} `xml:"sport_event"`
 }
 
@@ -108,6 +109,16 @@ func (s *ScheduleService) FetchUpcomingSchedule() ([]string, error) {
 	eventIDs := make([]string, len(schedule.SportEvents))
 	for i, event := range schedule.SportEvents {
 		eventIDs[i] = event.ID
+		// 更新数据库中的 live_odds 状态
+		if s.db != nil {
+			_, err := s.db.Exec(
+				"UPDATE tracked_events SET live_odds = $1, updated_at = $2 WHERE event_id = $3",
+				event.LiveOdds, time.Now(), event.ID,
+			)
+			if err != nil {
+				logger.Errorf("[Schedule] Failed to update live_odds for %s: %v", event.ID, err)
+			}
+		}
 	}
 
 	logger.Printf("[Schedule] ✅ Fetched %d sport events", len(eventIDs))
