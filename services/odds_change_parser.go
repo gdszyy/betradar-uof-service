@@ -336,19 +336,19 @@ func formatScore(score *int) string {
 // needsFixtureInfo 检查赛事是否需要获取 Fixture 信息
 // 如果赛事没有 category_id 或 tournament_id，则需要获取
 func (p *OddsChangeParser) needsFixtureInfo(eventID string) bool {
-	var categoryID, tournamentID string
+	var categoryID, tournamentID, sportID string
 	err := p.db.QueryRow(
-		"SELECT category_id, tournament_id FROM tracked_events WHERE event_id = $1",
+		"SELECT category_id, tournament_id, sport_id FROM tracked_events WHERE event_id = $1",
 		eventID,
-	).Scan(&categoryID, &tournamentID)
+	).Scan(&categoryID, &tournamentID, &sportID)
 	
 	// 如果记录不存在或查询失败，需要获取
 	if err != nil {
 		return true
 	}
 	
-	// 如果 category_id 或 tournament_id 为空，需要获取
-	return categoryID == "" || tournamentID == ""
+	// 如果 category_id, tournament_id 或 sport_id 为空，需要获取
+	return categoryID == "" || tournamentID == "" || sportID == ""
 }
 
 // processTeam 处理队伍信息，检查是否为新队伍并安排 Logo 获取
