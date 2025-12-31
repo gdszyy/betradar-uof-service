@@ -578,7 +578,13 @@ func (s *MarketDescriptionsService) GetOutcomeName(marketID, outcomeID, specifie
 			if outcomes, ok := s.outcomes[marketID]; ok {
 				if outcome, ok := outcomes[outcomeID]; ok {
 					s.mu.RUnlock()
-					return outcome.Name
+					name := outcome.Name
+					// 对 variant outcome 也需要进行模板替换
+					name = replaceSpecifiers(name, specifiers)
+					if ctx != nil {
+						name = replaceCompetitors(name, ctx.HomeTeamName, ctx.AwayTeamName)
+					}
+					return name
 				}
 			}
 			s.mu.RUnlock()
