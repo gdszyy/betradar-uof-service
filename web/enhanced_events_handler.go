@@ -114,6 +114,7 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 	marketIDs := getQueryParam(r, "market_ids") // 新增: 逗号分隔的 market ID 列表
 	sortBy := getQueryParam(r, "sort_by") // 新增: 排序方式 (time, popularity)
 	sortOrder := getQueryParam(r, "sort_order") // 新增: 排序顺序 (asc, desc)
+	liveOdds := getQueryParam(r, "live_odds") // 新增: live_odds 筛选 (booked, not_booked, etc.)
 	
 	page := 1
 	pageSize := 20 // 默认改为 20，降低负载
@@ -149,6 +150,7 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 			"market_ids":  marketIDs,
 		"sort_by":     sortBy,
 		"sort_order":  sortOrder,
+		"live_odds":   liveOdds,
 		"page":        page,
 		"page_size":   pageSize,
 	})
@@ -221,12 +223,24 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 			}
 		}
 		
-		// 添加 is_live 过滤
-		if isLive == "true" {
-			// 只返回 live 的比赛 (status = 'live' 且 live_odds = 'booked')
-			// 原因：live 比赛必须已订阅滚球盘口才有数据
-			whereClauses = append(whereClauses, "te.status = 'live' AND te.live_odds = 'booked'")
+	// 添加 is_live 过滤
+	if isLive == "true" {
+		// 只返回 live 的比赛 (status = 'live' 且 live_odds = 'booked')
+		// 原因：live 比赛必须已订阅滚球盘口才有数据
+		whereClauses = append(whereClauses, "te.status = 'live' AND te.live_odds = 'booked'")
+	}
+	
+	// 添加 live_odds 过滤
+	if liveOdds != "" {
+		if liveOdds == "null" || liveOdds == "not_booked" {
+			// 过滤未订阅的比赛 (live_odds IS NULL 或不等于 'booked')
+			whereClauses = append(whereClauses, "(te.live_odds IS NULL OR te.live_odds != 'booked')")
+		} else {
+			// 精确匹配 live_odds 值
+			whereClauses = append(whereClauses, "te.live_odds = $"+fmt.Sprintf("%d", len(args)+1))
+			args = append(args, liveOdds)
 		}
+	}
 	
 	// 添加 producer 过滤
 	if producer != "" {
