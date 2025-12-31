@@ -37,6 +37,7 @@ type EnhancedEvent struct {
 	MessageCount   int     `json:"message_count"`
 	LastMessageAt  *string `json:"last_message_at"`
 	Subscribed     bool    `json:"subscribed"`
+	LiveOdds       *string `json:"live_odds"`
 	CreatedAt      string  `json:"created_at"`
 	UpdatedAt      string  `json:"updated_at"`
 	
@@ -220,11 +221,12 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 			}
 		}
 		
-	// 添加 is_live 过滤
-	if isLive == "true" {
-		// 只返回 live 的比赛 (status = 'live')
-		whereClauses = append(whereClauses, "te.status = 'live'")
-	}
+		// 添加 is_live 过滤
+		if isLive == "true" {
+			// 只返回 live 的比赛 (status = 'live' 且 live_odds = 'booked')
+			// 原因：live 比赛必须已订阅滚球盘口才有数据
+			whereClauses = append(whereClauses, "te.status = 'live' AND te.live_odds = 'booked'")
+		}
 	
 	// 添加 producer 过滤
 	if producer != "" {
@@ -267,7 +269,7 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 				te.event_id, te.srn_id, te.sport_id, te.status, te.schedule_time,
 				te.home_team_id, te.home_team_name, te.away_team_id, te.away_team_name,
 				te.home_score, te.away_score, te.match_status, te.match_time,
-				te.message_count, te.last_message_at, te.subscribed,
+				te.message_count, te.last_message_at, te.subscribed, te.live_odds,
 				te.created_at, te.updated_at,
 				COALESCE(MAX(m.updated_at), te.last_message_at) as last_update
 			FROM tracked_events te
@@ -275,9 +277,9 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 		` + whereClause + `
 			GROUP BY te.event_id, te.srn_id, te.sport_id, te.status, te.schedule_time,
 				te.home_team_id, te.home_team_name, te.away_team_id, te.away_team_name,
-				te.home_score, te.away_score, te.match_status, te.match_time,
-				te.message_count, te.last_message_at, te.subscribed,
-				te.created_at, te.updated_at
+					te.home_score, te.away_score, te.match_status, te.match_time,
+					te.message_count, te.last_message_at, te.subscribed, te.live_odds,
+					te.created_at, te.updated_at
 		`
 	
 			// 添加排序和限制 (支持 page/page_size)
@@ -327,19 +329,20 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 	for rows.Next() {
 		var event EnhancedEvent
 		var scheduleTime, lastMessageAt sql.NullTime
-		var srnID, homeTeamID, homeTeamName, awayTeamID, awayTeamName sql.NullString
-		var homeScore, awayScore sql.NullInt64
-		var matchStatus, matchTime sql.NullString
-		
-		var lastUpdate sql.NullTime
-		err := rows.Scan(
-			&event.EventID, &srnID, &event.SportID, &event.Status, &scheduleTime,
-			&homeTeamID, &homeTeamName, &awayTeamID, &awayTeamName,
-			&homeScore, &awayScore, &matchStatus, &matchTime,
-			&event.MessageCount, &lastMessageAt, &event.Subscribed,
-			&event.CreatedAt, &event.UpdatedAt,
-			&lastUpdate, // last_update 字段
-		)
+			var srnID, homeTeamID, homeTeamName, awayTeamID, awayTeamName sql.NullString
+			var homeScore, awayScore sql.NullInt64
+			var matchStatus, matchTime sql.NullString
+			var liveOdds sql.NullString
+			
+			var lastUpdate sql.NullTime
+			err := rows.Scan(
+				&event.EventID, &srnID, &event.SportID, &event.Status, &scheduleTime,
+				&homeTeamID, &homeTeamName, &awayTeamID, &awayTeamName,
+				&homeScore, &awayScore, &matchStatus, &matchTime,
+				&event.MessageCount, &lastMessageAt, &event.Subscribed, &liveOdds,
+				&event.CreatedAt, &event.UpdatedAt,
+				&lastUpdate, // last_update 字段
+			)
 		
 		if err != nil {
 			log.Printf("[API] Failed to scan row: %v", err)
@@ -380,12 +383,15 @@ func (s *Server) handleGetEnhancedEvents(w http.ResponseWriter, r *http.Request)
 		if matchTime.Valid {
 			event.MatchTime = &matchTime.String
 		}
-		if lastMessageAt.Valid {
-			t := lastMessageAt.Time.Format("2006-01-02T15:04:05Z")
-			event.LastMessageAt = &t
-		}
-		
-		// 使用映射器转换数据
+			if lastMessageAt.Valid {
+				t := lastMessageAt.Time.Format("2006-01-02T15:04:05Z")
+				event.LastMessageAt = &t
+			}
+			if liveOdds.Valid {
+				event.LiveOdds = &liveOdds.String
+			}
+			
+			// 使用映射器转换数据
 		event.Sport = s.srMapper.MapSport(event.SportID)
 		event.SportName = s.srMapper.MapSportChinese(event.SportID)
 		

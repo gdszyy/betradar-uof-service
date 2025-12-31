@@ -119,6 +119,7 @@ func Migrate(db *sql.DB) error {
     match_time VARCHAR(50),
     status VARCHAR(50) DEFAULT 'active',
     subscribed BOOLEAN DEFAULT FALSE,
+    live_odds VARCHAR(50),
     message_count INTEGER DEFAULT 0,
     last_message_at TIMESTAMP,
     attendance INTEGER,
@@ -374,6 +375,7 @@ func Migrate(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_tracked_events_sport_id ON tracked_events(sport_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_tracked_events_schedule_time ON tracked_events(schedule_time)`,
 		`CREATE INDEX IF NOT EXISTS idx_tracked_events_subscribed ON tracked_events(subscribed)`,
+		`CREATE INDEX IF NOT EXISTS idx_tracked_events_live_odds ON tracked_events(live_odds)`,
 		
 		`CREATE INDEX IF NOT EXISTS idx_markets_event_id ON markets(event_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_markets_sr_market_id ON markets(sr_market_id)`,
