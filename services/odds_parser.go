@@ -79,15 +79,34 @@ func (p *OddsParser) ParseAndStoreOdds(xmlData []byte, productID int) error {
 
 // storeMarket 存储盘口数据
 func (p *OddsParser) storeMarket(tx *sql.Tx, eventID string, market MarketData, timestamp int64, productID int) error {
+	// 获取 market name 和 groups
+	var marketName, groups string
+	if p.marketDescService != nil {
+		// 查询 home_team_name 和 away_team_name 用于替换变量
+		var homeTeam, awayTeam sql.NullString
+		teamQuery := `SELECT home_team_name, away_team_name FROM events WHERE event_id = $1`
+		tx.QueryRow(teamQuery, eventID).Scan(&homeTeam, &awayTeam)
+		
+		ctx := &ReplacementContext{
+			HomeTeamName: homeTeam.String,
+			AwayTeamName: awayTeam.String,
+			Specifiers:   market.Specifiers,
+		}
+		marketName = p.marketDescService.GetMarketName(market.ID, market.Specifiers, ctx)
+		groups = p.marketDescService.GetMarketGroups(market.ID)
+	}
+	
 	// 1. 插入或更新盘口
 	// 注意: markets 表没有 timestamp 字段,我们使用 updated_at 来判断
 	// 但这不是最优方案,理想情况下应该添加 timestamp 字段
 	marketQuery := `
-		INSERT INTO markets (event_id, sr_market_id, market_type, specifiers, status, producer_id, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, NOW())
+		INSERT INTO markets (event_id, sr_market_id, market_type, market_name, groups, specifiers, status, producer_id, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
 		ON CONFLICT (event_id, sr_market_id, specifiers) DO UPDATE
 		SET status = EXCLUDED.status, 
-		    producer_id = EXCLUDED.producer_id, 
+		    producer_id = EXCLUDED.producer_id,
+		    market_name = COALESCE(NULLIF(markets.market_name, ''), EXCLUDED.market_name),
+		    groups = COALESCE(NULLIF(markets.groups, ''), EXCLUDED.groups),
 		    updated_at = NOW()
 		RETURNING id
 	`
@@ -97,6 +116,8 @@ func (p *OddsParser) storeMarket(tx *sql.Tx, eventID string, market MarketData, 
 		eventID, 
 		market.ID, 
 		p.getMarketType(market.ID),
+		marketName,
+		groups,
 		market.Specifiers,
 		market.Status,
 		productID,

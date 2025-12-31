@@ -109,6 +109,7 @@ type MarketTabChipView struct {
 	SRMarketID      string    `db:"sr_market_id"`
 	MarketType      string    `db:"market_type"`
 	MarketName      string    `db:"market_name"`
+	Groups          string    `db:"groups"`
 	Specifiers      string    `db:"specifiers"`
 	Status          string    `db:"status"`
 	TabID           *string   `db:"tab_id"`

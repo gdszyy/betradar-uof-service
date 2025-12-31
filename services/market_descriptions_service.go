@@ -1039,3 +1039,15 @@ func (s *MarketDescriptionsService) UpdateExistingMarkets() (int, int, error) {
 
 	return marketUpdateCount, outcomeUpdateCount, nil
 }
+
+// GetMarketGroups 获取市场分组
+func (s *MarketDescriptionsService) GetMarketGroups(marketID string) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if market, ok := s.markets[marketID]; ok {
+		return market.Groups
+	}
+
+	return ""
+}

@@ -136,22 +136,23 @@ func Migrate(db *sql.DB) error {
 );`,
 
 		
-		// 盘口表
-		`CREATE TABLE IF NOT EXISTS markets (
-    id SERIAL PRIMARY KEY,
-    event_id VARCHAR(100) NOT NULL,
-    sr_market_id VARCHAR(200) NOT NULL,
-    market_type VARCHAR(100),
-    market_name VARCHAR(200),
-    specifiers TEXT,
-    status VARCHAR(50),
-    producer_id INTEGER,
-    favourite BOOLEAN,
-    home_team_name VARCHAR(200),
-    away_team_name VARCHAR(200),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (event_id, sr_market_id, specifiers)
+			// 盘口表
+			`CREATE TABLE IF NOT EXISTS markets (
+	    id SERIAL PRIMARY KEY,
+	    event_id VARCHAR(100) NOT NULL,
+	    sr_market_id VARCHAR(200) NOT NULL,
+	    market_type VARCHAR(100),
+	    market_name VARCHAR(200),
+	    groups TEXT,
+	    specifiers TEXT,
+	    status VARCHAR(50),
+	    producer_id INTEGER,
+	    favourite BOOLEAN,
+	    home_team_name VARCHAR(200),
+	    away_team_name VARCHAR(200),
+	    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	    UNIQUE (event_id, sr_market_id, specifiers)
 );`,
 		
 		// 赔率表 (当前最新赔率)
