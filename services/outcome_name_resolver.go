@@ -92,29 +92,7 @@ func (r *OutcomeNameResolver) ResolveMarketName(
 	return resolved, nil
 }
 
-// parseSpecifiers 解析 specifiers 字符串
-// "total=2.5|hcp=1.5" -> map["total"]="2.5", map["hcp"]="1.5"
-func parseSpecifiers(specifiers string) map[string]string {
-	result := make(map[string]string)
-	
-	if specifiers == "" {
-		return result
-	}
 
-	// 按 | 分割
-	pairs := strings.Split(specifiers, "|")
-	for _, pair := range pairs {
-		// 按 = 分割
-		parts := strings.SplitN(pair, "=", 2)
-		if len(parts) == 2 {
-			key := strings.TrimSpace(parts[0])
-			value := strings.TrimSpace(parts[1])
-			result[key] = value
-		}
-	}
-
-	return result
-}
 
 // replaceOrdinalPlaceholders 替换序数词占位符
 // {!periodnr} with periodnr=1 -> "1st"
@@ -140,35 +118,7 @@ func replaceOrdinalPlaceholders(template string, specMap map[string]string) stri
 	return result
 }
 
-// toOrdinal 将数字转换为序数词
-// "1" -> "1st", "2" -> "2nd", "3" -> "3rd", "4" -> "4th"
-func toOrdinal(num string) string {
-	// 简单实现,只处理常见情况
-	switch num {
-	case "1":
-		return "1st"
-	case "2":
-		return "2nd"
-	case "3":
-		return "3rd"
-	case "4":
-		return "4th"
-	case "5":
-		return "5th"
-	case "6":
-		return "6th"
-	case "7":
-		return "7th"
-	case "8":
-		return "8th"
-	case "9":
-		return "9th"
-	case "10":
-		return "10th"
-	default:
-		return num + "th"
-	}
-}
+
 
 // BatchResolveOutcomeNames 批量解析 outcome 名称
 func (r *OutcomeNameResolver) BatchResolveOutcomeNames(
