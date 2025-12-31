@@ -369,6 +369,18 @@ func Migrate(db *sql.DB) error {
 		}
 	}
 	
+	// 添加缺失的列（对已存在的表）
+	alterTableStatements := []string{
+		`ALTER TABLE tracked_events ADD COLUMN IF NOT EXISTS live_odds VARCHAR(50)`,
+	}
+	
+	for _, sql := range alterTableStatements {
+		if _, err := db.Exec(sql); err != nil {
+			// 忽略列已存在的错误
+			log.Printf("[Database] Warning: %v", err)
+		}
+	}
+	
 	// 创建索引以提高查询性能
 	indexes := []string{
 		`CREATE INDEX IF NOT EXISTS idx_tracked_events_event_id ON tracked_events(event_id)`,
