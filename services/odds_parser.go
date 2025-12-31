@@ -85,7 +85,11 @@ func (p *OddsParser) storeMarket(tx *sql.Tx, eventID string, market MarketData, 
 		// 查询 home_team_name 和 away_team_name 用于替换变量
 		var homeTeam, awayTeam sql.NullString
 		teamQuery := `SELECT home_team_name, away_team_name FROM events WHERE event_id = $1`
-		tx.QueryRow(teamQuery, eventID).Scan(&homeTeam, &awayTeam)
+		err := tx.QueryRow(teamQuery, eventID).Scan(&homeTeam, &awayTeam)
+		if err != nil && err != sql.ErrNoRows {
+			// 如果查询失败，记录警告但继续执行
+			// 不阻断 market 插入，后续可以通过 UpdateMissingNames 填充
+		}
 		
 		ctx := &ReplacementContext{
 			HomeTeamName: homeTeam.String,
@@ -94,6 +98,17 @@ func (p *OddsParser) storeMarket(tx *sql.Tx, eventID string, market MarketData, 
 		}
 		marketName = p.marketDescService.GetMarketName(market.ID, market.Specifiers, ctx)
 		groups = p.marketDescService.GetMarketGroups(market.ID)
+		
+		// 如果 market name 为空或等于 market ID，说明没有找到对应的描述
+		if marketName == "" || marketName == market.ID {
+			// 使用 market_descriptions 表中的原始名称作为退路
+			var descName sql.NullString
+			descQuery := `SELECT market_name FROM market_descriptions WHERE market_id = $1`
+			err := tx.QueryRow(descQuery, market.ID).Scan(&descName)
+			if err == nil && descName.Valid {
+				marketName = descName.String
+			}
+		}
 	}
 	
 	// 1. 插入或更新盘口
