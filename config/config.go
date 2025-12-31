@@ -58,6 +58,9 @@ type Config struct {
 	
 	// 订阅同步配置
 	SubscriptionSyncIntervalMinutes int // 订阅同步间隔(分钟)
+	
+	// 消息存储配置
+	SaveMessages bool // 是否保存原始消息到 uof_messages 表
 }
 
 func Load() *Config {
@@ -135,9 +138,12 @@ func Load() *Config {
 		ProducerCheckIntervalSeconds: getEnvInt("PRODUCER_CHECK_INTERVAL_SECONDS", 60),   // 默认每 60 秒检查一次
 		ProducerDownThresholdSeconds: getEnvInt("PRODUCER_DOWN_THRESHOLD_SECONDS", 10),  // 默认 10 秒不响应才告警 (alive 消息间隔)
 		
-		// 订阅同步配置
-		SubscriptionSyncIntervalMinutes: getEnvInt("SUBSCRIPTION_SYNC_INTERVAL_MINUTES", 5), // 默认每 5 分钟同步一次
-	}
+			// 订阅同步配置
+			SubscriptionSyncIntervalMinutes: getEnvInt("SUBSCRIPTION_SYNC_INTERVAL_MINUTES", 5), // 默认每 5 分钟同步一次
+			
+			// 消息存储配置
+			SaveMessages: getEnv("SAVE_MESSAGES", "true") == "true", // 默认启用消息存储
+		}
 }
 
 func getEnv(key, defaultValue string) string {

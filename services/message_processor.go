@@ -117,6 +117,7 @@ func (p *MessageProcessor) processMessage(msg BrokerMessage) {
 		EventID   string `xml:"event_id,attr"`
 		ProductID int    `xml:"product,attr"`
 		Timestamp int64  `xml:"timestamp,attr"`
+		SportID   string `xml:"sport_id,attr"`
 	}
 
 	var base BaseMessage
@@ -125,6 +126,18 @@ func (p *MessageProcessor) processMessage(msg BrokerMessage) {
 	eventID := base.EventID
 	productID := &base.ProductID
 	timestamp := base.Timestamp
+	sportID := base.SportID
+	
+	// 保存消息到数据库（根据配置决定）
+	if p.config.SaveMessages {
+		var sportIDPtr *string
+		if sportID != "" {
+			sportIDPtr = &sportID
+		}
+		if err := p.messageStore.SaveMessage(messageType, eventID, productID, sportIDPtr, msg.Topic, xmlContent, timestamp); err != nil {
+			logger.Errorf("[MessageProcessor] Failed to save message: %v", err)
+		}
+	}
 
 	// 广播到WebSocket客户端 (从 AMQPConsumer 迁移过来)
 	// 过滤alive心跳消息

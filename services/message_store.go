@@ -14,13 +14,8 @@ func NewMessageStore(db *sql.DB) *MessageStore {
 }
 
 // SaveMessage 保存消息到数据库
-// DISABLED: 停止uof_messages落库以节省数据库空间
+// 可通过环境变量 SAVE_MESSAGES 控制是否启用
 func (s *MessageStore) SaveMessage(messageType, eventID string, productID *int, sportID *string, routingKey, xmlContent string, timestamp int64) error {
-	// 禁用消息保存功能
-	return nil
-	
-	// 原始代码已注释
-	/*
 	query := `
 		INSERT INTO uof_messages (message_type, event_id, product_id, sport_id, routing_key, xml_content, timestamp, received_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -33,7 +28,6 @@ func (s *MessageStore) SaveMessage(messageType, eventID string, productID *int, 
 
 	_, err := s.db.Exec(query, messageType, eventIDPtr, productID, sportID, routingKey, xmlContent, timestamp, time.Now())
 	return err
-	*/
 }
 
 // SaveOddsChange 保存赔率变化
@@ -403,3 +397,22 @@ func (s *MessageStore) SetEventSubscribed(eventID string, subscribed bool) error
 	return err
 }
 
+
+// CleanOldMessages 清理旧消息（保留最近指定天数的消息）
+func (s *MessageStore) CleanOldMessages(days int) (int64, error) {
+	query := `
+		DELETE FROM uof_messages
+		WHERE received_at < NOW() - INTERVAL '1 day' * $1
+	`
+	result, err := s.db.Exec(query, days)
+	if err != nil {
+		return 0, err
+	}
+	
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	
+	return rowsAffected, nil
+}
